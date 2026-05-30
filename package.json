@@ -1,5 +1,5 @@
 {
-  "name": "pos-system",
+  "name": "salon-pos-system",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,9 +8,6 @@
     "build": "next build",
     "start": "node server.js",
     "lint": "eslint",
-    "db:init": "node lib/db/seed.js",
-    "db:seed": "node lib/db/seed.js",
-    "db:reset": "rm -f pos_restaurant.db && node lib/db/seed.js",
     "package": "npm run build && pkg . --out-path dist"
   },
   "bin": "server.js",
@@ -18,8 +15,7 @@
     "assets": [
       ".next/**/*",
       "public/**/*",
-      "lib/**/*",
-      "pos_restaurant.db"
+      "src/**/*"
     ],
     "targets": [
       "node18-win-x64"
