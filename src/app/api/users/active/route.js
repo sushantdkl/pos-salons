@@ -21,8 +21,9 @@ export async function GET() {
         CASE COALESCE(sp.salon_role, u.role)
           WHEN 'admin' THEN 1
           WHEN 'cashier' THEN 2
-          WHEN 'stylist' THEN 3
-          WHEN 'beautician' THEN 4
+          WHEN 'barber' THEN 3
+          WHEN 'stylist' THEN 4
+          WHEN 'beautician' THEN 5
           ELSE 6
         END,
         u.full_name

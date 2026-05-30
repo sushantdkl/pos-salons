@@ -97,7 +97,7 @@ export default function StaffPage() {
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-semibold text-gray-950">Staff & Commission</h1>
-              <p className="mt-1 text-sm text-gray-600">Salon roles, passwords, service revenue, and commission summaries.</p>
+              <p className="mt-1 text-sm text-gray-600">Salon roles, PIN access, service revenue, and commission summaries.</p>
             </div>
             <button onClick={() => openForm()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800">
               <Plus className="h-5 w-5" />
@@ -175,10 +175,10 @@ export default function StaffPage() {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-900">{editingStaff ? 'New password' : 'Password *'}</span>
+                <span className="mb-2 block text-sm font-medium text-gray-900">{editingStaff ? 'New PIN' : 'PIN *'}</span>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input type="text" required={!editingStaff} value={formData.password} onChange={(event) => setFormData({ ...formData, password: event.target.value })} className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" placeholder="Minimum 4 characters" />
+                  <input type="text" inputMode="numeric" required={!editingStaff} value={formData.password} onChange={(event) => setFormData({ ...formData, password: event.target.value })} className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" placeholder="4 or more digits" />
                 </div>
               </label>
               <label className="block">

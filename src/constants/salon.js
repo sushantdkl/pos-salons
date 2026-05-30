@@ -11,7 +11,7 @@ export const SERVICE_CATEGORIES = [
 
 export const PAYMENT_METHODS = ['cash', 'card', 'online', 'split'];
 
-export const STAFF_ROLES = ['admin', 'cashier', 'stylist', 'beautician'];
+export const STAFF_ROLES = ['admin', 'cashier', 'barber', 'stylist', 'beautician'];
 
 export const PRODUCT_CATEGORIES = [
   'Shampoo',

@@ -1,23 +1,28 @@
-export const APP_ROLES = ['admin', 'cashier', 'stylist', 'beautician'];
+export const APP_ROLES = ['admin', 'cashier', 'barber', 'stylist', 'beautician'];
 
 export const ROLE_LABELS = {
   admin: 'Admin',
   cashier: 'Cashier',
+  barber: 'Barber',
   stylist: 'Stylist',
   beautician: 'Beautician',
 };
 
-export const ROLE_DEMO_PASSWORDS = {
-  admin: '123456',
-  cashier: '1234',
-  stylist: '2222',
-  beautician: '3333',
+export const ROLE_DEMO_PINS = {
+  admin: '1111',
+  cashier: '2222',
+  barber: '3333',
+  stylist: '4444',
+  beautician: '5555',
 };
+
+export const ROLE_DEMO_PASSWORDS = ROLE_DEMO_PINS;
 
 export function normalizeRole(role) {
   const value = String(role || '').toLowerCase();
   if (value === 'admin') return 'admin';
   if (value === 'cashier') return 'cashier';
+  if (value === 'barber') return 'barber';
   if (value === 'beautician') return 'beautician';
   return 'stylist';
 }
@@ -32,6 +37,7 @@ export function canAccessPath(role, pathname) {
 
   if (pathname.startsWith('/dashboard/admin')) return normalized === 'admin';
   if (pathname.startsWith('/dashboard/cashier')) return normalized === 'cashier';
+  if (pathname.startsWith('/dashboard/barber')) return normalized === 'barber';
   if (pathname.startsWith('/dashboard/stylist')) return normalized === 'stylist';
   if (pathname.startsWith('/dashboard/beautician')) return normalized === 'beautician';
 

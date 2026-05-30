@@ -71,6 +71,7 @@ export default function AdminLayout({ children }) {
   const allMenuItems = [
     { roles: ['admin'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/admin', color: 'text-gray-600' },
     { roles: ['cashier'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/cashier', color: 'text-gray-600' },
+    { roles: ['barber'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/barber', color: 'text-gray-600' },
     { roles: ['stylist'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/stylist', color: 'text-gray-600' },
     { roles: ['beautician'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/beautician', color: 'text-gray-600' },
     { roles: ['admin', 'cashier'], icon: DollarSign, label: 'Billing', href: '/admin/billing', color: 'text-teal-600' },
@@ -79,6 +80,7 @@ export default function AdminLayout({ children }) {
     { roles: ['admin'], icon: Users, label: 'Staff', href: '/admin/employees', color: 'text-green-600' },
     { roles: ['admin', 'cashier'], icon: Users, label: 'Customers', href: '/admin/customers', color: 'text-pink-600' },
     { roles: ['admin'], icon: FileText, label: 'Reports', href: '/admin/reports', color: 'text-purple-600' },
+    { roles: ['admin'], icon: Users, label: 'Performance', href: '/dashboard/admin/staff-performance', color: 'text-amber-700' },
     { roles: ['admin', 'cashier'], icon: MessageCircle, label: 'Reminders', href: '/admin/reminders', color: 'text-green-600' },
     { roles: ['admin'], icon: Settings, label: 'Settings', href: '/admin/settings', color: 'text-gray-600' },
   ];

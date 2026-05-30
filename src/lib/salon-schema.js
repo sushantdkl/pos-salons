@@ -3,7 +3,10 @@ import bcrypt from 'bcryptjs';
 const CUSTOMER_COLUMNS = [
   ['gender', 'TEXT'],
   ['favorite_services', 'TEXT'],
+  ['preferred_barber_id', 'INTEGER'],
   ['preferred_stylist_id', 'INTEGER'],
+  ['preferred_beautician_id', 'INTEGER'],
+  ['customer_category', "TEXT DEFAULT 'New Customer'"],
   ['notes', 'TEXT'],
   ['total_visits', 'INTEGER DEFAULT 0'],
   ['total_spent', 'REAL DEFAULT 0'],
@@ -18,6 +21,10 @@ function addColumnIfMissing(db, table, column, definition) {
   if (!columnExists(db, table, column)) {
     db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
   }
+}
+
+function tableSql(db, table) {
+  return db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)?.sql || '';
 }
 
 function seedSalonData(db) {
@@ -63,10 +70,11 @@ function seedSalonData(db) {
 
 function seedRoleUsers(db) {
   const users = [
-    ['admin', 'Salon Admin', 'admin', '123456', 'admin@salon.local'],
-    ['cashier', 'Salon Cashier', 'cashier', '1234', 'cashier@salon.local'],
-    ['stylist', 'Salon Stylist', 'stylist', '2222', 'stylist@salon.local'],
-    ['beautician', 'Salon Beautician', 'beautician', '3333', 'beautician@salon.local'],
+    ['admin', 'Salon Admin', 'admin', '1111', 'admin@salon.local'],
+    ['cashier', 'Salon Cashier', 'cashier', '2222', 'cashier@salon.local'],
+    ['barber', 'Salon Barber', 'barber', '3333', 'barber@salon.local'],
+    ['stylist', 'Salon Stylist', 'stylist', '4444', 'stylist@salon.local'],
+    ['beautician', 'Salon Beautician', 'beautician', '5555', 'beautician@salon.local'],
   ];
 
   const insertUser = db.prepare(`
@@ -103,13 +111,13 @@ function seedRoleUsers(db) {
 
 function normalizeStaffProfileRoles(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'staff_profiles'").get();
-  if (!table?.sql?.includes("'cashier'")) {
+  if (!table?.sql?.includes("'barber'")) {
     db.prepare('ALTER TABLE staff_profiles RENAME TO staff_profiles_legacy').run();
     db.prepare(`
       CREATE TABLE staff_profiles (
         user_id INTEGER PRIMARY KEY,
         display_name TEXT,
-        salon_role TEXT NOT NULL DEFAULT 'stylist' CHECK(salon_role IN ('admin', 'cashier', 'stylist', 'beautician')),
+        salon_role TEXT NOT NULL DEFAULT 'stylist' CHECK(salon_role IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')),
         assigned_services TEXT,
         commission_percentage REAL DEFAULT 0 CHECK(commission_percentage >= 0 AND commission_percentage <= 100),
         base_salary REAL DEFAULT 0 CHECK(base_salary >= 0),
@@ -125,7 +133,7 @@ function normalizeStaffProfileRoles(db) {
       )
       SELECT user_id,
              display_name,
-             CASE WHEN salon_role IN ('admin', 'cashier', 'beautician') THEN salon_role ELSE 'stylist' END,
+             CASE WHEN salon_role IN ('admin', 'cashier', 'barber', 'beautician') THEN salon_role ELSE 'stylist' END,
              assigned_services,
              commission_percentage,
              base_salary,
@@ -137,14 +145,20 @@ function normalizeStaffProfileRoles(db) {
   }
 }
 
-export function ensureSalonSchema(db) {
+function normalizeUsersTableRoles(db) {
+  const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+  if (!table?.sql || table.sql.includes("'barber'")) return;
+
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  db.prepare('ALTER TABLE users RENAME TO users_legacy').run();
   db.prepare(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       full_name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'cashier', 'stylist', 'beautician')),
+      role TEXT NOT NULL CHECK(role IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')),
       email TEXT,
       phone TEXT,
       is_active INTEGER DEFAULT 1,
@@ -152,6 +166,207 @@ export function ensureSalonSchema(db) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+  db.prepare(`
+    INSERT INTO users (id, username, password_hash, full_name, role, email, phone, is_active, created_at)
+    SELECT id,
+           username,
+           password_hash,
+           full_name,
+           CASE
+             WHEN role = 'admin' THEN 'admin'
+             WHEN role = 'cashier' THEN 'cashier'
+             ELSE 'stylist'
+           END,
+           email,
+           phone,
+           COALESCE(is_active, 1),
+           created_at
+    FROM users_legacy
+  `).run();
+  db.prepare('DROP TABLE users_legacy').run();
+  db.pragma('legacy_alter_table = OFF');
+  db.pragma('foreign_keys = ON');
+}
+
+function rebuildTable(db, table, createSql, columns) {
+  const legacyTable = `${table}_user_fk_legacy`;
+  db.prepare(`DROP TABLE IF EXISTS ${legacyTable}`).run();
+  db.prepare(`ALTER TABLE ${table} RENAME TO ${legacyTable}`).run();
+  db.prepare(createSql).run();
+
+  const legacyColumns = columns.filter((column) => columnExists(db, legacyTable, column));
+  if (legacyColumns.length) {
+    const columnList = legacyColumns.join(', ');
+    db.prepare(`INSERT INTO ${table} (${columnList}) SELECT ${columnList} FROM ${legacyTable}`).run();
+  }
+  db.prepare(`DROP TABLE ${legacyTable}`).run();
+}
+
+function repairUserForeignKeyReferences(db) {
+  const tables = [
+    {
+      table: 'sessions',
+      columns: ['id', 'user_id', 'token', 'expires_at', 'created_at'],
+      createSql: `
+        CREATE TABLE sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          expires_at DATETIME NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `
+    },
+    {
+      table: 'salon_bills',
+      columns: [
+        'id', 'bill_number', 'customer_id', 'customer_name', 'customer_phone',
+        'subtotal', 'discount_amount', 'discount_type', 'tax', 'tax_percent',
+        'service_charge', 'grand_total', 'payment_method', 'amount_paid',
+        'cashier_id', 'notes', 'status', 'created_at'
+      ],
+      createSql: `
+        CREATE TABLE salon_bills (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_number TEXT UNIQUE NOT NULL,
+          customer_id INTEGER,
+          customer_name TEXT,
+          customer_phone TEXT,
+          subtotal REAL NOT NULL CHECK(subtotal >= 0),
+          discount_amount REAL DEFAULT 0 CHECK(discount_amount >= 0),
+          discount_type TEXT DEFAULT 'amount' CHECK(discount_type IN ('amount', 'percentage')),
+          tax REAL DEFAULT 0 CHECK(tax >= 0),
+          tax_percent REAL DEFAULT 0 CHECK(tax_percent >= 0),
+          service_charge REAL DEFAULT 0 CHECK(service_charge >= 0),
+          grand_total REAL NOT NULL CHECK(grand_total >= 0),
+          payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'online', 'split')),
+          amount_paid REAL NOT NULL CHECK(amount_paid >= 0),
+          cashier_id INTEGER,
+          notes TEXT,
+          status TEXT DEFAULT 'paid' CHECK(status IN ('paid', 'cancelled')),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+          FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `
+    },
+    {
+      table: 'salon_bill_items',
+      columns: [
+        'id', 'bill_id', 'item_type', 'item_id', 'name', 'quantity',
+        'unit_price', 'subtotal', 'staff_id', 'commission_percentage',
+        'commission_amount', 'created_at'
+      ],
+      createSql: `
+        CREATE TABLE salon_bill_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_id INTEGER NOT NULL,
+          item_type TEXT NOT NULL CHECK(item_type IN ('service', 'product')),
+          item_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          quantity INTEGER DEFAULT 1 CHECK(quantity > 0),
+          unit_price REAL NOT NULL CHECK(unit_price >= 0),
+          subtotal REAL NOT NULL CHECK(subtotal >= 0),
+          staff_id INTEGER,
+          commission_percentage REAL DEFAULT 0,
+          commission_amount REAL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (bill_id) REFERENCES salon_bills(id) ON DELETE CASCADE,
+          FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `
+    },
+    {
+      table: 'action_logs',
+      columns: ['id', 'user_id', 'action', 'entity_type', 'entity_id', 'details', 'created_at'],
+      createSql: `
+        CREATE TABLE action_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          action TEXT NOT NULL,
+          entity_type TEXT,
+          entity_id INTEGER,
+          details TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `
+    }
+  ];
+
+  const needsRepair = tables.some(({ table }) => tableSql(db, table).includes('users_legacy'));
+  if (!needsRepair) return;
+
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  tables.forEach((definition) => {
+    if (tableSql(db, definition.table).includes('users_legacy')) {
+      rebuildTable(db, definition.table, definition.createSql, definition.columns);
+    }
+  });
+  db.pragma('legacy_alter_table = OFF');
+  db.pragma('foreign_keys = ON');
+}
+
+function cleanLegacyStaffIdentity(db) {
+  const legacyPattern = "%waiter%";
+  const legacyNameSql = `
+    lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE ?
+    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%chef%'
+    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%kitchen%'
+    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%restaurant%'
+    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%manager%'
+  `;
+  db.prepare(`
+    UPDATE users
+    SET full_name = CASE
+          WHEN role = 'admin' THEN 'Salon Admin'
+          WHEN role = 'cashier' THEN 'Salon Cashier'
+          WHEN role = 'barber' THEN 'Salon Barber'
+          WHEN role = 'beautician' THEN 'Salon Beautician'
+          ELSE 'Salon Stylist'
+        END,
+        username = 'salon_staff_' || id,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE username NOT IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')
+      AND (${legacyNameSql})
+  `).run(legacyPattern);
+
+  db.prepare(`
+    UPDATE staff_profiles
+    SET display_name = CASE
+          WHEN salon_role = 'admin' THEN 'Salon Admin'
+          WHEN salon_role = 'cashier' THEN 'Salon Cashier'
+          WHEN salon_role = 'barber' THEN 'Salon Barber'
+          WHEN salon_role = 'beautician' THEN 'Salon Beautician'
+          ELSE 'Salon Stylist'
+        END,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE lower(COALESCE(display_name, '')) LIKE '%waiter%'
+       OR lower(COALESCE(display_name, '')) LIKE '%chef%'
+       OR lower(COALESCE(display_name, '')) LIKE '%kitchen%'
+       OR lower(COALESCE(display_name, '')) LIKE '%restaurant%'
+       OR lower(COALESCE(display_name, '')) LIKE '%manager%'
+  `).run();
+}
+
+export function ensureSalonSchema(db) {
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')),
+      email TEXT,
+      phone TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  normalizeUsersTableRoles(db);
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS sessions (
@@ -221,7 +436,7 @@ export function ensureSalonSchema(db) {
     CREATE TABLE IF NOT EXISTS staff_profiles (
       user_id INTEGER PRIMARY KEY,
       display_name TEXT,
-      salon_role TEXT NOT NULL DEFAULT 'stylist' CHECK(salon_role IN ('admin', 'cashier', 'stylist', 'beautician')),
+      salon_role TEXT NOT NULL DEFAULT 'stylist' CHECK(salon_role IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')),
       assigned_services TEXT,
       commission_percentage REAL DEFAULT 0 CHECK(commission_percentage >= 0 AND commission_percentage <= 100),
       base_salary REAL DEFAULT 0 CHECK(base_salary >= 0),
@@ -320,6 +535,7 @@ export function ensureSalonSchema(db) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `).run();
+  repairUserForeignKeyReferences(db);
 
   CUSTOMER_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'customers', column, definition));
   db.prepare(`
@@ -328,11 +544,13 @@ export function ensureSalonSchema(db) {
            CASE
              WHEN role = 'admin' THEN 'Salon Admin'
              WHEN role = 'cashier' THEN 'Cashier'
+             WHEN role = 'barber' THEN 'Barber'
              ELSE 'Stylist'
            END,
            CASE
              WHEN role = 'admin' THEN 'admin'
              WHEN role = 'cashier' THEN 'cashier'
+             WHEN role = 'barber' THEN 'barber'
              ELSE 'stylist'
            END,
            10,
@@ -346,9 +564,11 @@ export function ensureSalonSchema(db) {
     SET role = CASE
       WHEN role = 'admin' THEN 'admin'
       WHEN role = 'cashier' THEN 'cashier'
+      WHEN role = 'barber' THEN 'barber'
       ELSE 'stylist'
     END
   `).run();
+  cleanLegacyStaffIdentity(db);
 
   seedRoleUsers(db);
   seedSalonData(db);

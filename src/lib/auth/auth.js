@@ -1,11 +1,13 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import Database from '../db/index.js';
-import { normalizeRole } from '@/constants/roles';
+import { dashboardPathForRole, normalizeRole } from '@/constants/roles';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 
 export class AuthService {
   constructor() {
     this.db = Database.getInstance();
+    ensureSalonSchema(this.db.db);
   }
   
   async authenticate(username, password) {
@@ -45,17 +47,19 @@ export class AuthService {
       VALUES (?, ?, ?)
     `, [user.id, sessionToken, expiresAt.toISOString()]);
     
+    const role = normalizeRole(user.app_role);
     return {
       success: true,
       user: {
         id: user.id,
         username: user.username,
         full_name: user.full_name,
-        role: normalizeRole(user.app_role),
+        role,
         email: user.email,
         phone: user.phone
       },
-      token: sessionToken
+      token: sessionToken,
+      redirectPath: dashboardPathForRole(role)
     };
   }
   
@@ -93,6 +97,7 @@ export class AuthService {
     const permissions = {
       admin: ['*'],
       cashier: ['billing.*', 'customers.*', 'services.view', 'products.view', 'reminders.*'],
+      barber: ['performance.view', 'services.view', 'customers.view'],
       stylist: ['billing.view', 'customers.view', 'services.view'],
       beautician: ['billing.view', 'customers.view', 'services.view']
     };

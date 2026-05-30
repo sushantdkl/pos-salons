@@ -80,6 +80,20 @@ export async function GET(request) {
     const repeatCustomers = db.prepare('SELECT COUNT(*) as count FROM customers WHERE COALESCE(total_visits, 0) >= 2').get().count;
     const totalCustomers = db.prepare('SELECT COUNT(*) as count FROM customers').get().count;
     const commissionSummary = bestStaff.reduce((sum, row) => sum + Number(row.commission || 0), 0);
+    const topService = topServices[0];
+    const topStaff = bestStaff[0];
+    const mostActiveCustomer = db.prepare(`
+      SELECT name, total_visits, total_spent
+      FROM customers
+      ORDER BY COALESCE(total_visits, 0) DESC, COALESCE(total_spent, 0) DESC
+      LIMIT 1
+    `).get();
+    const insights = [
+      topService ? `${topService.name} generated the highest service revenue for this period.` : null,
+      topStaff ? `${topStaff.name} generated ${topStaff.revenue} in service revenue for this period.` : null,
+      mostActiveCustomer ? `${mostActiveCustomer.name} has visited ${mostActiveCustomer.total_visits || 0} times.` : null,
+      commissionSummary > 0 ? `Total staff commission for this period is ${commissionSummary}.` : null,
+    ].filter(Boolean);
 
     return NextResponse.json({
       totalSales: summary.totalSales,
@@ -96,7 +110,9 @@ export async function GET(request) {
       productSales,
       bestStaff,
       lowStockProducts,
-      commissionSummary
+      commissionSummary,
+      mostActiveCustomer,
+      insights
     });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to fetch reports' }, { status: error.status || 500 });

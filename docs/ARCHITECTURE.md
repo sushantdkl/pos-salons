@@ -23,6 +23,7 @@ Each module should keep these layers separate:
 - UI: pages and components only call APIs or hooks. They should not own business rules.
 
 `src/modules/services` is the first extracted reference implementation.
+`src/modules/staff` owns staff performance calculations used by staff dashboards and the admin leaderboard.
 
 ## License Flag
 

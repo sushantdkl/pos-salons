@@ -63,8 +63,14 @@ export async function POST(request) {
       const serviceRows = services.map((item) => {
         const service = db.prepare('SELECT * FROM salon_services WHERE id = ? AND is_active = 1').get(item.id);
         if (!service) throw new Error(`Service unavailable: ${item.name || item.id}`);
-        const staffId = Number(item.staff_id || service.assigned_staff_ids?.split(',')[0] || 0) || null;
-        const staffProfile = staffId ? db.prepare('SELECT commission_percentage FROM staff_profiles WHERE user_id = ?').get(staffId) : null;
+        const staffId = Number(item.staff_id || 0) || null;
+        if (!staffId) throw new Error(`Assign staff for ${service.name}`);
+        const staffProfile = db.prepare(`
+          SELECT salon_role, commission_percentage
+          FROM staff_profiles
+          WHERE user_id = ? AND salon_role IN ('barber', 'stylist', 'beautician')
+        `).get(staffId);
+        if (!staffProfile) throw new Error(`Selected staff cannot perform ${service.name}`);
         const commissionPercentage = Number(staffProfile?.commission_percentage || 0);
         return {
           item_type: 'service',
@@ -74,6 +80,7 @@ export async function POST(request) {
           unit_price: Number(service.price),
           subtotal: Number(service.price),
           staff_id: staffId,
+          staff_role: staffProfile.salon_role,
           commission_percentage: commissionPercentage,
           commission_amount: Number(service.price) * commissionPercentage / 100
         };
@@ -159,13 +166,43 @@ export async function POST(request) {
       });
 
       if (customerId) {
+        const serviceNames = serviceRows.map((item) => item.name).join(', ');
+        const preferred = serviceRows.reduce((acc, item) => {
+          if (item.staff_role === 'barber' && !acc.barber) acc.barber = item.staff_id;
+          if (item.staff_role === 'stylist' && !acc.stylist) acc.stylist = item.staff_id;
+          if (item.staff_role === 'beautician' && !acc.beautician) acc.beautician = item.staff_id;
+          return acc;
+        }, {});
         db.prepare(`
           UPDATE customers
           SET total_visits = COALESCE(total_visits, 0) + 1,
               total_spent = COALESCE(total_spent, 0) + ?,
+              favorite_services = CASE
+                WHEN ? = '' THEN favorite_services
+                WHEN favorite_services IS NULL OR favorite_services = '' THEN ?
+                ELSE favorite_services || ', ' || ?
+              END,
+              preferred_barber_id = COALESCE(?, preferred_barber_id),
+              preferred_stylist_id = COALESCE(?, preferred_stylist_id),
+              preferred_beautician_id = COALESCE(?, preferred_beautician_id),
+              customer_category = CASE
+                WHEN COALESCE(total_spent, 0) + ? >= 50000 THEN 'VIP Customer'
+                WHEN COALESCE(total_visits, 0) + 1 >= 2 THEN 'Returning Customer'
+                ELSE 'New Customer'
+              END,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(grandTotal, customerId);
+        `).run(
+          grandTotal,
+          serviceNames,
+          serviceNames,
+          serviceNames,
+          preferred.barber || null,
+          preferred.stylist || null,
+          preferred.beautician || null,
+          grandTotal,
+          customerId
+        );
       }
 
       db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')

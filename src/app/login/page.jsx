@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LogIn } from 'lucide-react'
-import { ROLE_DEMO_PASSWORDS, ROLE_LABELS, normalizeRole } from '@/constants/roles'
+import { ROLE_DEMO_PINS, ROLE_LABELS, normalizeRole } from '@/constants/roles'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -38,12 +38,12 @@ export default function LoginPage() {
     [users, username]
   )
   const selectedRole = normalizeRole(selectedUser?.role)
-  const suggestedPassword = ROLE_DEMO_PASSWORDS[selectedRole]
+  const suggestedPin = ROLE_DEMO_PINS[selectedRole]
 
   const selectUser = (user) => {
     setUsername(user.username)
     const role = normalizeRole(user.role)
-    setPassword(ROLE_DEMO_PASSWORDS[role] || '')
+    setPassword(ROLE_DEMO_PINS[role] || '')
     setError('')
   }
 
@@ -74,6 +74,7 @@ export default function LoginPage() {
     const colors = {
       admin: 'bg-neutral-900',
       cashier: 'bg-teal-600',
+      barber: 'bg-amber-700',
       stylist: 'bg-indigo-600',
       beautician: 'bg-pink-600',
     }
@@ -115,7 +116,7 @@ export default function LoginPage() {
                         <div className="text-sm text-gray-600">{ROLE_LABELS[role]}</div>
                       </div>
                       <div className="rounded-lg bg-[#f7f4ef] px-3 py-1 text-xs font-semibold text-gray-700">
-                        {ROLE_DEMO_PASSWORDS[role]}
+                        {ROLE_DEMO_PINS[role]}
                       </div>
                     </div>
                   </button>
@@ -135,20 +136,20 @@ export default function LoginPage() {
           <CardContent className="space-y-5">
             {selectedUser && (
               <div className="rounded-xl border border-[#e7ded2] bg-[#fffaf4] p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Testing password</div>
-                <div className="mt-1 text-2xl font-semibold tracking-wider text-gray-950">{suggestedPassword}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Demo PIN</div>
+                <div className="mt-1 text-2xl font-semibold tracking-wider text-gray-950">{suggestedPin}</div>
               </div>
             )}
 
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-gray-800">Password</span>
+              <span className="mb-2 block text-sm font-medium text-gray-800">PIN Code</span>
               <input
                 type="text"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={!username || loading}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-neutral-900 disabled:bg-gray-100"
-                placeholder="Select a role to fill testing password"
+                placeholder="Select a role to fill demo PIN"
               />
             </label>
 

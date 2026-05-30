@@ -8,7 +8,7 @@ function validateStaff(data, editing = false) {
   if (!cleanText(data.username)) return 'Username is required';
   if (!cleanText(data.full_name)) return 'Staff name is required';
   if (!APP_ROLES.includes(normalizeRole(data.salon_role || data.role))) return 'Valid role is required';
-  if (!editing && String(data.password || '').length < 4) return 'Password must be at least 4 characters';
+  if (!editing && !/^\d{4,8}$/.test(String(data.password || ''))) return 'PIN must be 4 to 8 digits';
   if (Number(data.commission_percentage || 0) < 0 || Number(data.commission_percentage || 0) > 100) return 'Commission must be between 0 and 100';
   if (Number(data.base_salary || 0) < 0) return 'Base salary cannot be negative';
   return null;
@@ -18,7 +18,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance().db;
     ensureSalonSchema(db);
-    requireRole(request, db, 'admin');
+    requireRole(request, db, ['admin', 'cashier']);
 
     const employees = db.prepare(`
       SELECT u.id, u.username, COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name, u.role, u.email, u.phone, u.is_active, u.created_at,
@@ -116,7 +116,7 @@ export async function PUT(request) {
     let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?';
     const newPassword = data.password;
     if (newPassword) {
-      if (String(newPassword).length < 4) return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 });
+      if (!/^\d{4,8}$/.test(String(newPassword))) return NextResponse.json({ error: 'PIN must be 4 to 8 digits' }, { status: 400 });
       sql += ', password_hash = ?';
       params.push(bcrypt.hashSync(String(newPassword), 10));
     }

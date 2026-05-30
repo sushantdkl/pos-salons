@@ -30,6 +30,7 @@ export async function POST(request) {
       success: true,
       user: result.user,
       token: result.token,
+      redirectPath: result.redirectPath,
     });
   } catch (error) {
     console.error('Login error:', error);

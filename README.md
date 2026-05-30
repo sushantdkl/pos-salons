@@ -18,20 +18,23 @@ Only four roles are enabled:
 
 | Role | Default Username | Testing Password | Access |
 | --- | --- | --- | --- |
-| Admin | admin | 123456 | All modules |
-| Cashier | cashier | 1234 | Billing, customers, services, inventory view, reminders |
-| Stylist | stylist | 2222 | Assigned services, personal performance, commission summary |
-| Beautician | beautician | 3333 | Beauty services, personal performance, commission summary |
+| Admin | admin | 1111 | All modules |
+| Cashier | cashier | 2222 | Billing, customers, services, inventory view, reminders |
+| Barber | barber | 3333 | Assigned services, personal performance, commission summary |
+| Stylist | stylist | 4444 | Assigned services, personal performance, commission summary |
+| Beautician | beautician | 5555 | Beauty services, personal performance, commission summary |
 
-The login screen displays the testing password when a role profile is selected.
+The login screen displays the demo PIN when a role profile is selected.
 
 ## App Routes
 
 - `/login`
 - `/dashboard/admin`
 - `/dashboard/cashier`
+- `/dashboard/barber`
 - `/dashboard/stylist`
 - `/dashboard/beautician`
+- `/dashboard/admin/staff-performance`
 
 Core operational modules:
 

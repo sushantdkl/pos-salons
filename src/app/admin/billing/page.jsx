@@ -36,7 +36,11 @@ export default function AdminBilling() {
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services?.filter((item) => item.is_active) || []);
     if (productResponse.ok) setProducts((await productResponse.json()).products?.filter((item) => item.status === 'active') || []);
     if (customerResponse.ok) setCustomers((await customerResponse.json()).customers || []);
-    if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter((employee) => employee.is_active) || []);
+    if (staffResponse.ok) {
+      setStaff((await staffResponse.json()).employees?.filter((employee) =>
+        employee.is_active && ['barber', 'stylist', 'beautician'].includes(employee.salon_role)
+      ) || []);
+    }
   };
 
   useEffect(() => {
@@ -109,6 +113,10 @@ export default function AdminBilling() {
     }
     if (discountType === 'percentage' && Number(discountValue || 0) > 100) {
       setError('Percentage discount cannot exceed 100.');
+      return;
+    }
+    if (cartServices.some((service) => !service.staff_id)) {
+      setError('Assign a barber, stylist, or beautician for every service.');
       return;
     }
     if (paymentMethod === 'cash' && amountPaid && Number(amountPaid) < total) {
@@ -262,8 +270,8 @@ export default function AdminBilling() {
                     <button onClick={() => setCartServices((items) => items.filter((item) => item.cart_id !== service.cart_id))} className="p-1 text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   <select value={service.staff_id || ''} onChange={(event) => setCartServices((items) => items.map((item) => item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item))} className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-950">
-                    <option value="">Assign stylist</option>
-                    {staff.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                    <option value="">Assign staff member</option>
+                    {staff.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
                   </select>
                 </div>
               ))}
