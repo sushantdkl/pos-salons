@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth-context'
 import { ToastProvider } from '@/components/ui/toast'
@@ -47,7 +46,6 @@ export default function RootLayout({ children }) {
             {children}
           </ToastProvider>
         </AuthProvider>
-        <Analytics />
       </body>
     </html>
   )

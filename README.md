@@ -14,9 +14,9 @@ With this value the app is directly accessible and does not require activation.
 
 ## Roles
 
-Only four roles are enabled:
+Only five roles are enabled:
 
-| Role | Default Username | Testing Password | Access |
+| Role | Default Username | Testing PIN | Access |
 | --- | --- | --- | --- |
 | Admin | admin | 1111 | All modules |
 | Cashier | cashier | 2222 | Billing, customers, services, inventory view, reminders |
@@ -58,7 +58,16 @@ Source code lives under `src/`:
 - `src/constants` - shared constants
 - `src/utils` - framework-neutral helpers
 
-See `docs/ARCHITECTURE.md` for module structure and standards.
+See the `/docs` folder for product, technical, app flow, UI/UX, backend schema, and implementation planning documents.
+
+## Documentation
+
+- `docs/PRD.md` - product requirements and acceptance criteria
+- `docs/TRD.md` - technical requirements and architecture
+- `docs/APP_FLOW.md` - role, billing, navigation, and error flows
+- `docs/UI_UX_BRIEF.md` - design system and experience standards
+- `docs/BACKEND_SCHEMA.md` - backend entities, relationships, validation, and indexes
+- `docs/IMPLEMENTATION_PLAN.md` - phased roadmap and delivery criteria
 
 ## Development
 
