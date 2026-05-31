@@ -33,7 +33,7 @@ flowchart TD
 
 ## Cashier Flow
 
-1. Cashier logs in with PIN.
+1. Kanchan logs in with PIN `2222`.
 2. Cashier opens billing.
 3. Cashier selects an existing customer or creates a new customer during billing.
 4. Cashier adds services.
@@ -44,9 +44,11 @@ flowchart TD
 9. Cashier confirms payment.
 10. System generates receipt, saves bill, updates stock, updates customer history, and updates staff performance.
 
+Kanchan is also selectable as Beautician on beauty services so her beauty revenue and commission are tracked.
+
 ## Barber Flow
 
-1. Barber logs in with PIN.
+1. Raashid logs in with PIN `3333`, Salman logs in with PIN `4444`, or Saajid logs in with PIN `5555`.
 2. Barber lands on `/dashboard/barber`.
 3. Barber sees today, week, month, and lifetime metrics.
 4. Barber reviews recent completed services, customers, invoice references, revenue, and commission.
@@ -86,6 +88,7 @@ Billing validation:
 
 - At least one service or product is required.
 - Every service requires staff assignment.
+- Selected staff should be assigned to the selected service or package component.
 - Product quantity must be positive.
 - Stock cannot go negative.
 - Discount cannot be negative or exceed allowed limits.
@@ -122,6 +125,14 @@ Billing validation:
 - Form buttons submit validated data.
 - Cancel and close actions return users to the previous safe state.
 - Logout clears the session and returns the user to login.
+
+## Package Billing Flow
+
+1. Cashier searches for Silver, Gold, or Platinum Package.
+2. Cashier adds the package as one fast-billing grouped service.
+3. System displays included package components.
+4. Cashier assigns the staff member responsible for the package.
+5. Bill completion stores the package as a service invoice item with package metadata available from the service catalog.
 
 ## Error Handling Flow
 

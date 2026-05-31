@@ -5,7 +5,20 @@ import { ToastProvider } from '@/components/ui/toast'
 export const metadata = {
   title: 'Salon POS System',
   description: 'Fast salon management point of sale system with offline-friendly workflows',
-  generator: 'v0.app',
+  applicationName: 'Salon POS System',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pos-salons.vercel.app'),
+  openGraph: {
+    title: 'Salon POS System',
+    description: 'Professional salon billing, staff performance, inventory, customer management, and reports.',
+    type: 'website',
+    url: '/',
+    siteName: 'Salon POS System',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Salon POS System',
+    description: 'Professional salon billing, staff performance, inventory, customer management, and reports.',
+  },
   icons: {
     icon: [
       {

@@ -19,12 +19,21 @@ Only five roles are enabled:
 | Role | Default Username | Testing PIN | Access |
 | --- | --- | --- | --- |
 | Admin | admin | 1111 | All modules |
-| Cashier | cashier | 2222 | Billing, customers, services, inventory view, reminders |
-| Barber | barber | 3333 | Assigned services, personal performance, commission summary |
-| Stylist | stylist | 4444 | Assigned services, personal performance, commission summary |
-| Beautician | beautician | 5555 | Beauty services, personal performance, commission summary |
+| Cashier / Beautician | kanchan | 2222 | Billing, customers, products, receipts, reminders, beauty services |
+| Barber | raashid | 3333 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
+| Barber | salman | 4444 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
+| Barber | saajid | 5555 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
 
-The login screen displays the demo PIN when a role profile is selected.
+The login screen displays a Demo Access panel and fills the demo PIN when a staff profile is selected.
+
+## Service Catalog
+
+The app seeds the client rate card services and fast billing packages:
+
+- Hair Cut, Hair Wash, Shaving, Head Massage, Threading
+- Normal Cleansing, Deep Cleansing, Wine Facial, Fruit Facial, Lotus Facial
+- Hair Colouring, Cap Highlight, Hair Straight, Keratin, Piece Highlight
+- Silver, Gold, and Platinum men's packages
 
 ## App Routes
 

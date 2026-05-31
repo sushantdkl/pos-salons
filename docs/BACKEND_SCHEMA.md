@@ -100,6 +100,8 @@ Fields:
 - `duration_minutes`: integer, required.
 - `assigned_staff_ids`: text, optional.
 - `description`: text, optional.
+- `is_package`: integer boolean.
+- `package_items`: text, optional comma-separated included service names.
 - `is_active`: integer boolean.
 - `created_at`: datetime.
 - `updated_at`: datetime.
@@ -108,12 +110,14 @@ Relationships:
 
 - One service can appear in many invoice items.
 - Assigned staff IDs reference users logically.
+- Packages are stored as grouped service records for fast billing.
 
 Validation:
 
 - Name and category are required.
 - Price must be zero or greater.
 - Duration must be greater than zero.
+- Package records should include package item names.
 
 Indexes:
 
@@ -216,6 +220,7 @@ Relationships:
 Validation:
 
 - Only paid service invoice items count.
+- Kanchan uses login role `cashier` and staff profile role `beautician`; staff performance is based on staff profile/service assignment, not only login role.
 
 Indexes:
 

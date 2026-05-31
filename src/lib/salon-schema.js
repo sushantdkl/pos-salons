@@ -13,6 +13,83 @@ const CUSTOMER_COLUMNS = [
   ['updated_at', 'DATETIME']
 ];
 
+const BARBER_SERVICES = 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading';
+const BEAUTY_SERVICES = 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading';
+
+const LAUNCH_STAFF = [
+  {
+    username: 'admin',
+    name: 'Admin',
+    role: 'admin',
+    salonRole: 'admin',
+    pin: '1111',
+    email: 'admin@thehaircut.local',
+    assignedServices: '',
+    commission: 0,
+  },
+  {
+    username: 'kanchan',
+    name: 'Kanchan',
+    role: 'cashier',
+    salonRole: 'beautician',
+    pin: '2222',
+    email: 'kanchan@thehaircut.local',
+    assignedServices: BEAUTY_SERVICES,
+    commission: 10,
+  },
+  {
+    username: 'raashid',
+    name: 'Raashid',
+    role: 'barber',
+    salonRole: 'barber',
+    pin: '3333',
+    email: 'raashid@thehaircut.local',
+    assignedServices: BARBER_SERVICES,
+    commission: 10,
+  },
+  {
+    username: 'salman',
+    name: 'Salman',
+    role: 'barber',
+    salonRole: 'barber',
+    pin: '4444',
+    email: 'salman@thehaircut.local',
+    assignedServices: BARBER_SERVICES,
+    commission: 10,
+  },
+  {
+    username: 'saajid',
+    name: 'Saajid',
+    role: 'barber',
+    salonRole: 'barber',
+    pin: '5555',
+    email: 'saajid@thehaircut.local',
+    assignedServices: BARBER_SERVICES,
+    commission: 10,
+  },
+];
+
+const LAUNCH_SERVICES = [
+  ['Hair Cut', 'Haircut', 150, 30, 'Client rate card service', 0, ''],
+  ['Hair Wash', 'Treatment', 50, 15, 'Client rate card service', 0, ''],
+  ['Shaving', 'Beard', 100, 20, 'Client rate card service', 0, ''],
+  ['Head Massage', 'Spa', 200, 20, 'Client rate card service', 0, ''],
+  ['Threading', 'Facial', 50, 15, 'Client rate card service', 0, ''],
+  ['Normal Cleansing', 'Facial', 500, 35, 'Client rate card service', 0, ''],
+  ['Deep Cleansing', 'Facial', 800, 45, 'Client rate card service', 0, ''],
+  ['Wine Facial', 'Facial', 1200, 60, 'Client rate card service', 0, ''],
+  ['Fruit Facial', 'Facial', 1500, 60, 'Client rate card service', 0, ''],
+  ['Lotus Facial', 'Facial', 1800, 60, 'Client rate card service', 0, ''],
+  ['Hair Colouring', 'Hair Color', 500, 75, 'Starting from NPR 500+', 0, ''],
+  ['Cap Highlight', 'Hair Color', 1000, 90, 'Starting from NPR 1000+', 0, ''],
+  ['Hair Straight', 'Treatment', 1200, 90, 'Starting from NPR 1200+', 0, ''],
+  ['Keratin', 'Treatment', 1500, 120, 'Starting from NPR 1500+', 0, ''],
+  ['Piece Highlight', 'Hair Color', 200, 20, 'NPR 200 per piece', 0, ''],
+  ['Silver Package', 'Other', 650, 80, 'Includes Hair Cut, Hair Wash, Shaving, Normal Cleansing', 1, 'Hair Cut,Hair Wash,Shaving,Normal Cleansing'],
+  ['Gold Package', 'Other', 850, 90, 'Includes Hair Cut, Hair Wash, Shaving, Deep Cleansing', 1, 'Hair Cut,Hair Wash,Shaving,Deep Cleansing'],
+  ['Platinum Package', 'Other', 1450, 120, 'Includes Hair Cut, Hair Wash, Shaving, Head Massage, Facial', 1, 'Hair Cut,Hair Wash,Shaving,Head Massage,Facial'],
+];
+
 function columnExists(db, table, column) {
   return db.prepare(`PRAGMA table_info(${table})`).all().some((row) => row.name === column);
 }
@@ -28,28 +105,35 @@ function tableSql(db, table) {
 }
 
 function seedSalonData(db) {
-  const categoryCount = db.prepare('SELECT COUNT(*) as count FROM salon_service_categories').get().count;
-  if (categoryCount === 0) {
-    const insertCategory = db.prepare('INSERT INTO salon_service_categories (name, display_order) VALUES (?, ?)');
-    ['Haircut', 'Hair Color', 'Facial', 'Beard', 'Treatment', 'Makeup', 'Spa', 'Other'].forEach((name, index) => {
-      insertCategory.run(name, index + 1);
-    });
-  }
+  const insertCategory = db.prepare('INSERT OR IGNORE INTO salon_service_categories (name, display_order) VALUES (?, ?)');
+  ['Haircut', 'Hair Color', 'Facial', 'Beard', 'Treatment', 'Makeup', 'Spa', 'Other'].forEach((name, index) => {
+    insertCategory.run(name, index + 1);
+  });
 
-  const serviceCount = db.prepare('SELECT COUNT(*) as count FROM salon_services').get().count;
-  if (serviceCount === 0) {
-    const insertService = db.prepare(`
-      INSERT INTO salon_services (name, category, price, duration_minutes, description, is_active)
-      VALUES (?, ?, ?, ?, ?, 1)
-    `);
-    [
-      ['Classic Haircut', 'Haircut', 500, 30, 'Clean salon haircut with finishing'],
-      ['Beard Trim', 'Beard', 250, 20, 'Shape, trim, and finish'],
-      ['Hair Color', 'Hair Color', 2200, 90, 'Professional color application'],
-      ['Deep Facial', 'Facial', 1800, 60, 'Skin cleansing and facial care'],
-      ['Hair Spa', 'Spa', 1500, 50, 'Relaxing hair spa treatment']
-    ].forEach((service) => insertService.run(...service));
-  }
+  const insertService = db.prepare(`
+    INSERT INTO salon_services (name, category, price, duration_minutes, description, is_package, package_items, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+  const updateService = db.prepare(`
+    UPDATE salon_services
+    SET category = ?, price = ?, duration_minutes = ?, description = ?,
+        is_package = ?, package_items = ?, is_active = 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  LAUNCH_SERVICES.forEach(([name, category, price, duration, description, isPackage, packageItems]) => {
+    const existing = db.prepare('SELECT id FROM salon_services WHERE name = ? ORDER BY id ASC LIMIT 1').get(name);
+    if (existing) {
+      updateService.run(category, price, duration, description, isPackage, packageItems, existing.id);
+    } else {
+      insertService.run(name, category, price, duration, description, isPackage, packageItems);
+    }
+  });
+
+  db.prepare(`
+    UPDATE salon_services
+    SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE name IN ('Classic Haircut', 'Beard Trim', 'Hair Color', 'Deep Facial', 'Hair Spa')
+  `).run();
 
   const productCount = db.prepare('SELECT COUNT(*) as count FROM salon_products').get().count;
   if (productCount === 0) {
@@ -69,14 +153,6 @@ function seedSalonData(db) {
 }
 
 function seedRoleUsers(db) {
-  const users = [
-    ['admin', 'Salon Admin', 'admin', '1111', 'admin@salon.local'],
-    ['cashier', 'Salon Cashier', 'cashier', '2222', 'cashier@salon.local'],
-    ['barber', 'Salon Barber', 'barber', '3333', 'barber@salon.local'],
-    ['stylist', 'Salon Stylist', 'stylist', '4444', 'stylist@salon.local'],
-    ['beautician', 'Salon Beautician', 'beautician', '5555', 'beautician@salon.local'],
-  ];
-
   const insertUser = db.prepare(`
     INSERT INTO users (username, full_name, role, password_hash, email, phone, is_active)
     VALUES (?, ?, ?, ?, ?, '', 1)
@@ -88,24 +164,34 @@ function seedRoleUsers(db) {
   `);
   const upsertProfile = db.prepare(`
     INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
-    VALUES (?, ?, ?, '', ?, 0)
+    VALUES (?, ?, ?, ?, ?, 0)
     ON CONFLICT(user_id) DO UPDATE SET
       display_name = excluded.display_name,
       salon_role = excluded.salon_role,
+      assigned_services = excluded.assigned_services,
+      commission_percentage = excluded.commission_percentage,
       updated_at = CURRENT_TIMESTAMP
   `);
 
-  users.forEach(([username, name, role, password, email]) => {
-    const hash = bcrypt.hashSync(password, 10);
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  db.prepare(`
+    UPDATE users
+    SET is_active = 0
+    WHERE username IN ('cashier', 'barber', 'stylist', 'beautician')
+       OR username LIKE 'qa_%'
+       OR username LIKE 'salon_staff_%'
+  `).run();
+
+  LAUNCH_STAFF.forEach((staff) => {
+    const hash = bcrypt.hashSync(staff.pin, 10);
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(staff.username);
     let userId = existing?.id;
     if (existing) {
-      updateUser.run(name, role, hash, email, username);
+      updateUser.run(staff.name, staff.role, hash, staff.email, staff.username);
     } else {
-      const result = insertUser.run(username, name, role, hash, email);
+      const result = insertUser.run(staff.username, staff.name, staff.role, hash, staff.email);
       userId = result.lastInsertRowid;
     }
-    upsertProfile.run(userId, name, role, role === 'admin' ? 0 : 10);
+    upsertProfile.run(userId, staff.name, staff.salonRole, staff.assignedServices, staff.commission);
   });
 }
 
@@ -406,6 +492,8 @@ export function ensureSalonSchema(db) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+  addColumnIfMissing(db, 'salon_services', 'is_package', 'INTEGER DEFAULT 0');
+  addColumnIfMissing(db, 'salon_services', 'package_items', 'TEXT');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_service_categories (

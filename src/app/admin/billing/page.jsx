@@ -81,7 +81,21 @@ export default function AdminBilling() {
   const change = Number(amountPaid || total) - total;
 
   const addService = (service) => {
-    setCartServices((items) => [...items, { ...service, cart_id: crypto.randomUUID(), staff_id: customer.preferred_stylist_id || '' }]);
+    setCartServices((items) => [...items, { ...service, cart_id: crypto.randomUUID(), staff_id: customer.preferred_stylist_id || customer.preferred_barber_id || customer.preferred_beautician_id || '' }]);
+  };
+
+  const staffForService = (service) => {
+    const serviceKeys = [service.name, ...String(service.package_items || '').split(',')]
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean);
+
+    return staff.filter((employee) => {
+      const assigned = String(employee.assigned_services || '').split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean);
+      if (!assigned.length) return true;
+      return serviceKeys.some((name) => assigned.includes(name) || (name.includes('facial') && assigned.some((item) => item.includes('facial'))));
+    });
   };
 
   const addProduct = (product) => {
@@ -102,7 +116,16 @@ export default function AdminBilling() {
 
   const selectCustomer = (id) => {
     const selected = customers.find((item) => String(item.id) === String(id));
-    if (selected) setCustomer({ id: selected.id, name: selected.name, phone: selected.phone || '', preferred_stylist_id: selected.preferred_stylist_id || '' });
+    if (selected) {
+      setCustomer({
+        id: selected.id,
+        name: selected.name,
+        phone: selected.phone || '',
+        preferred_barber_id: selected.preferred_barber_id || '',
+        preferred_stylist_id: selected.preferred_stylist_id || '',
+        preferred_beautician_id: selected.preferred_beautician_id || ''
+      });
+    }
   };
 
   const completeBill = async () => {
@@ -225,7 +248,8 @@ export default function AdminBilling() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="font-medium text-gray-950">{service.name}</p>
-                          <p className="text-sm text-gray-500">{service.category} • {service.duration_minutes} min</p>
+                          <p className="text-sm text-gray-500">{service.category} - {service.duration_minutes} min{service.is_package ? ' - Package' : ''}</p>
+                          {service.is_package ? <p className="mt-1 text-xs text-gray-500">{service.package_items}</p> : null}
                         </div>
                         <span className="font-semibold text-gray-950">{formatCurrency(service.price)}</span>
                       </div>
@@ -242,7 +266,7 @@ export default function AdminBilling() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="font-medium text-gray-950">{product.name}</p>
-                          <p className="text-sm text-gray-500">{product.category} • Stock {product.current_stock}</p>
+                          <p className="text-sm text-gray-500">{product.category} - Stock {product.current_stock}</p>
                         </div>
                         <span className="font-semibold text-gray-950">{formatCurrency(product.selling_price)}</span>
                       </div>
@@ -271,7 +295,7 @@ export default function AdminBilling() {
                   </div>
                   <select value={service.staff_id || ''} onChange={(event) => setCartServices((items) => items.map((item) => item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item))} className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-950">
                     <option value="">Assign staff member</option>
-                    {staff.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
+                    {staffForService(service).map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
                   </select>
                 </div>
               ))}

@@ -12,7 +12,7 @@ export class AuthService {
   
   async authenticate(username, password) {
     const user = this.db.get(`
-      SELECT u.*, COALESCE(sp.salon_role, u.role) as app_role
+      SELECT u.*, sp.salon_role
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
       WHERE u.username = ? AND u.is_active = 1
@@ -47,7 +47,7 @@ export class AuthService {
       VALUES (?, ?, ?)
     `, [user.id, sessionToken, expiresAt.toISOString()]);
     
-    const role = normalizeRole(user.app_role);
+    const role = normalizeRole(user.role);
     return {
       success: true,
       user: {
@@ -66,7 +66,7 @@ export class AuthService {
   async verifySession(token) {
     const session = this.db.get(`
       SELECT s.*, u.id as user_id, u.username, u.full_name, u.role, u.email, u.phone,
-             COALESCE(sp.salon_role, u.role) as app_role
+             sp.salon_role
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
@@ -81,7 +81,7 @@ export class AuthService {
       id: session.user_id,
       username: session.username,
       full_name: session.full_name,
-      role: normalizeRole(session.app_role),
+      role: normalizeRole(session.role),
       email: session.email,
       phone: session.phone
     };

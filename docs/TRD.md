@@ -74,6 +74,14 @@ sequenceDiagram
 
 During testing, demo PINs are visible on the login screen. Production can keep the same hashing/session architecture while hiding demo credentials and strengthening account policies.
 
+Launch demo PINs:
+
+- Admin: `1111`
+- Kanchan, Cashier / Beautician: `2222`
+- Raashid, Barber: `3333`
+- Salman, Barber: `4444`
+- Saajid, Barber: `5555`
+
 ## Role-Based Access
 
 - Admin: all modules and analytics.
@@ -81,6 +89,8 @@ During testing, demo PINs are visible on the login screen. Production can keep t
 - Barber: own performance dashboard and permitted service/customer views.
 - Stylist: own performance dashboard and permitted service/customer views.
 - Beautician: own performance dashboard and permitted service/customer views.
+
+Kanchan is modeled with login role `cashier` and staff profile role `beautician`. This lets her access reception workflows while still receiving beauty-service performance, revenue, and commission attribution.
 
 Protected routes are enforced by middleware/proxy checks and API-level `requireRole` checks.
 
@@ -109,6 +119,7 @@ Protected routes are enforced by middleware/proxy checks and API-level `requireR
 - Reject duplicate usernames.
 - Reject inactive users.
 - Reject negative stock, invalid discounts, and missing staff assignments.
+- Restrict service assignment to staff whose assigned service list matches the selected service or package component.
 - Keep environment variables server-side unless explicitly public.
 - Keep license enforcement behind `NEXT_PUBLIC_LICENSE_ENABLED`.
 - Use transactions for bill completion.
@@ -122,6 +133,7 @@ Core persisted entities:
 - Sessions.
 - Customers.
 - Salon service categories and services.
+- Service package flags and package component lists.
 - Salon bills and bill items.
 - Salon products and inventory movements.
 - Action logs.
@@ -168,3 +180,12 @@ NEXT_PUBLIC_LICENSE_ENABLED=true
 - UI components should avoid unnecessary re-renders.
 - Build output must stay Vercel-compatible.
 - Slow network states should show loading and error feedback.
+
+## Launch Website, SEO, and Legal Placeholders
+
+- Open Graph and Twitter metadata are configured in the root layout.
+- `robots.js` blocks internal dashboard/API paths and allows login/legal placeholders.
+- `sitemap.js` lists root, login, privacy, and terms placeholders.
+- `/legal/privacy` and `/legal/terms` are placeholders for launch legal review.
+- Google Search Console and Bing Webmaster Tools should verify the production domain after DNS/SSL are final.
+- The future landing page should include salon positioning, CTA structure, service highlights, location, Open Graph image, and mobile-first layout.

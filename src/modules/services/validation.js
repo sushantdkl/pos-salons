@@ -23,5 +23,9 @@ export function normalizeServiceInput(data) {
     assigned_staff_ids: staffIds,
     description: sanitizeText(data.description, null),
     is_active: data.is_active === false ? 0 : 1,
+    is_package: data.is_package ? 1 : 0,
+    package_items: Array.isArray(data.package_items)
+      ? data.package_items.map((item) => sanitizeText(item)).filter(Boolean).join(',')
+      : sanitizeText(data.package_items || ''),
   };
 }

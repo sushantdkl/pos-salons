@@ -66,11 +66,23 @@ export async function POST(request) {
         const staffId = Number(item.staff_id || 0) || null;
         if (!staffId) throw new Error(`Assign staff for ${service.name}`);
         const staffProfile = db.prepare(`
-          SELECT salon_role, commission_percentage
+          SELECT salon_role, commission_percentage, assigned_services
           FROM staff_profiles
           WHERE user_id = ? AND salon_role IN ('barber', 'stylist', 'beautician')
         `).get(staffId);
         if (!staffProfile) throw new Error(`Selected staff cannot perform ${service.name}`);
+        const assignedServices = String(staffProfile.assigned_services || '')
+          .split(',')
+          .map((name) => name.trim().toLowerCase())
+          .filter(Boolean);
+        const packageServices = String(service.package_items || '')
+          .split(',')
+          .map((name) => name.trim().toLowerCase())
+          .filter(Boolean);
+        const serviceKeys = [service.name.toLowerCase(), ...packageServices];
+        if (assignedServices.length && !serviceKeys.some((name) => assignedServices.includes(name) || name.includes('facial') && assignedServices.includes('facial'))) {
+          throw new Error(`${staffProfile.salon_role} is not assigned to ${service.name}`);
+        }
         const commissionPercentage = Number(staffProfile?.commission_percentage || 0);
         return {
           item_type: 'service',

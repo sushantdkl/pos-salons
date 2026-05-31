@@ -67,7 +67,7 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-gray-900">Dashboard</h1>
-            <p className="text-gray-500 mt-1 text-sm">Welcome back, Admin • {getNepaliDateString(new Date())}</p>
+            <p className="text-gray-500 mt-1 text-sm">Welcome back, Admin - {getNepaliDateString(new Date())}</p>
           </div>
           <div className="flex items-center space-x-2 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -261,21 +261,39 @@ export default function AdminDashboard() {
                 <p className="text-xs text-gray-500 mt-1">Available now</p>
               </div>
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Avg Bill</p>
+                <p className="text-sm font-medium text-gray-600 mb-1">Avg Bill Value</p>
                 <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.avgOrder || 0)}</p>
                 <p className="text-xs text-gray-500 mt-1">Per customer</p>
               </div>
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Monthly Sales</p>
+                <p className="text-sm font-medium text-gray-600 mb-1">Weekly Revenue</p>
+                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.weeklyRevenue || 0)}</p>
+                <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                <p className="text-sm font-medium text-gray-600 mb-1">Monthly Revenue</p>
                 <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.monthlySales || 0)}</p>
                 <p className="text-xs text-gray-500 mt-1">This month</p>
               </div>
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Growth</p>
-                <p className={`text-2xl font-semibold ${(stats?.growthPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {(stats?.growthPercent || 0) >= 0 ? '+' : ''}{stats?.growthPercent || 0}%
-                </p>
-                <p className="text-xs text-gray-500 mt-1">vs last month</p>
+                <p className="text-sm font-medium text-gray-600 mb-1">Customer Retention</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats?.repeatCustomerRate || 0}%</p>
+                <p className="text-xs text-gray-500 mt-1">Repeat customer rate</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                <p className="text-sm font-medium text-gray-600 mb-1">Commission Summary</p>
+                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.commissionSummary || 0)}</p>
+                <p className="text-xs text-gray-500 mt-1">Service commission</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                <p className="text-sm font-medium text-gray-600 mb-1">Today&apos;s Customers</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats?.todayCustomers || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">Served today</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                <p className="text-sm font-medium text-gray-600 mb-1">Today&apos;s Services</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats?.todayServices || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">Sold today</p>
               </div>
             </div>
           </div>

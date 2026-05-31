@@ -33,8 +33,8 @@ export class ServiceRepository {
 
   create(service) {
     const result = this.db.prepare(`
-      INSERT INTO salon_services (name, category, price, duration_minutes, assigned_staff_ids, description, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO salon_services (name, category, price, duration_minutes, assigned_staff_ids, description, is_active, is_package, package_items)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       service.name,
       service.category,
@@ -42,7 +42,9 @@ export class ServiceRepository {
       service.duration_minutes,
       service.assigned_staff_ids,
       service.description,
-      service.is_active
+      service.is_active,
+      service.is_package,
+      service.package_items
     );
 
     return this.findById(result.lastInsertRowid);
@@ -52,7 +54,7 @@ export class ServiceRepository {
     this.db.prepare(`
       UPDATE salon_services
       SET name = ?, category = ?, price = ?, duration_minutes = ?, assigned_staff_ids = ?,
-          description = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+          description = ?, is_active = ?, is_package = ?, package_items = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       service.name,
@@ -62,6 +64,8 @@ export class ServiceRepository {
       service.assigned_staff_ids,
       service.description,
       service.is_active,
+      service.is_package,
+      service.package_items,
       service.id
     );
 

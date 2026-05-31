@@ -16,6 +16,19 @@ export const ROLE_DEMO_PINS = {
   beautician: '5555',
 };
 
+export const DEMO_ACCESS_PROFILES = [
+  { username: 'admin', name: 'Admin', label: 'Admin', pin: '1111' },
+  { username: 'kanchan', name: 'Kanchan', label: 'Cashier / Beautician', pin: '2222' },
+  { username: 'raashid', name: 'Raashid', label: 'Barber', pin: '3333' },
+  { username: 'salman', name: 'Salman', label: 'Barber', pin: '4444' },
+  { username: 'saajid', name: 'Saajid', label: 'Barber', pin: '5555' },
+];
+
+export const USER_DEMO_PINS = DEMO_ACCESS_PROFILES.reduce((pins, profile) => ({
+  ...pins,
+  [profile.username]: profile.pin,
+}), {});
+
 export const ROLE_DEMO_PASSWORDS = ROLE_DEMO_PINS;
 
 export function normalizeRole(role) {

@@ -41,6 +41,38 @@ export async function GET(request) {
     const totalServices = db.prepare('SELECT COUNT(*) as count FROM salon_services WHERE is_active = 1').get().count;
     const totalStaff = db.prepare('SELECT COUNT(*) as count FROM users WHERE is_active = 1').get().count;
     const totalCustomers = db.prepare('SELECT COUNT(*) as count FROM customers').get().count;
+    const todayCustomers = db.prepare("SELECT COUNT(DISTINCT customer_id) as count FROM salon_bills WHERE DATE(created_at) = DATE('now') AND status = 'paid' AND customer_id IS NOT NULL").get().count;
+    const todayServices = db.prepare("SELECT COUNT(*) as count FROM salon_bill_items WHERE item_type = 'service' AND DATE(created_at) = DATE('now')").get().count;
+    const weeklyRevenue = db.prepare("SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE DATE(created_at) >= DATE('now', '-6 days') AND status = 'paid'").get().total;
+    const topCustomers = db.prepare(`
+      SELECT customer_name as name, COALESCE(SUM(grand_total), 0) as total_spent, COUNT(*) as visits
+      FROM salon_bills
+      WHERE status = 'paid' AND customer_name IS NOT NULL
+      GROUP BY customer_name
+      ORDER BY total_spent DESC
+      LIMIT 5
+    `).all();
+    const topServices = db.prepare(`
+      SELECT name, COUNT(*) as count, COALESCE(SUM(subtotal), 0) as revenue
+      FROM salon_bill_items
+      WHERE item_type = 'service'
+      GROUP BY name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `).all();
+    const topStaff = db.prepare(`
+      SELECT COALESCE(sp.display_name, u.full_name) as name, sp.salon_role, COUNT(sbi.id) as services, COALESCE(SUM(sbi.subtotal), 0) as revenue
+      FROM salon_bill_items sbi
+      JOIN users u ON u.id = sbi.staff_id
+      LEFT JOIN staff_profiles sp ON sp.user_id = u.id
+      WHERE sbi.item_type = 'service'
+      GROUP BY u.id
+      ORDER BY revenue DESC
+      LIMIT 5
+    `).all();
+    const commissionSummary = db.prepare("SELECT COALESCE(SUM(commission_amount), 0) as total FROM salon_bill_items WHERE item_type = 'service'").get().total;
+    const repeatCustomers = db.prepare('SELECT COUNT(*) as count FROM customers WHERE COALESCE(total_visits, 0) >= 2').get().count;
+    const repeatCustomerRate = totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0;
 
     return NextResponse.json({
       stats: {
@@ -52,8 +84,16 @@ export async function GET(request) {
         totalProducts: totalServices || 0,
         totalEmployees: totalStaff || 0,
         totalCustomers: totalCustomers || 0,
+        todayCustomers: todayCustomers || 0,
+        todayServices: todayServices || 0,
+        weeklyRevenue: weeklyRevenue || 0,
         monthlySales: monthlySales.total || 0,
         avgOrder: monthlySales.avg || 0,
+        repeatCustomerRate,
+        commissionSummary: commissionSummary || 0,
+        topCustomers,
+        topServices,
+        topStaff,
         growthPercent,
         weeklySales,
         revenueSources: revenueSources.map((row) => ({

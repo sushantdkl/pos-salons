@@ -30,8 +30,7 @@ export default function Home() {
         }
         
         setCheckingActivation(false)
-      } catch (error) {
-        console.error('Activation check failed:', error)
+      } catch {
         // Skip activation check on error - allow access
         setCheckingActivation(false)
       }
@@ -41,8 +40,6 @@ export default function Home() {
   }, [router])
 
   useEffect(() => {
-    console.log('Home page state:', { loading, checkingActivation, isAuthenticated, user: user?.username })
-    
     if (!loading && !checkingActivation) {
       if (isAuthenticated && user) {
         router.push(dashboardPathForRole(user.role))

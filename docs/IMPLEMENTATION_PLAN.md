@@ -36,6 +36,7 @@ Deliverables:
 
 - Role constants.
 - Demo PIN display.
+- Real launch staff: Admin, Kanchan, Raashid, Salman, Saajid.
 - Role dashboard routing.
 - API role checks.
 
@@ -61,6 +62,7 @@ Deliverables:
 - Service CRUD.
 - Search and category filter.
 - Validation.
+- Client rate-card services and Silver, Gold, Platinum package records.
 
 Risks:
 
@@ -252,6 +254,7 @@ Deliverables:
 - License feature flag preserved.
 - Deployment notes.
 - Security review.
+- Launch placeholders for Open Graph, sitemap, robots, privacy policy, terms, data handling, Google Search Console, and Bing Webmaster Tools.
 
 Risks:
 
@@ -263,3 +266,22 @@ Acceptance Criteria:
 - Testing deployments are accessible with `NEXT_PUBLIC_LICENSE_ENABLED=false`.
 - Future release can enable license checks with `NEXT_PUBLIC_LICENSE_ENABLED=true`.
 - Repository is clean and pushed only after verification passes.
+
+## Launch Checklist Placeholders
+
+Website:
+
+- Future landing page copy, CTA structure, service highlights, mobile responsiveness, favicon, Open Graph image, and SSL/domain readiness.
+
+SEO:
+
+- Google Search Console verification after final domain setup.
+- Bing Webmaster Tools verification after final domain setup.
+- Sitemap and robots endpoints available from the Next.js app.
+- Meta title, description, Open Graph, and Twitter metadata configured.
+
+Legal:
+
+- Privacy Policy placeholder route exists at `/legal/privacy`.
+- Terms of Service placeholder route exists at `/legal/terms`.
+- Data handling documentation should be completed before commercial launch.

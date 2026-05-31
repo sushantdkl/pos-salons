@@ -70,6 +70,18 @@ Recommended admin sidebar:
 
 Cashier sidebar should focus on billing, customers, services, inventory, reminders, and logout. Barber, Stylist, and Beautician sidebars should focus on personal dashboard/performance and logout.
 
+## Demo Access UI
+
+During testing, the login screen includes a professional Demo Access section:
+
+- Admin: PIN 1111.
+- Kanchan, Cashier / Beautician: PIN 2222.
+- Raashid, Barber: PIN 3333.
+- Salman, Barber: PIN 4444.
+- Saajid, Barber: PIN 5555.
+
+This section must be easy to remove before production.
+
 ## Mobile Responsiveness
 
 - Sidebar should collapse or stack.

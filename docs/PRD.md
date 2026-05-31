@@ -23,7 +23,43 @@ The product focuses on POS-side salon operations. Public appointment booking, on
 - Cashier: billing, customer lookup, customer creation, service/product selection, staff assignment, receipt generation, inventory viewing, and reminders.
 - Barber: personal dashboard for assigned work, completed services, revenue, commission, and recent customer service history.
 - Stylist: personal dashboard for assigned work, completed services, revenue, commission, and recent customer service history.
-- Beautician: personal dashboard for beauty services, completed services, revenue, commission, and recent customer service history.
+- Beautician: personal dashboard for beauty services, completed services, revenue, commission, and recent customer service history. Kanchan is selectable as Beautician for beauty services while logging in as Cashier.
+
+## Launch Staff Configuration
+
+| Staff | Login Role | Service Role | PIN | Assigned Services |
+| --- | --- | --- | --- | --- |
+| Admin | Admin | Admin | 1111 | Full system access |
+| Kanchan | Cashier | Beautician | 2222 | Beauty services, beauty treatments, billing, customers, products, receipts, reminders |
+| Raashid | Barber | Barber | 3333 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
+| Salman | Barber | Barber | 4444 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
+| Saajid | Barber | Barber | 5555 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
+
+## Launch Service Catalog
+
+| Service | Price |
+| --- | ---: |
+| Hair Cut | 150 |
+| Hair Wash | 50 |
+| Shaving | 100 |
+| Head Massage | 200 |
+| Threading | 50 |
+| Normal Cleansing | 500 |
+| Deep Cleansing | 800 |
+| Wine Facial | 1200 |
+| Fruit Facial | 1500 |
+| Lotus Facial | 1800 |
+| Hair Colouring | Starting 500+ |
+| Cap Highlight | Starting 1000+ |
+| Hair Straight | Starting 1200+ |
+| Keratin | Starting 1500+ |
+| Piece Highlight | 200 per piece |
+
+Packages:
+
+- Silver Package: 650. Includes Hair Cut, Hair Wash, Shaving, Normal Cleansing.
+- Gold Package: 850. Includes Hair Cut, Hair Wash, Shaving, Deep Cleansing.
+- Platinum Package: 1450. Includes Hair Cut, Hair Wash, Shaving, Head Massage, Facial.
 
 ## Features
 
