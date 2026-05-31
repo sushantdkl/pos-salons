@@ -232,6 +232,7 @@ Deliverables:
 - Reusable public-site data, layout, and WhatsApp helper modules.
 - Navbar, footer, floating WhatsApp button, and POS Login link.
 - SEO-ready sitemap, robots, metadata, and legal placeholders.
+- Real The Hair Cut details: Birendranagar-7, Surkhet, +977 9858051694, Facebook, TikTok, Google Maps embed, and public image assets.
 
 Risks:
 
@@ -244,7 +245,7 @@ Acceptance Criteria:
 - Public pages open without login.
 - POS dashboards remain protected.
 - Booking form validates required fields and opens WhatsApp with the correct message.
-- WhatsApp number is read from `NEXT_PUBLIC_SALON_WHATSAPP_NUMBER`.
+- WhatsApp number is centralized in `src/modules/public-site/data/salon-info.ts` and resolves to `9779858051694`.
 
 ## Phase 10: QA & Optimization
 
@@ -294,11 +295,11 @@ Acceptance Criteria:
 - Future release can enable license checks with `NEXT_PUBLIC_LICENSE_ENABLED=true`.
 - Repository is clean and pushed only after verification passes.
 
-## Launch Checklist Placeholders
+## Launch Checklist
 
 Website:
 
-- Future landing page copy, CTA structure, service highlights, mobile responsiveness, favicon, Open Graph image, and SSL/domain readiness.
+- Public landing page copy, CTA structure, service highlights, mobile responsiveness, favicon, Open Graph image, and SSL/domain readiness.
 
 SEO:
 

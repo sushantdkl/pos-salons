@@ -189,7 +189,7 @@ export default function AdminBilling() {
         table{width:100%;border-collapse:collapse}td{padding:3px 0}.total{border-top:1px dashed #111;font-weight:bold;font-size:14px}
         .center{text-align:center;margin-top:8px}
       </style></head><body>
-        <h1>The Haircut Salon</h1><div class="meta">${billData.bill.bill_number}<br/>${new Date().toLocaleString()}<br/>${billData.bill.customer_name || 'Walk-in Customer'}</div>
+        <h1>The Hair Cut</h1><div class="meta">${billData.bill.bill_number}<br/>${new Date().toLocaleString()}<br/>${billData.bill.customer_name || 'Walk-in Customer'}</div>
         <table>${rows}
           <tr><td>Subtotal</td><td style="text-align:right">${formatCurrency(billData.bill.subtotal)}</td></tr>
           <tr><td>Discount</td><td style="text-align:right">-${formatCurrency(billData.bill.discount_amount)}</td></tr>
@@ -210,7 +210,7 @@ export default function AdminBilling() {
       return;
     }
     const phone = lastBill.bill.customer_phone.replace(/[^\d]/g, '');
-    const message = `Receipt ${lastBill.bill.bill_number} from The Haircut Salon. Total: ${formatCurrency(lastBill.bill.grand_total)}. Thank you.`;
+    const message = `Receipt ${lastBill.bill.bill_number} from The Hair Cut. Total: ${formatCurrency(lastBill.bill.grand_total)}. Thank you.`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 

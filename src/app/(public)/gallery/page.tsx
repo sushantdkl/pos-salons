@@ -1,22 +1,22 @@
-import { ImageIcon } from 'lucide-react';
+import Image from 'next/image';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
 import { galleryItems } from '@/modules/public-site/data/gallery';
 
 export const metadata = {
-  title: 'Gallery | The Haircut Salon',
-  description: 'Placeholder gallery for future salon photos and completed looks.',
+  title: 'Gallery | The Hair Cut',
+  description: 'Photos from The Hair Cut salon space, services, opening moments, customers, and hygiene setup.',
 };
 
 export default function GalleryPage() {
   return (
     <PublicLayout>
-      <Section eyebrow="Gallery" title="Salon gallery" description="Placeholder cards are ready for real salon images.">
+      <Section eyebrow="Gallery" title="Salon gallery" description="Real moments from The Hair Cut, including the salon space, services, opening day, customers, and hygiene setup.">
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {galleryItems.map((item) => (
             <article key={item.title} className="overflow-hidden rounded-2xl border border-[#e7ded2] bg-white shadow-sm">
-              <div className="flex aspect-[4/3] items-center justify-center bg-[#211d1a] text-white">
-                <ImageIcon className="h-10 w-10" />
+              <div className="relative aspect-[4/3] bg-[#171411]">
+                <Image src={item.image} alt={item.title} fill sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" className="object-cover" />
               </div>
               <div className="p-5">
                 <h3 className="text-lg font-semibold">{item.title}</h3>

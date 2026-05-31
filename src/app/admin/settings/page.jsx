@@ -40,7 +40,7 @@ export default function SettingsPage() {
         const data = await response.json();
         const settings = data.settings || {};
         setForm({
-          salon_name: settings.salon_name || 'The Haircut Salon',
+          salon_name: settings.salon_name || 'The Hair Cut',
           salon_address: settings.salon_address || '',
           salon_phone: settings.salon_phone || '',
           salon_email: settings.salon_email || '',

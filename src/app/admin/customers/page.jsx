@@ -113,7 +113,7 @@ export default function AdminCustomers() {
       alert('Customer phone number is required for WhatsApp reminder.');
       return;
     }
-    const message = `Namaste ${customer.name}, this is a reminder from The Haircut Salon. We look forward to serving you again.`;
+    const message = `Namaste ${customer.name}, this is a reminder from The Hair Cut. We look forward to serving you again.`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 

@@ -3,38 +3,39 @@ import { AuthProvider } from '@/lib/auth-context'
 import { ToastProvider } from '@/components/ui/toast'
 
 export const metadata = {
-  title: 'Salon POS System',
-  description: 'Fast salon management point of sale system with offline-friendly workflows',
-  applicationName: 'Salon POS System',
+  title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+  description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+  applicationName: 'The Hair Cut',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pos-salons.vercel.app'),
   openGraph: {
-    title: 'Salon POS System',
-    description: 'Professional salon billing, staff performance, inventory, customer management, and reports.',
+    title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+    description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+    images: ['/assets/Salon_Banner.jpeg'],
     type: 'website',
     url: '/',
     siteName: 'Salon POS System',
   },
   twitter: {
     card: 'summary',
-    title: 'Salon POS System',
-    description: 'Professional salon billing, staff performance, inventory, customer management, and reports.',
+    title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+    description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
   },
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
+        url: '/assets/logo.jpg',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/icon-dark-32x32.png',
+        url: '/assets/logo.jpg',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: '/assets/logo.jpg',
+        type: 'image/jpeg',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/assets/logo.jpg',
   },
 }
 

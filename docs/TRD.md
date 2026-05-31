@@ -58,6 +58,16 @@ Domain modules should contain types, validation, repositories, services, hooks, 
 
 Public website code is isolated under `src/modules/public-site` and `src/app/(public)`. It uses safe static public data and does not import POS repositories, PIN seed data, or private dashboard components.
 
+Public salon configuration is centralized in `src/modules/public-site/data/salon-info.ts`, including:
+
+- Salon name: The Hair Cut.
+- Location: Birendranagar-7, Surkhet.
+- Phone: +977 9858051694.
+- WhatsApp number: `9779858051694`.
+- Facebook and TikTok links.
+- Google Maps embed URL.
+- Logo, banner, and public image asset paths.
+
 ## Authentication Flow
 
 ```mermaid
@@ -184,12 +194,14 @@ NEXT_PUBLIC_LICENSE_ENABLED=true
 - Build output must stay Vercel-compatible.
 - Slow network states should show loading and error feedback.
 
-## Launch Website, SEO, and Legal Placeholders
+## Launch Website, SEO, and Legal Readiness
 
 - Open Graph and Twitter metadata are configured in the root layout.
 - `robots.js` blocks internal dashboard/API paths and allows login/legal placeholders.
 - `sitemap.js` lists root, login, privacy, and terms placeholders.
 - `/legal/privacy` and `/legal/terms` are placeholders for launch legal review.
-- `/book-appointment` opens WhatsApp using `NEXT_PUBLIC_SALON_WHATSAPP_NUMBER` and does not write to the database.
+- `/book-appointment` opens WhatsApp using the centralized public salon configuration and does not write to the database.
+- Current WhatsApp destination is `https://wa.me/9779858051694`.
+- Public gallery images come from `public/assets` and exclude logo/banner/details branding assets.
 - Google Search Console and Bing Webmaster Tools should verify the production domain after DNS/SSL are final.
-- The future landing page should include salon positioning, CTA structure, service highlights, location, Open Graph image, and mobile-first layout.
+- The public landing page includes salon positioning, CTA structure, service highlights, location, Open Graph image, and mobile-first layout.

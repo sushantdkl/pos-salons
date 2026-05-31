@@ -93,7 +93,7 @@ export default function LoginPage() {
       <div className="w-full max-w-5xl grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-[#e7ded2] shadow-sm">
           <CardHeader>
-            <CardTitle className="text-2xl">Salon POS</CardTitle>
+            <CardTitle className="text-2xl">The Hair Cut POS</CardTitle>
             <CardDescription>Select your role profile to continue</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

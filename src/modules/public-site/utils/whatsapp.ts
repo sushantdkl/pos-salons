@@ -1,7 +1,7 @@
-const DEFAULT_WHATSAPP_NUMBER = '977XXXXXXXXXX';
+import { salonInfo } from '../data/salon-info';
 
 export function getSalonWhatsAppNumber() {
-  return process.env.NEXT_PUBLIC_SALON_WHATSAPP_NUMBER || DEFAULT_WHATSAPP_NUMBER;
+  return salonInfo.whatsappNumber || process.env.NEXT_PUBLIC_SALON_WHATSAPP_NUMBER || '';
 }
 
 export function createWhatsAppLink(message?: string) {
@@ -28,7 +28,7 @@ export function createBookingMessage({
   message?: string;
 }) {
   return [
-    'Hello, I want to book a salon appointment.',
+    `Hello ${salonInfo.name}, I want to book an appointment.`,
     '',
     `Name: ${name}`,
     `Phone: ${phone}`,

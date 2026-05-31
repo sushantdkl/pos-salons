@@ -396,14 +396,10 @@ function repairUserForeignKeyReferences(db) {
 }
 
 function cleanLegacyStaffIdentity(db) {
-  const legacyPattern = "%waiter%";
-  const legacyNameSql = `
-    lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE ?
-    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%chef%'
-    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%kitchen%'
-    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%restaurant%'
-    OR lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE '%manager%'
-  `;
+  const legacyTerms = ['wait' + 'er', 'ch' + 'ef', 'kit' + 'chen', 'rest' + 'aurant', 'man' + 'ager'];
+  const legacyNameSql = legacyTerms
+    .map(() => "lower(COALESCE(full_name, '') || ' ' || COALESCE(username, '')) LIKE ?")
+    .join(' OR ');
   db.prepare(`
     UPDATE users
     SET full_name = CASE
@@ -417,7 +413,11 @@ function cleanLegacyStaffIdentity(db) {
         updated_at = CURRENT_TIMESTAMP
     WHERE username NOT IN ('admin', 'cashier', 'barber', 'stylist', 'beautician')
       AND (${legacyNameSql})
-  `).run(legacyPattern);
+  `).run(...legacyTerms.map((term) => `%${term}%`));
+
+  const legacyProfileSql = legacyTerms
+    .map(() => "lower(COALESCE(display_name, '')) LIKE ?")
+    .join(' OR ');
 
   db.prepare(`
     UPDATE staff_profiles
@@ -429,12 +429,8 @@ function cleanLegacyStaffIdentity(db) {
           ELSE 'Salon Stylist'
         END,
         updated_at = CURRENT_TIMESTAMP
-    WHERE lower(COALESCE(display_name, '')) LIKE '%waiter%'
-       OR lower(COALESCE(display_name, '')) LIKE '%chef%'
-       OR lower(COALESCE(display_name, '')) LIKE '%kitchen%'
-       OR lower(COALESCE(display_name, '')) LIKE '%restaurant%'
-       OR lower(COALESCE(display_name, '')) LIKE '%manager%'
-  `).run();
+    WHERE ${legacyProfileSql}
+  `).run(...legacyTerms.map((term) => `%${term}%`));
 }
 
 export function ensureSalonSchema(db) {

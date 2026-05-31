@@ -4,7 +4,7 @@ import { StaffCard } from '@/modules/public-site/components/cards';
 import { publicStaff } from '@/modules/public-site/data/staff';
 
 export const metadata = {
-  title: 'Staff | The Haircut Salon',
+  title: 'Staff | The Hair Cut',
   description: 'Meet the salon staff: Raashid, Salman, Saajid, and Kanchan.',
 };
 

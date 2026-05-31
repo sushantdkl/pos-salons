@@ -4,7 +4,7 @@ import { ServiceCard } from '@/modules/public-site/components/cards';
 import { publicServices } from '@/modules/public-site/data/services';
 
 export const metadata = {
-  title: 'Services | The Haircut Salon',
+  title: 'Services | The Hair Cut',
   description: 'Salon services and rates for hair, beard, facial, beauty, and treatment services.',
 };
 

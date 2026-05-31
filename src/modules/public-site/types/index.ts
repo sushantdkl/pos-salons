@@ -16,9 +16,11 @@ export type PublicStaffMember = {
   name: string;
   role: string;
   specialties: string[];
+  image?: string;
 };
 
 export type GalleryItem = {
   title: string;
   description: string;
+  image: string;
 };

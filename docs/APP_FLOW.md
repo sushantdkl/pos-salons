@@ -15,9 +15,9 @@ flowchart TD
 
 ## Public Website Flow
 
-1. Visitor opens `/`.
+1. Visitor opens `/` and sees The Hair Cut branding, tagline, service highlights, packages, staff preview, real salon photos, and location.
 2. Visitor browses Services, Packages, Staff, Gallery, and Contact.
-3. Visitor can open WhatsApp from the navbar, footer, floating button, or contact page.
+3. Visitor can open WhatsApp at `https://wa.me/9779858051694` from the navbar, footer, floating button, or contact page.
 4. Visitor can open `/book-appointment` without login.
 5. Public website routes do not read private POS data or expose staff PINs.
 
@@ -26,7 +26,7 @@ flowchart TD
 1. Visitor enters name, phone, service, preferred date, and preferred time.
 2. Visitor optionally chooses preferred staff and enters a message.
 3. Client-side validation blocks incomplete required fields.
-4. The page opens WhatsApp with a prefilled appointment request.
+4. The page opens WhatsApp with a prefilled appointment request addressed to The Hair Cut.
 5. No appointment is stored in the POS database until a future appointment module is added.
 
 ## Role Routing Flow

@@ -42,7 +42,7 @@ export default function RemindersPage() {
     }
     const servicePart = serviceName ? ` for ${serviceName}` : '';
     const staffPart = staffName ? ` with ${staffName}` : '';
-    const message = `Namaste ${customer.name}, this is a friendly reminder from The Haircut Salon${servicePart}${staffPart}. We look forward to seeing you.`;
+    const message = `Namaste ${customer.name}, this is a friendly reminder from The Hair Cut${servicePart}${staffPart}. We look forward to seeing you.`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 

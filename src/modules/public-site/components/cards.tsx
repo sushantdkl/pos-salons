@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { PublicPackage, PublicService, PublicStaffMember } from '../types';
 
 export function ServiceCard({ service }: { service: PublicService }) {
@@ -23,7 +24,7 @@ export function PackageCard({ item }: { item: PublicPackage }) {
       <p className="mt-2 text-3xl font-semibold text-[#211d1a]">Rs. {item.price}</p>
       <p className="mt-3 text-sm leading-6 text-[#6d625b]">{item.description}</p>
       <ul className="mt-5 grid gap-2 text-sm text-[#3a312b]">
-        {item.includes.map((service) => <li key={service}>• {service}</li>)}
+        {item.includes.map((service) => <li key={service}>- {service}</li>)}
       </ul>
     </article>
   );
@@ -32,9 +33,15 @@ export function PackageCard({ item }: { item: PublicPackage }) {
 export function StaffCard({ member }: { member: PublicStaffMember }) {
   return (
     <article className="rounded-2xl border border-[#e7ded2] bg-white p-6 shadow-sm">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#211d1a] text-xl font-semibold text-white">
-        {member.name.charAt(0)}
-      </div>
+      {member.image ? (
+        <div className="relative h-16 w-16 overflow-hidden rounded-full bg-[#211d1a]">
+          <Image src={member.image} alt={`${member.name} at The Hair Cut`} fill sizes="64px" className="object-cover" />
+        </div>
+      ) : (
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#211d1a] text-xl font-semibold text-white">
+          {member.name.charAt(0)}
+        </div>
+      )}
       <h3 className="mt-5 text-xl font-semibold text-[#211d1a]">{member.name}</h3>
       <p className="mt-1 text-sm font-medium text-[#8a6a52]">{member.role}</p>
       <div className="mt-4 flex flex-wrap gap-2">

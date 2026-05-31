@@ -2,9 +2,19 @@
 
 ## Project Overview
 
-Salon POS is an internal business management system for salons that need fast billing, customer history, staff performance tracking, inventory control, reports, and manual reminders. The system is designed for daily use by owners, reception staff, barbers, stylists, and beauticians.
+Salon POS is an internal business management system and public website for The Hair Cut, a men's salon in Birendranagar-7, Surkhet. The POS supports fast billing, customer history, staff performance tracking, inventory control, reports, and manual reminders. The public site presents salon services, packages, staff, gallery, contact details, and WhatsApp appointment requests.
 
-The product focuses on POS-side salon operations. Public appointment booking, online booking, and public marketing pages are intentionally out of scope for the current testing stage.
+The product focuses on POS-side salon operations plus a lightweight public website. Full database-backed appointment scheduling remains out of scope for the current testing stage.
+
+## Public Salon Configuration
+
+- Salon name: The Hair Cut.
+- Tagline: We'll style, You'll smile!
+- Location: Birendranagar-7, Surkhet.
+- Phone/WhatsApp: +977 9858051694.
+- WhatsApp link: `https://wa.me/9779858051694`.
+- Facebook: `https://www.facebook.com/profile.php?id=61563439747795`.
+- TikTok: `https://www.tiktok.com/@the.haircut1?_r=1&_t=ZS-96n9lkFroZA`.
 
 ## Business Goals
 
@@ -75,6 +85,7 @@ Packages:
 - Reports for revenue, products, services, staff, customers, commission, and payments.
 - Manual WhatsApp reminder trigger.
 - Public salon website with services, packages, staff, gallery, contact, and WhatsApp booking.
+- Real salon assets from `public/assets` for branding, hero, gallery, services, and contact sections.
 - License feature flag disabled for development, Vercel preview, and current production testing.
 
 ## Functional Requirements

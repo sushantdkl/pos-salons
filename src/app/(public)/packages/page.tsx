@@ -4,7 +4,7 @@ import { PackageCard } from '@/modules/public-site/components/cards';
 import { publicPackages } from '@/modules/public-site/data/packages';
 
 export const metadata = {
-  title: "Men's Packages | The Haircut Salon",
+  title: "Men's Packages | The Hair Cut",
   description: 'Silver, Gold, and Platinum salon grooming packages.',
 };
 

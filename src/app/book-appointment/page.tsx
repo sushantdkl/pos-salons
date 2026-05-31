@@ -1,8 +1,10 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { MessageCircle } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
+import { salonInfo } from '@/modules/public-site/data/salon-info';
 import { publicServices } from '@/modules/public-site/data/services';
 import { publicPackages } from '@/modules/public-site/data/packages';
 import { publicStaff } from '@/modules/public-site/data/staff';
@@ -50,13 +52,18 @@ export default function BookAppointmentPage() {
             <p className="text-sm font-semibold uppercase tracking-wide text-[#8a6a52]">WhatsApp booking</p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#211d1a]">Book an appointment</h1>
             <p className="mt-4 leading-7 text-[#6d625b]">
-              Send a WhatsApp appointment request with your preferred service, staff, date, and time. The salon will confirm availability.
+              Send a WhatsApp appointment request to {salonInfo.name} with your preferred service, staff, date, and time.
             </p>
+            <div className="relative mt-8 min-h-[360px] overflow-hidden rounded-3xl bg-[#171411] shadow-sm">
+              <Image src={salonInfo.assets.booking} alt="Booking an appointment at The Hair Cut" fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <p className="absolute bottom-5 left-5 right-5 text-lg font-semibold text-white">{salonInfo.tagline}</p>
+            </div>
           </div>
           <form onSubmit={submit} className="rounded-2xl border border-[#e7ded2] bg-white p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Customer name *</span>
+                <span className="mb-2 block text-sm font-semibold">Full Name *</span>
                 <input value={form.name} onChange={(event) => update('name', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
               </label>
               <label className="block">
