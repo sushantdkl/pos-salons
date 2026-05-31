@@ -13,6 +13,22 @@ flowchart TD
   E -->|Invalid| H["Show clear error"]
 ```
 
+## Public Website Flow
+
+1. Visitor opens `/`.
+2. Visitor browses Services, Packages, Staff, Gallery, and Contact.
+3. Visitor can open WhatsApp from the navbar, footer, floating button, or contact page.
+4. Visitor can open `/book-appointment` without login.
+5. Public website routes do not read private POS data or expose staff PINs.
+
+## WhatsApp Appointment Flow
+
+1. Visitor enters name, phone, service, preferred date, and preferred time.
+2. Visitor optionally chooses preferred staff and enters a message.
+3. Client-side validation blocks incomplete required fields.
+4. The page opens WhatsApp with a prefilled appointment request.
+5. No appointment is stored in the POS database until a future appointment module is added.
+
 ## Role Routing Flow
 
 - Admin routes to `/dashboard/admin`.

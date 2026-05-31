@@ -74,6 +74,7 @@ Packages:
 - Inventory product management with stock in/out, low stock alerts, valuation, and sale deduction.
 - Reports for revenue, products, services, staff, customers, commission, and payments.
 - Manual WhatsApp reminder trigger.
+- Public salon website with services, packages, staff, gallery, contact, and WhatsApp booking.
 - License feature flag disabled for development, Vercel preview, and current production testing.
 
 ## Functional Requirements
@@ -89,6 +90,7 @@ Packages:
 - Staff revenue and commission must calculate from completed service bill items.
 - Reports must read from persisted billing, item, product, customer, and staff data.
 - WhatsApp reminders must open a prefilled customer message when a phone number exists.
+- Public appointment requests must open WhatsApp with a prefilled message and must not write to POS data yet.
 
 ## Non-Functional Requirements
 

@@ -46,6 +46,7 @@ src/
     billing/
     customers/
     inventory/
+    public-site/
     reports/
     services/
     staff/
@@ -54,6 +55,8 @@ src/
 ```
 
 Domain modules should contain types, validation, repositories, services, hooks, and components as the module grows. UI routes should call APIs or module services instead of owning complex business rules.
+
+Public website code is isolated under `src/modules/public-site` and `src/app/(public)`. It uses safe static public data and does not import POS repositories, PIN seed data, or private dashboard components.
 
 ## Authentication Flow
 
@@ -187,5 +190,6 @@ NEXT_PUBLIC_LICENSE_ENABLED=true
 - `robots.js` blocks internal dashboard/API paths and allows login/legal placeholders.
 - `sitemap.js` lists root, login, privacy, and terms placeholders.
 - `/legal/privacy` and `/legal/terms` are placeholders for launch legal review.
+- `/book-appointment` opens WhatsApp using `NEXT_PUBLIC_SALON_WHATSAPP_NUMBER` and does not write to the database.
 - Google Search Console and Bing Webmaster Tools should verify the production domain after DNS/SSL are final.
 - The future landing page should include salon positioning, CTA structure, service highlights, location, Open Graph image, and mobile-first layout.

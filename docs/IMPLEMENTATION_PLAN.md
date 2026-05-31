@@ -219,6 +219,33 @@ Acceptance Criteria:
 - Reminder requires customer phone.
 - WhatsApp opens with prefilled salon message.
 
+## Phase 9B: Public Website & WhatsApp Booking
+
+Objectives:
+
+- Add a public salon website without exposing protected POS routes.
+- Add WhatsApp-based booking requests without database writes.
+
+Deliverables:
+
+- Public pages for Home, Services, Packages, Staff, Gallery, Contact, and Book Appointment.
+- Reusable public-site data, layout, and WhatsApp helper modules.
+- Navbar, footer, floating WhatsApp button, and POS Login link.
+- SEO-ready sitemap, robots, metadata, and legal placeholders.
+
+Risks:
+
+- Public root route accidentally breaking POS login flow.
+- Booking logic accidentally writing to POS customer or billing records.
+- Hardcoded WhatsApp number scattered across files.
+
+Acceptance Criteria:
+
+- Public pages open without login.
+- POS dashboards remain protected.
+- Booking form validates required fields and opens WhatsApp with the correct message.
+- WhatsApp number is read from `NEXT_PUBLIC_SALON_WHATSAPP_NUMBER`.
+
 ## Phase 10: QA & Optimization
 
 Objectives:

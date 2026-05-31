@@ -67,6 +67,16 @@ export async function proxy(request) {
   }
 
   if (
+    pathname === '/' ||
+    pathname.startsWith('/services') ||
+    pathname.startsWith('/packages') ||
+    pathname.startsWith('/staff') ||
+    pathname.startsWith('/gallery') ||
+    pathname.startsWith('/contact') ||
+    pathname.startsWith('/book-appointment') ||
+    pathname.startsWith('/legal') ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
     pathname.startsWith('/activate') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/license-expired') ||
