@@ -1,5 +1,8 @@
 import { AuthService } from '@/lib/auth/auth.js';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const { username, password, deviceId } = await request.json();

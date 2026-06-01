@@ -24,6 +24,14 @@ export const DEMO_ACCESS_PROFILES = [
   { username: 'saajid', name: 'Saajid', label: 'Barber', pin: '5555' },
 ];
 
+export const DEMO_LOGIN_USERS = [
+  { username: 'admin', full_name: 'Admin', role: 'admin', salon_role: 'admin' },
+  { username: 'kanchan', full_name: 'Kanchan', role: 'cashier', salon_role: 'beautician' },
+  { username: 'raashid', full_name: 'Raashid', role: 'barber', salon_role: 'barber' },
+  { username: 'salman', full_name: 'Salman', role: 'barber', salon_role: 'barber' },
+  { username: 'saajid', full_name: 'Saajid', role: 'barber', salon_role: 'barber' },
+];
+
 export const USER_DEMO_PINS = DEMO_ACCESS_PROFILES.reduce((pins, profile) => ({
   ...pins,
   [profile.username]: profile.pin,

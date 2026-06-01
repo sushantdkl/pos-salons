@@ -6,13 +6,35 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function resolveDatabasePathFromUrl(databaseUrl) {
+  if (!databaseUrl) return '';
+
+  if (databaseUrl.startsWith('file:')) {
+    return fileURLToPath(databaseUrl);
+  }
+
+  if (databaseUrl.startsWith('sqlite://')) {
+    return databaseUrl.replace(/^sqlite:\/\//, '');
+  }
+
+  if (/^(postgres|postgresql|mysql|https?):\/\//i.test(databaseUrl)) {
+    console.warn('DATABASE_URL is not a SQLite path. Falling back to local SQLite storage.');
+    return '';
+  }
+
+  return databaseUrl;
+}
+
 export class PosDatabase {
   constructor(dbPath) {
     const isVercel = !!process.env.VERCEL;
 
-    // Use database from environment variable or .license file
+    // Use explicit path, DATABASE_URL, isolated license file, DB_NAME, or default SQLite file.
     if (!dbPath) {
-      // Try to read from .license file
+      dbPath = resolveDatabasePathFromUrl(process.env.DATABASE_URL);
+    }
+
+    if (!dbPath) {
       const licensePath = path.join(process.cwd(), 'databases', '.license');
       if (fs.existsSync(licensePath)) {
         try {
@@ -22,18 +44,16 @@ export class PosDatabase {
           console.error('Error reading license file:', error);
         }
       }
-      
-      // Fallback to environment variable or default
-      if (!dbPath) {
-        dbPath = process.env.DB_NAME ? `databases/${process.env.DB_NAME}` : 'salon_pos.db';
-      }
     }
-    
-    const fullPath = path.join(process.cwd(), dbPath);
+
+    if (!dbPath) {
+      dbPath = process.env.DB_NAME ? `databases/${process.env.DB_NAME}` : 'salon_pos.db';
+    }
+
+    const fullPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
     let runtimePath = fullPath;
 
-    // Vercel serverless filesystem is read-only except /tmp.
-    // Mirror/copy the DB into /tmp so writes can work.
+    // Vercel serverless filesystem is read-only except /tmp. Mirror or create the DB there.
     if (isVercel) {
       const tmpBaseDir = path.join('/tmp', 'databases');
       if (!fs.existsSync(tmpBaseDir)) {
@@ -49,28 +69,23 @@ export class PosDatabase {
 
       runtimePath = tmpDbPath;
     }
-    
-    // Check if database file exists
+
     const dbExists = fs.existsSync(runtimePath);
-    
-    console.log('📊 Using database:', runtimePath);
-    
+
+    console.log('Using database:', runtimePath);
+
     this.db = new BetterSqlite3(runtimePath, {
-      verbose: process.env.NODE_ENV === 'development' ? console.log : null
+      verbose: process.env.NODE_ENV === 'development' ? console.log : null,
     });
-    
-    // Enable WAL mode for better concurrent access
+
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    
-    // Only initialize schema if database is new
+
     if (!dbExists) {
-      console.log('⚠️  Database file not found. Please run: npm run db:seed');
-      // Don't throw error, just warn - the seed script will create it
+      console.log('Database file not found. The application will initialize the salon schema on first use.');
     }
   }
-  
-  // Helper methods
+
   run(sql, params = []) {
     try {
       return this.db.prepare(sql).run(params);
@@ -79,7 +94,7 @@ export class PosDatabase {
       throw error;
     }
   }
-  
+
   get(sql, params = []) {
     try {
       return this.db.prepare(sql).get(params);
@@ -88,7 +103,7 @@ export class PosDatabase {
       throw error;
     }
   }
-  
+
   all(sql, params = []) {
     try {
       return this.db.prepare(sql).all(params);
@@ -97,20 +112,19 @@ export class PosDatabase {
       throw error;
     }
   }
-  
+
   transaction(fn) {
     return this.db.transaction(fn);
   }
-  
+
   close() {
     this.db.close();
   }
 }
 
-// Singleton instance
 class Database {
   static instance = null;
-  
+
   static getInstance() {
     if (!Database.instance) {
       Database.instance = new PosDatabase();

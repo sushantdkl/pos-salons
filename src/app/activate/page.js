@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
 
 export default function ActivationPage() {
-  const licenseEnabled = process.env.NEXT_PUBLIC_LICENSE_ENABLED === 'true';
+  const licenseEnabled = String(process.env.NEXT_PUBLIC_LICENSE_ENABLED || '').trim().toLowerCase() === 'true';
 
   return (
     <div className="min-h-screen bg-[#f7f4ef] flex items-center justify-center p-4">

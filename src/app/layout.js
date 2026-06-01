@@ -46,9 +46,13 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{
           __html: `
             (function() {
-              const theme = localStorage.getItem('theme') || 'light';
-              if (theme === 'dark') {
-                document.documentElement.classList.add('dark');
+              try {
+                const theme = localStorage.getItem('theme') || 'light';
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (error) {
+                document.documentElement.classList.remove('dark');
               }
             })();
           `

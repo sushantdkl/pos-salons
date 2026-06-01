@@ -5,7 +5,7 @@ import path from 'path';
 export const runtime = 'nodejs';
 
 const ADMIN_SERVER_URL = process.env.NEXT_PUBLIC_ADMIN_SERVER_URL || 'http://localhost:3001';
-const LICENSE_ENABLED = process.env.NEXT_PUBLIC_LICENSE_ENABLED === 'true';
+const LICENSE_ENABLED = String(process.env.NEXT_PUBLIC_LICENSE_ENABLED || '').trim().toLowerCase() === 'true';
 
 export async function GET() {
   try {

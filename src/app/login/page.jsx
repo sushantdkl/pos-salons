@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LogIn } from 'lucide-react'
-import { DEMO_ACCESS_PROFILES, ROLE_DEMO_PINS, ROLE_LABELS, USER_DEMO_PINS, normalizeRole } from '@/constants/roles'
+import { DEMO_ACCESS_PROFILES, DEMO_LOGIN_USERS, ROLE_DEMO_PINS, ROLE_LABELS, USER_DEMO_PINS, normalizeRole } from '@/constants/roles'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -22,9 +22,12 @@ export default function LoginPage() {
         const response = await fetch('/api/users/active')
         if (response.ok) {
           const data = await response.json()
-          setUsers(data.users || [])
+          setUsers(data.users?.length ? data.users : DEMO_LOGIN_USERS)
+        } else {
+          setUsers(DEMO_LOGIN_USERS)
         }
       } catch {
+        setUsers(DEMO_LOGIN_USERS)
         setError('Unable to load active users')
       } finally {
         setLoadingUsers(false)

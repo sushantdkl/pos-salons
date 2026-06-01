@@ -488,8 +488,6 @@ export function ensureSalonSchema(db) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
-  addColumnIfMissing(db, 'salon_services', 'is_package', 'INTEGER DEFAULT 0');
-  addColumnIfMissing(db, 'salon_services', 'package_items', 'TEXT');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_service_categories (
@@ -515,6 +513,8 @@ export function ensureSalonSchema(db) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+  addColumnIfMissing(db, 'salon_services', 'is_package', 'INTEGER DEFAULT 0');
+  addColumnIfMissing(db, 'salon_services', 'package_items', 'TEXT');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS staff_profiles (

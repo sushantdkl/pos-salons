@@ -2,7 +2,7 @@ const WARNING_DAYS = 2;
 const DEFAULT_GRACE_DAYS = 5;
 
 export function isLicenseEnabled() {
-  return process.env.NEXT_PUBLIC_LICENSE_ENABLED === 'true';
+  return String(process.env.NEXT_PUBLIC_LICENSE_ENABLED || '').trim().toLowerCase() === 'true';
 }
 
 function disabledLicenseStatus() {

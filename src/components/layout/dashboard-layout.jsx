@@ -39,6 +39,10 @@ export default function AdminLayout({ children }) {
   };
 
   const checkLicense = async () => {
+    if (process.env.NEXT_PUBLIC_LICENSE_ENABLED !== 'true') {
+      return;
+    }
+
     try {
       const res = await fetch('/api/license/check');
       const data = await res.json();

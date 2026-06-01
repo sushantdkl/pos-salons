@@ -3,6 +3,9 @@ import Database from '@/lib/db/index';
 import { ensureSalonSchema } from '@/lib/salon-schema';
 import { normalizeRole } from '@/constants/roles';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const dbInstance = Database.getInstance();
