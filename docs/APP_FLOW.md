@@ -159,6 +159,22 @@ Token controls:
 3. Server aggregates revenue, bills, services, product sales, staff performance, customer activity, low stock, commissions, and payment methods.
 4. Dashboard shows summary cards, clean lists, and business insights.
 
+## Website CMS Flow
+
+1. Admin opens `/dashboard/admin/website`.
+2. Admin edits Hero, About, Services, Packages, Staff, Gallery, Contact, and SEO tabs.
+3. Admin saves CMS changes through the admin-only website CMS API.
+4. Server validates/sanitizes input, stores CMS rows, and writes an audit log.
+5. Public website routes read CMS data on request and merge it with safe fallback content.
+6. Public pages stay accessible even if CMS data is empty.
+
+Security rules:
+
+- Only Admin can access Website CMS routes and APIs.
+- Cashier, Barber, Stylist, and Beautician receive access denied for CMS APIs.
+- Public staff cards never expose PINs, salary, commission, phone, or performance data.
+- Google Map embed data accepts Google Maps embed URLs only.
+
 ## Navigation Flow
 
 - Sidebar shows role-appropriate modules.

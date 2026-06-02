@@ -422,3 +422,58 @@ Validation:
 Indexes:
 
 - Recommended indexes on `user_id`, `entity_type`, `entity_id`, and `created_at`.
+
+## WebsiteContent
+
+Physical table: `website_content`.
+
+Fields:
+
+- `id`: integer primary key.
+- `section_key`: text unique key. Values include hero, about, services, packages, staff, contact, and seo.
+- `title`, `subtitle`, `description`: public website copy.
+- `image_url`: public asset or remote image URL.
+- `button_text`, `button_link`: primary CTA.
+- `secondary_button_text`, `secondary_button_link`: secondary CTA.
+- `is_visible`: integer boolean controlling section visibility.
+- `sort_order`: integer display order.
+- `metadata`: JSON text for section-specific data such as contact details, social links, map embed, highlights, SEO keywords, and Open Graph text.
+- `created_at`, `updated_at`: audit timestamps.
+- `updated_by`: admin user ID.
+
+Validation:
+
+- Only admin users can update CMS content.
+- Text input is sanitized before storage/output.
+- Google Map embeds must resolve to `https://www.google.com/maps/embed`.
+
+## WebsiteGalleryImage
+
+Physical table: `website_gallery_images`.
+
+Fields:
+
+- `id`: integer primary key.
+- `image_url`: required public asset or remote image URL.
+- `title`: optional display title.
+- `alt_text`: image alt text.
+- `category`: optional gallery grouping.
+- `description`: optional public caption.
+- `sort_order`: integer order.
+- `is_visible`: integer boolean.
+- `created_at`, `updated_at`: audit timestamps.
+- `updated_by`: admin user ID.
+
+Additional public website fields:
+
+- `salon_services.show_on_website`
+- `salon_services.featured_on_website`
+- `salon_services.website_image`
+- `salon_services.website_description`
+- `staff_profiles.show_on_website`
+- `staff_profiles.featured_on_website`
+- `staff_profiles.website_title`
+- `staff_profiles.website_bio`
+- `staff_profiles.website_photo`
+
+These fields control public website presentation only. Private staff PINs, salary, commission, phone, and performance data are not exposed publicly.

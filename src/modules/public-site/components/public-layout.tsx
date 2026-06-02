@@ -14,8 +14,10 @@ const navLinks = [
   ['Contact', '/contact'],
 ];
 
-export function PublicLayout({ children }: { children: ReactNode }) {
-  const whatsappUrl = createWhatsAppLink();
+type PublicLayoutInfo = typeof salonInfo;
+
+export function PublicLayout({ children, info = salonInfo }: { children: ReactNode; info?: PublicLayoutInfo }) {
+  const whatsappUrl = createWhatsAppLink(undefined, info.whatsappNumber);
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#171411]">
@@ -23,9 +25,9 @@ export function PublicLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="flex items-center gap-3 font-semibold">
             <span className="relative h-11 w-11 overflow-hidden rounded-full bg-[#171411]">
-              <Image src={salonInfo.assets.logo} alt={`${salonInfo.name} logo`} fill sizes="44px" className="object-cover" />
+              <Image src={info.assets.logo} alt={`${info.name} logo`} fill sizes="44px" className="object-cover" />
             </span>
-            <span>{salonInfo.name}</span>
+            <span>{info.name}</span>
           </Link>
           <nav className="hidden items-center gap-5 text-sm font-medium text-[#5f554e] lg:flex">
             {navLinks.map(([label, href]) => (
@@ -75,11 +77,11 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           <div>
             <div className="flex items-center gap-3">
               <span className="relative h-12 w-12 overflow-hidden rounded-full bg-white">
-                <Image src={salonInfo.assets.logo} alt={`${salonInfo.name} logo`} fill sizes="48px" className="object-cover" />
+                <Image src={info.assets.logo} alt={`${info.name} logo`} fill sizes="48px" className="object-cover" />
               </span>
-              <h2 className="text-xl font-semibold">{salonInfo.name}</h2>
+              <h2 className="text-xl font-semibold">{info.name}</h2>
             </div>
-            <p className="mt-3 text-sm leading-6 text-white/70">{salonInfo.tagline}</p>
+            <p className="mt-3 text-sm leading-6 text-white/70">{info.tagline}</p>
           </div>
           <div>
             <h3 className="font-semibold">Quick Links</h3>
@@ -90,16 +92,16 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           </div>
           <div>
             <h3 className="font-semibold">Contact</h3>
-            <p className="mt-3 text-sm text-white/70">{salonInfo.address}</p>
-            <p className="mt-2 text-sm text-white/70">{salonInfo.phone}</p>
+            <p className="mt-3 text-sm text-white/70">{info.address}</p>
+            <p className="mt-2 text-sm text-white/70">{info.phone}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#171411]">WhatsApp</a>
-              <a href={salonInfo.social.facebook} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"><Facebook className="h-4 w-4" />Facebook</a>
-              <a href={salonInfo.social.tiktok} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"><Music2 className="h-4 w-4" />TikTok</a>
+              <a href={info.social.facebook} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"><Facebook className="h-4 w-4" />Facebook</a>
+              <a href={info.social.tiktok} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"><Music2 className="h-4 w-4" />TikTok</a>
             </div>
           </div>
         </div>
-        <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-white/60">{salonInfo.copyright}</div>
+        <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-white/60">{info.copyright}</div>
       </footer>
     </div>
   );

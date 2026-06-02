@@ -1,110 +1,24 @@
-'use client';
+import { BookingForm } from '@/modules/public-site/components/booking-form';
+import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
 
-import { FormEvent, useMemo, useState } from 'react';
-import Image from 'next/image';
-import { MessageCircle } from 'lucide-react';
-import { PublicLayout } from '@/modules/public-site/components/public-layout';
-import { salonInfo } from '@/modules/public-site/data/salon-info';
-import { publicServices } from '@/modules/public-site/data/services';
-import { publicPackages } from '@/modules/public-site/data/packages';
-import { publicStaff } from '@/modules/public-site/data/staff';
-import { createBookingMessage, createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
+export const dynamic = 'force-dynamic';
 
-const initialForm = {
-  name: '',
-  phone: '',
-  service: '',
-  preferredStaff: '',
-  date: '',
-  time: '',
-  message: '',
-};
+export function generateMetadata() {
+  const cms = getPublicWebsiteData();
+  return {
+    title: `Book Appointment | ${cms.info.name}`,
+    description: `Send a WhatsApp appointment request to ${cms.info.name}.`,
+  };
+}
 
 export default function BookAppointmentPage() {
-  const [form, setForm] = useState(initialForm);
-  const [error, setError] = useState('');
-  const serviceOptions = useMemo(() => [
-    ...publicServices.map((service) => service.name),
-    ...publicPackages.map((item) => item.name),
-  ], []);
-
-  const update = (key: keyof typeof form, value: string) => {
-    setForm((current) => ({ ...current, [key]: value }));
-    setError('');
-  };
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !form.service || !form.date || !form.time) {
-      setError('Please fill name, phone, service, preferred date, and preferred time.');
-      return;
-    }
-
-    const message = createBookingMessage(form);
-    window.open(createWhatsAppLink(message), '_blank', 'noopener,noreferrer');
-  };
-
+  const cms = getPublicWebsiteData();
   return (
-    <PublicLayout>
-      <main className="px-4 py-14">
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#8a6a52]">WhatsApp booking</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#211d1a]">Book an appointment</h1>
-            <p className="mt-4 leading-7 text-[#6d625b]">
-              Send a WhatsApp appointment request to {salonInfo.name} with your preferred service, staff, date, and time.
-            </p>
-            <div className="relative mt-8 min-h-[360px] overflow-hidden rounded-3xl bg-[#171411] shadow-sm">
-              <Image src={salonInfo.assets.booking} alt="Booking an appointment at The Hair Cut" fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <p className="absolute bottom-5 left-5 right-5 text-lg font-semibold text-white">{salonInfo.tagline}</p>
-            </div>
-          </div>
-          <form onSubmit={submit} className="rounded-2xl border border-[#e7ded2] bg-white p-6 shadow-sm">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Full Name *</span>
-                <input value={form.name} onChange={(event) => update('name', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Phone number *</span>
-                <input value={form.phone} onChange={(event) => update('phone', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
-              </label>
-              <label className="block md:col-span-2">
-                <span className="mb-2 block text-sm font-semibold">Service *</span>
-                <select value={form.service} onChange={(event) => update('service', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]">
-                  <option value="">Select service or package</option>
-                  {serviceOptions.map((service) => <option key={service} value={service}>{service}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred staff</span>
-                <select value={form.preferredStaff} onChange={(event) => update('preferredStaff', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]">
-                  <option value="">Any available staff</option>
-                  {publicStaff.map((member) => <option key={member.name} value={member.name}>{member.name} - {member.role}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred date *</span>
-                <input type="date" value={form.date} onChange={(event) => update('date', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred time *</span>
-                <input type="time" value={form.time} onChange={(event) => update('time', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
-              </label>
-              <label className="block md:col-span-2">
-                <span className="mb-2 block text-sm font-semibold">Message</span>
-                <textarea value={form.message} onChange={(event) => update('message', event.target.value)} rows={4} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
-              </label>
-            </div>
-            {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
-            <button type="submit" className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700">
-              <MessageCircle className="h-5 w-5" />
-              Send WhatsApp Booking Request
-            </button>
-          </form>
-        </div>
-      </main>
-    </PublicLayout>
+    <BookingForm
+      info={cms.info}
+      services={cms.services}
+      packages={cms.packages}
+      staff={cms.staff}
+    />
   );
 }

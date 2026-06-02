@@ -4,8 +4,8 @@ export function getSalonWhatsAppNumber() {
   return salonInfo.whatsappNumber || process.env.NEXT_PUBLIC_SALON_WHATSAPP_NUMBER || '';
 }
 
-export function createWhatsAppLink(message?: string) {
-  const number = getSalonWhatsAppNumber().replace(/[^\dX]/g, '');
+export function createWhatsAppLink(message?: string, whatsappNumber?: string) {
+  const number = (whatsappNumber || getSalonWhatsAppNumber()).replace(/[^\dX]/g, '');
   const query = message ? `?text=${encodeURIComponent(message)}` : '';
   return `https://wa.me/${number}${query}`;
 }
@@ -18,6 +18,7 @@ export function createBookingMessage({
   date,
   time,
   message,
+  salonName,
 }: {
   name: string;
   phone: string;
@@ -26,9 +27,10 @@ export function createBookingMessage({
   date: string;
   time: string;
   message?: string;
+  salonName?: string;
 }) {
   return [
-    `Hello ${salonInfo.name}, I want to book an appointment.`,
+    `Hello ${salonName || salonInfo.name}, I want to book an appointment.`,
     '',
     `Name: ${name}`,
     `Phone: ${phone}`,

@@ -3,7 +3,13 @@ import type { PublicPackage, PublicService, PublicStaffMember } from '../types';
 
 export function ServiceCard({ service }: { service: PublicService }) {
   return (
-    <article className="rounded-2xl border border-[#e7ded2] bg-white p-5 shadow-sm">
+    <article className="overflow-hidden rounded-2xl border border-[#e7ded2] bg-white shadow-sm">
+      {service.image ? (
+        <div className="relative aspect-[4/3] bg-[#171411]">
+          <Image src={service.image} alt={`${service.name} at The Hair Cut`} fill sizes="(min-width: 1024px) 33vw, 100vw" className="object-cover" />
+        </div>
+      ) : null}
+      <div className="p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-[#8a6a52]">{service.category}</p>
@@ -12,6 +18,8 @@ export function ServiceCard({ service }: { service: PublicService }) {
         <p className="shrink-0 rounded-full bg-[#f8f3ed] px-3 py-1 text-sm font-semibold text-[#211d1a]">{service.priceLabel}</p>
       </div>
       <p className="mt-4 text-sm leading-6 text-[#6d625b]">{service.description}</p>
+      {service.duration ? <p className="mt-3 text-xs font-semibold text-[#8a6a52]">{service.duration} min</p> : null}
+      </div>
     </article>
   );
 }
@@ -47,6 +55,7 @@ export function StaffCard({ member }: { member: PublicStaffMember }) {
       <div className="mt-4 flex flex-wrap gap-2">
         {member.specialties.map((item) => <span key={item} className="rounded-full bg-[#f8f3ed] px-3 py-1 text-xs font-medium text-[#5f554e]">{item}</span>)}
       </div>
+      {member.bio ? <p className="mt-4 text-sm leading-6 text-[#6d625b]">{member.bio}</p> : null}
     </article>
   );
 }

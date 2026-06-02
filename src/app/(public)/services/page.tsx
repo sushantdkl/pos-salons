@@ -1,19 +1,24 @@
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
 import { ServiceCard } from '@/modules/public-site/components/cards';
-import { publicServices } from '@/modules/public-site/data/services';
+import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import type { PublicService } from '@/modules/public-site/types';
 
-export const metadata = {
-  title: 'Services | The Hair Cut',
-  description: 'Salon services and rates for hair, beard, facial, beauty, and treatment services.',
-};
+export const dynamic = 'force-dynamic';
+
+export function generateMetadata() {
+  const cms = getPublicWebsiteData();
+  return { title: `Services | ${cms.info.name}`, description: cms.sections.services.description };
+}
 
 export default function ServicesPage() {
+  const cms = getPublicWebsiteData();
+  const section = cms.sections.services;
   return (
-    <PublicLayout>
-      <Section eyebrow="Rate card" title="Services" description="Transparent pricing for grooming, beauty care, and treatments.">
+    <PublicLayout info={cms.info}>
+      <Section eyebrow={section.subtitle || 'Rate card'} title="Services" description={section.description || 'Transparent pricing for grooming, beauty care, and treatments.'}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {publicServices.map((service) => <ServiceCard key={service.name} service={service} />)}
+          {cms.services.map((service: PublicService) => <ServiceCard key={service.name} service={service} />)}
         </div>
       </Section>
     </PublicLayout>

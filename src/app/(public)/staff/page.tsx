@@ -1,19 +1,24 @@
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
 import { StaffCard } from '@/modules/public-site/components/cards';
-import { publicStaff } from '@/modules/public-site/data/staff';
+import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import type { PublicStaffMember } from '@/modules/public-site/types';
 
-export const metadata = {
-  title: 'Staff | The Hair Cut',
-  description: 'Meet the salon staff: Raashid, Salman, Saajid, and Kanchan.',
-};
+export const dynamic = 'force-dynamic';
+
+export function generateMetadata() {
+  const cms = getPublicWebsiteData();
+  return { title: `Staff | ${cms.info.name}`, description: cms.sections.staff.description };
+}
 
 export default function StaffPage() {
+  const cms = getPublicWebsiteData();
+  const section = cms.sections.staff;
   return (
-    <PublicLayout>
-      <Section eyebrow="Team" title="Staff" description="A focused salon team for grooming, hair dressing, beauty care, and reception.">
+    <PublicLayout info={cms.info}>
+      <Section eyebrow={section.subtitle || 'Team'} title="Staff" description={section.description || 'A focused salon team for grooming, hair dressing, beauty care, and reception.'}>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {publicStaff.map((member) => <StaffCard key={member.name} member={member} />)}
+          {cms.staff.map((member: PublicStaffMember) => <StaffCard key={member.name} member={member} />)}
         </div>
       </Section>
     </PublicLayout>

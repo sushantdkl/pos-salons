@@ -1,19 +1,24 @@
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
 import { PackageCard } from '@/modules/public-site/components/cards';
-import { publicPackages } from '@/modules/public-site/data/packages';
+import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import type { PublicPackage } from '@/modules/public-site/types';
 
-export const metadata = {
-  title: "Men's Packages | The Hair Cut",
-  description: 'Silver, Gold, and Platinum salon grooming packages.',
-};
+export const dynamic = 'force-dynamic';
+
+export function generateMetadata() {
+  const cms = getPublicWebsiteData();
+  return { title: `Packages | ${cms.info.name}`, description: cms.sections.packages.description };
+}
 
 export default function PackagesPage() {
+  const cms = getPublicWebsiteData();
+  const section = cms.sections.packages;
   return (
-    <PublicLayout>
-      <Section eyebrow="Fast grooming" title="Men's packages" description="Choose a package for a complete grooming visit.">
+    <PublicLayout info={cms.info}>
+      <Section eyebrow={section.subtitle || 'Fast grooming'} title={section.title || "Men's packages"} description={section.description || 'Choose a package for a complete grooming visit.'}>
         <div className="grid gap-5 lg:grid-cols-3">
-          {publicPackages.map((item) => <PackageCard key={item.name} item={item} />)}
+          {cms.packages.map((item: PublicPackage) => <PackageCard key={item.name} item={item} />)}
         </div>
       </Section>
     </PublicLayout>

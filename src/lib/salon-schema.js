@@ -27,6 +27,21 @@ const TOKEN_COLUMNS = [
   ['printed_by', 'INTEGER']
 ];
 
+const SERVICE_WEBSITE_COLUMNS = [
+  ['show_on_website', 'INTEGER DEFAULT 1'],
+  ['featured_on_website', 'INTEGER DEFAULT 0'],
+  ['website_image', 'TEXT'],
+  ['website_description', 'TEXT']
+];
+
+const STAFF_WEBSITE_COLUMNS = [
+  ['show_on_website', 'INTEGER DEFAULT 1'],
+  ['featured_on_website', 'INTEGER DEFAULT 0'],
+  ['website_title', 'TEXT'],
+  ['website_bio', 'TEXT'],
+  ['website_photo', 'TEXT']
+];
+
 const BARBER_SERVICES = 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading';
 const BEAUTY_SERVICES = 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading';
 
@@ -207,6 +222,174 @@ function seedRoleUsers(db) {
     }
     upsertProfile.run(userId, staff.name, staff.salonRole, staff.assignedServices, staff.commission);
   });
+}
+
+function seedWebsiteCmsData(db) {
+  const contentCount = db.prepare('SELECT COUNT(*) as count FROM website_content').get().count;
+  if (contentCount === 0) {
+    const insertContent = db.prepare(`
+      INSERT INTO website_content (
+        section_key, title, subtitle, description, image_url, button_text,
+        button_link, secondary_button_text, secondary_button_link, is_visible,
+        sort_order, metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    [
+      [
+        'hero',
+        'The Hair Cut',
+        "We'll style, You'll smile!",
+        "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+        '/assets/hair_dressing_space1.jpg',
+        'Book Appointment',
+        '/book-appointment',
+        'WhatsApp',
+        'whatsapp',
+        1,
+        1,
+        JSON.stringify({ eyebrow: 'Salon experience' })
+      ],
+      [
+        'about',
+        'A Surkhet grooming space built for everyday confidence',
+        'About',
+        'Our salon combines practical grooming, beauty care, and a clean professional setting.',
+        '/assets/Salon_outside.jpg',
+        '',
+        '',
+        '',
+        '',
+        1,
+        2,
+        JSON.stringify({
+          highlights: ['Premium finish', 'Friendly staff', 'Clear packages'],
+          galleryImages: ['/assets/Salon_Banner.jpeg', '/assets/Details.jpeg']
+        })
+      ],
+      [
+        'services',
+        'Popular services',
+        'Services',
+        'Fast, clear pricing for daily grooming and beauty care.',
+        '/assets/Haircut1.jpg',
+        '',
+        '',
+        '',
+        '',
+        1,
+        3,
+        '{}'
+      ],
+      [
+        'packages',
+        "Men's packages",
+        'Packages',
+        'Grouped services for fast booking and clean billing.',
+        '',
+        '',
+        '',
+        '',
+        '',
+        1,
+        4,
+        '{}'
+      ],
+      [
+        'staff',
+        'Meet the staff',
+        'Team',
+        'Experienced staff for barbering, hair dressing, beauty care, and reception.',
+        '',
+        '',
+        '',
+        '',
+        '',
+        1,
+        5,
+        '{}'
+      ],
+      [
+        'contact',
+        'Location and contact',
+        'Visit us',
+        'Reach the salon or request an appointment through WhatsApp.',
+        '',
+        'Contact details',
+        '/contact',
+        'Book now',
+        '/book-appointment',
+        1,
+        6,
+        JSON.stringify({
+          salonName: 'The Hair Cut',
+          phone: '+977 9858051694',
+          whatsappNumber: '9779858051694',
+          address: 'Birendranagar-7, Surkhet',
+          email: '',
+          facebook: 'https://www.facebook.com/profile.php?id=61563439747795',
+          tiktok: 'https://www.tiktok.com/@the.haircut1?_r=1&_t=ZS-96n9lkFroZA',
+          openingHours: 'Opening hours: update with final salon schedule',
+          mapEmbedUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4533.836830090373!2d81.6257918!3d28.5996354!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x39a2850030b92a09%3A0xa0f6893a8b7d98f4!2sThe%20Hair%20Cut!5e1!3m2!1sen!2snp!4v1780240711625!5m2!1sen!2snp'
+        })
+      ],
+      [
+        'seo',
+        "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+        '',
+        "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+        '/assets/Salon_Banner.jpeg',
+        '',
+        '',
+        '',
+        '',
+        1,
+        7,
+        JSON.stringify({
+          ogTitle: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+          ogDescription: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+          keywords: 'salon, haircut, barber, surkhet, facial, shaving'
+        })
+      ]
+    ].forEach((row) => insertContent.run(...row));
+  }
+
+  const galleryCount = db.prepare('SELECT COUNT(*) as count FROM website_gallery_images').get().count;
+  if (galleryCount === 0) {
+    const insertGallery = db.prepare(`
+      INSERT INTO website_gallery_images (image_url, title, alt_text, category, description, sort_order, is_visible)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `);
+    [
+      ['/assets/hair_dressing_space1.jpg', 'Hair Dressing Space 1', 'Salon hair dressing area.', 'Salon', 'Salon hair dressing area.'],
+      ['/assets/hair_dressing_space2.jpg', 'Hair Dressing Space 2', 'Clean grooming workspace.', 'Salon', 'Clean grooming workspace.'],
+      ['/assets/hair_dressing_space3.jpg', 'Hair Dressing Space 3', 'Salon styling area.', 'Salon', 'Salon styling area.'],
+      ['/assets/hair_dressing_space4.jpg', 'Hair Dressing Space 4', 'Comfortable service station.', 'Salon', 'Comfortable service station.'],
+      ['/assets/Haircut1.jpg', 'Haircut 1', 'Haircut service moment.', 'Services', 'Haircut service moment.'],
+      ['/assets/Haircut2.jpg', 'Haircut 2', 'Salon haircut service.', 'Services', 'Salon haircut service.'],
+      ['/assets/Haircut3.jpg', 'Haircut 3', 'Finished haircut style.', 'Services', 'Finished haircut style.'],
+      ['/assets/Hairwash.jpg', 'Hair Wash', 'Hair wash service.', 'Services', 'Hair wash service.'],
+      ['/assets/Happy_customers.jpg', 'Happy Customers', 'Customers enjoying the salon experience.', 'Customers', 'Customers enjoying the salon experience.'],
+      ['/assets/Love_of_peoples.jpg', 'Love of Peoples', 'Community support and customer love.', 'Customers', 'Community support and customer love.'],
+      ['/assets/Opening_moments.jpg', 'Opening Moments', 'Salon opening celebration.', 'Opening', 'Salon opening celebration.'],
+      ['/assets/Opening_moments1.jpg', 'Opening Moments 1', 'Opening day memories.', 'Opening', 'Opening day memories.'],
+      ['/assets/Opening_moments2.jpg', 'Opening Moments 2', 'Salon launch moments.', 'Opening', 'Salon launch moments.'],
+      ['/assets/Salon_opening.jpg', 'Salon Opening', 'The Hair Cut opening event.', 'Opening', 'The Hair Cut opening event.'],
+      ['/assets/Salon_outside.jpg', 'Salon Outside', 'Outside view of the salon.', 'Salon', 'Outside view of the salon.'],
+      ['/assets/shaving.jpg', 'Shaving', 'Shaving and grooming service.', 'Services', 'Shaving and grooming service.'],
+      ['/assets/Uv_sanitizations.jpg', 'UV Sanitizations', 'Clean and hygienic tools.', 'Hygiene', 'Clean and hygienic tools.']
+    ].forEach((row, index) => insertGallery.run(...row, index + 1));
+  }
+
+  db.prepare(`
+    UPDATE staff_profiles
+    SET website_title = CASE
+          WHEN website_title IS NOT NULL AND website_title <> '' THEN website_title
+          WHEN salon_role = 'barber' THEN 'Barber / Hair Dresser'
+          WHEN salon_role = 'beautician' THEN 'Beautician / Cashier'
+          ELSE display_name
+        END,
+        website_bio = COALESCE(NULLIF(website_bio, ''), assigned_services)
+  `).run();
 }
 
 function normalizeStaffProfileRoles(db) {
@@ -537,6 +720,7 @@ export function ensureSalonSchema(db) {
   `).run();
   addColumnIfMissing(db, 'salon_services', 'is_package', 'INTEGER DEFAULT 0');
   addColumnIfMissing(db, 'salon_services', 'package_items', 'TEXT');
+  SERVICE_WEBSITE_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'salon_services', column, definition));
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS staff_profiles (
@@ -553,6 +737,50 @@ export function ensureSalonSchema(db) {
   `).run();
   normalizeStaffProfileRoles(db);
   addColumnIfMissing(db, 'staff_profiles', 'display_name', 'TEXT');
+  STAFF_WEBSITE_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'staff_profiles', column, definition));
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS website_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      section_key TEXT UNIQUE NOT NULL,
+      title TEXT,
+      subtitle TEXT,
+      description TEXT,
+      image_url TEXT,
+      button_text TEXT,
+      button_link TEXT,
+      secondary_button_text TEXT,
+      secondary_button_link TEXT,
+      is_visible INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      metadata TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `).run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS website_gallery_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      image_url TEXT NOT NULL,
+      title TEXT,
+      alt_text TEXT,
+      category TEXT,
+      description TEXT,
+      sort_order INTEGER DEFAULT 0,
+      is_visible INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `).run();
+  [
+    'CREATE INDEX IF NOT EXISTS idx_website_content_section ON website_content(section_key)',
+    'CREATE INDEX IF NOT EXISTS idx_website_gallery_visible_order ON website_gallery_images(is_visible, sort_order)'
+  ].forEach((sql) => db.prepare(sql).run());
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_products (
@@ -738,6 +966,7 @@ export function ensureSalonSchema(db) {
 
   seedRoleUsers(db);
   seedSalonData(db);
+  seedWebsiteCmsData(db);
 }
 
 export function getAuthUser(request, db) {
