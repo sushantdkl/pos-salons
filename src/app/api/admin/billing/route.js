@@ -40,6 +40,7 @@ export async function POST(request) {
     const data = await request.json();
     const services = Array.isArray(data.services) ? data.services : [];
     const products = Array.isArray(data.products) ? data.products : [];
+    const shouldPrint = Boolean(data.should_print);
     if (services.length === 0 && products.length === 0) {
       return NextResponse.json({ error: 'Add at least one service or product' }, { status: 400 });
     }
@@ -52,7 +53,7 @@ export async function POST(request) {
         linkedToken = db.prepare('SELECT * FROM walk_in_tokens WHERE id = ?').get(tokenId);
         if (!linkedToken) throw new Error('Selected token was not found');
         if (linkedToken.invoice_id || linkedToken.status === 'BILLED') throw new Error('This token has already been billed');
-        if (['CANCELLED', 'NO_SHOW'].includes(linkedToken.status)) throw new Error('Cancelled or no-show token cannot be billed');
+        if (linkedToken.status !== 'WAITING') throw new Error('Only waiting tokens can be billed');
       }
       const customerName = cleanText(data.customer?.name || data.customer_name || 'Walk-in Customer');
       const customerPhone = cleanText(data.customer?.phone || data.customer_phone, null);
@@ -148,8 +149,8 @@ export async function POST(request) {
           bill_number, customer_id, customer_name, customer_phone, subtotal,
           discount_amount, discount_type, tax, tax_percent, service_charge,
           grand_total, payment_method, amount_paid, cashier_id, token_id,
-          transaction_time, printed_at, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+          transaction_time, is_printed, printed_at, printed_by, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ${shouldPrint ? 'CURRENT_TIMESTAMP' : 'NULL'}, ?, ?)
       `).run(
         billNumber,
         customerId,
@@ -166,6 +167,8 @@ export async function POST(request) {
         amountPaid,
         user.id,
         tokenId,
+        shouldPrint ? 1 : 0,
+        shouldPrint ? user.id : null,
         cleanText(data.notes, null)
       );
 
@@ -228,7 +231,7 @@ export async function POST(request) {
       }
 
       db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-        .run(user.id, 'create', 'bill', billId, billNumber);
+        .run(user.id, shouldPrint ? 'create_printed' : 'create', 'bill', billId, billNumber);
 
       if (tokenId) {
         db.prepare(`
@@ -259,6 +262,9 @@ export async function POST(request) {
           amount_paid: amountPaid,
           token_id: tokenId,
           token_number: linkedToken?.token_number || null,
+          is_printed: shouldPrint,
+          printed_at: shouldPrint ? new Date().toISOString() : null,
+          printed_by: shouldPrint ? user.id : null,
           created_at: new Date().toISOString()
         },
         items

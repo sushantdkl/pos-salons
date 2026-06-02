@@ -113,20 +113,25 @@ Deliverables:
 - Cashier/Admin token generation and queue pages.
 - Staff queue pages for Barber, Stylist, and Beautician.
 - Token-to-bill conversion.
+- Digital/printed token and invoice tracking.
 - Token analytics and mismatch warnings.
 
 Risks:
 
 - Tokens being billed twice.
-- Staff completing unassigned services.
-- Completed tokens not being billed.
+- Waiting tokens being skipped without billing, cancellation, or no-show marking.
+- Physical receipt printing being confused with digital token/bill creation.
 
 Acceptance Criteria:
 
 - Token number increments daily.
-- Token lifecycle rules are enforced.
-- Token receipt print works.
-- Completed token can convert to bill.
+- Only WAITING, BILLED, CANCELLED, and NO_SHOW token statuses are used.
+- Generate Token creates a digital token without a print popup.
+- Generate & Print Token creates the token and opens the print popup.
+- Staff queue is read-only and shows assigned WAITING tokens only.
+- Waiting token can convert to Bill or Bill & Print.
+- Bill creates a digital invoice without a print popup.
+- Bill & Print creates the invoice and opens the receipt print popup.
 - Cancelled/no-show/billed tokens cannot be billed.
 
 ## Phase 5: Customers

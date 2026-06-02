@@ -16,7 +16,15 @@ const CUSTOMER_COLUMNS = [
 const BILL_COLUMNS = [
   ['token_id', 'INTEGER'],
   ['transaction_time', 'DATETIME'],
-  ['printed_at', 'DATETIME']
+  ['is_printed', 'INTEGER DEFAULT 0'],
+  ['printed_at', 'DATETIME'],
+  ['printed_by', 'INTEGER']
+];
+
+const TOKEN_COLUMNS = [
+  ['is_printed', 'INTEGER DEFAULT 0'],
+  ['printed_at', 'DATETIME'],
+  ['printed_by', 'INTEGER']
 ];
 
 const BARBER_SERVICES = 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading';
@@ -316,7 +324,8 @@ function repairUserForeignKeyReferences(db) {
         'id', 'bill_number', 'customer_id', 'customer_name', 'customer_phone',
         'subtotal', 'discount_amount', 'discount_type', 'tax', 'tax_percent',
         'service_charge', 'grand_total', 'payment_method', 'amount_paid',
-        'cashier_id', 'token_id', 'transaction_time', 'printed_at', 'notes', 'status', 'created_at'
+        'cashier_id', 'token_id', 'transaction_time', 'is_printed', 'printed_at',
+        'printed_by', 'notes', 'status', 'created_at'
       ],
       createSql: `
         CREATE TABLE salon_bills (
@@ -337,13 +346,16 @@ function repairUserForeignKeyReferences(db) {
           cashier_id INTEGER,
           token_id INTEGER,
           transaction_time DATETIME,
+          is_printed INTEGER DEFAULT 0,
           printed_at DATETIME,
+          printed_by INTEGER,
           notes TEXT,
           status TEXT DEFAULT 'paid' CHECK(status IN ('paid', 'cancelled')),
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
           FOREIGN KEY (token_id) REFERENCES walk_in_tokens(id) ON DELETE SET NULL,
-          FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
+          FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (printed_by) REFERENCES users(id) ON DELETE SET NULL
         )
       `
     },
@@ -570,18 +582,18 @@ export function ensureSalonSchema(db) {
       service_id INTEGER NOT NULL,
       package_id INTEGER,
       assigned_staff_id INTEGER,
-      status TEXT NOT NULL DEFAULT 'WAITING' CHECK(status IN ('WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'BILLED')),
+      status TEXT NOT NULL DEFAULT 'WAITING' CHECK(status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')),
       people_ahead INTEGER DEFAULT 0 CHECK(people_ahead >= 0),
       estimated_wait_minutes_min INTEGER DEFAULT 0 CHECK(estimated_wait_minutes_min >= 0),
       estimated_wait_minutes_max INTEGER DEFAULT 0 CHECK(estimated_wait_minutes_max >= 0),
       created_by INTEGER,
-      called_at DATETIME,
-      started_at DATETIME,
-      completed_at DATETIME,
       billed_at DATETIME,
       cancelled_at DATETIME,
       no_show_at DATETIME,
       invoice_id INTEGER,
+      is_printed INTEGER DEFAULT 0,
+      printed_at DATETIME,
+      printed_by INTEGER,
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -589,6 +601,7 @@ export function ensureSalonSchema(db) {
       FOREIGN KEY (service_id) REFERENCES salon_services(id) ON DELETE RESTRICT,
       FOREIGN KEY (assigned_staff_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (printed_by) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (invoice_id) REFERENCES salon_bills(id) ON DELETE SET NULL,
       UNIQUE(token_date, token_number)
     )
@@ -601,6 +614,14 @@ export function ensureSalonSchema(db) {
     'CREATE INDEX IF NOT EXISTS idx_tokens_invoice ON walk_in_tokens(invoice_id)',
     'CREATE INDEX IF NOT EXISTS idx_tokens_created_at ON walk_in_tokens(created_at)'
   ].forEach((sql) => db.prepare(sql).run());
+  TOKEN_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'walk_in_tokens', column, definition));
+  db.prepare(`
+    UPDATE walk_in_tokens
+    SET status = 'BILLED',
+        billed_at = COALESCE(billed_at, CURRENT_TIMESTAMP),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE invoice_id IS NOT NULL AND status <> 'BILLED'
+  `).run();
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_bills (
@@ -621,12 +642,15 @@ export function ensureSalonSchema(db) {
       cashier_id INTEGER,
       token_id INTEGER,
       transaction_time DATETIME,
+      is_printed INTEGER DEFAULT 0,
       printed_at DATETIME,
+      printed_by INTEGER,
       notes TEXT,
       status TEXT DEFAULT 'paid' CHECK(status IN ('paid', 'cancelled')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
       FOREIGN KEY (token_id) REFERENCES walk_in_tokens(id) ON DELETE SET NULL,
+      FOREIGN KEY (printed_by) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `).run();

@@ -146,7 +146,9 @@ Fields:
 - `cashier_id`: integer, optional.
 - `token_id`: integer, optional walk-in token reference.
 - `transaction_time`: datetime.
-- `printed_at`: datetime.
+- `is_printed`: integer boolean. `0` for digital bills, `1` for Bill & Print.
+- `printed_at`: datetime, set only when Bill & Print is used.
+- `printed_by`: integer user ID, set only when Bill & Print is used.
 - `notes`: text, optional.
 - `status`: text enum. Values: paid, cancelled.
 - `created_at`: datetime.
@@ -184,13 +186,16 @@ Fields:
 - `service_id`: integer, required.
 - `package_id`: integer, optional.
 - `assigned_staff_id`: integer, optional.
-- `status`: text enum. Values: WAITING, CALLED, IN_SERVICE, COMPLETED, CANCELLED, NO_SHOW, BILLED.
+- `status`: text enum. Values: WAITING, BILLED, CANCELLED, NO_SHOW.
 - `people_ahead`: integer.
 - `estimated_wait_minutes_min`: integer.
 - `estimated_wait_minutes_max`: integer.
 - `created_by`: integer user ID.
-- `called_at`, `started_at`, `completed_at`, `billed_at`, `cancelled_at`, `no_show_at`: datetime lifecycle timestamps.
+- `billed_at`, `cancelled_at`, `no_show_at`: datetime lifecycle timestamps.
 - `invoice_id`: integer, optional.
+- `is_printed`: integer boolean. `0` for digital tokens, `1` for Generate & Print Token.
+- `printed_at`: datetime, set only when token printing is requested.
+- `printed_by`: integer user ID, set only when token printing is requested.
 - `notes`: text, optional.
 - `created_at`: datetime.
 - `updated_at`: datetime.
@@ -204,10 +209,10 @@ Relationships:
 Validation:
 
 - Token number is unique per date.
-- Token cannot be completed before service starts.
 - Cancelled or no-show tokens cannot be billed.
 - Billed tokens cannot be billed again.
-- Staff must be assigned before service starts.
+- Staff queue is read-only and shows assigned WAITING tokens only.
+- Staff performance updates when the bill is created, not from token status changes.
 
 Indexes:
 

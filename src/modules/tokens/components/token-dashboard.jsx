@@ -3,14 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/layout/dashboard-layout';
-import { Clock, Printer, RefreshCw, Scissors, UserCheck, XCircle } from 'lucide-react';
+import { Clock, Printer, RefreshCw, UserCheck, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 const statusStyles = {
   WAITING: 'bg-yellow-100 text-yellow-800',
-  CALLED: 'bg-blue-100 text-blue-800',
-  IN_SERVICE: 'bg-purple-100 text-purple-800',
-  COMPLETED: 'bg-green-100 text-green-800',
   BILLED: 'bg-gray-900 text-white',
   CANCELLED: 'bg-red-100 text-red-800',
   NO_SHOW: 'bg-orange-100 text-orange-800',
@@ -24,8 +21,7 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function printToken(token) {
-  const printWindow = window.open('', '', 'width=340,height=620');
+function printToken(token, printWindow = window.open('', '', 'width=340,height=620')) {
   if (!printWindow) return;
   printWindow.document.write(`
     <html><head><title>${token.token_number}</title><style>
@@ -74,7 +70,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     notes: '',
   });
 
-  const activeTokens = useMemo(() => tokens.filter((token) => ['WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED'].includes(token.status)), [tokens]);
+  const waitingTokens = useMemo(() => tokens.filter((token) => token.status === 'WAITING'), [tokens]);
 
   const fetchTokens = async () => {
     setLoading(true);
@@ -114,25 +110,27 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     fetchAnalytics();
   }, [date, status]);
 
-  const createToken = async (event) => {
-    event.preventDefault();
+  const createToken = async (shouldPrint = false) => {
     setError('');
     if (!form.service_id) {
       setError('Select a service or package.');
       return;
     }
+    const printWindow = shouldPrint ? window.open('', '', 'width=340,height=620') : null;
     const response = await fetch('/api/admin/tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, should_print: shouldPrint }),
     });
     const data = await response.json();
     if (!response.ok) {
+      if (printWindow) printWindow.close();
       setError(data.error || 'Could not create token');
       return;
     }
     setLastToken(data.token);
     setForm({ customer_name: '', customer_phone: '', service_id: '', assigned_staff_id: '', notes: '' });
+    if (shouldPrint) printToken(data.token, printWindow);
     fetchTokens();
     fetchAnalytics();
   };
@@ -147,10 +145,18 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     const data = await response.json();
     if (!response.ok) {
       setError(data.error || 'Could not update token');
-      return;
+      return null;
     }
     fetchTokens();
     fetchAnalytics();
+    return data.token;
+  };
+
+  const printExistingToken = async (token) => {
+    const printWindow = window.open('', '', 'width=340,height=620');
+    const updated = await updateToken(token, 'print');
+    if (!updated && printWindow) printWindow.close();
+    else printToken(updated || token, printWindow);
   };
 
   const assignStaff = async (token, staffId) => {
@@ -175,11 +181,15 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
 
   const cards = analytics ? [
     ['Tokens Generated', analytics.summary?.generated || 0],
-    ['Bills Printed', analytics.bills?.printed || 0],
-    ['Active Queue', Number(analytics.summary?.waiting || 0) + Number(analytics.summary?.inService || 0)],
+    ['Digital Tokens', analytics.summary?.digitalTokens || 0],
+    ['Printed Tokens', analytics.summary?.printedTokens || 0],
+    ['Bills Done', analytics.bills?.totalBills || 0],
+    ['Digital Bills', analytics.bills?.digitalBills || 0],
+    ['Printed Bills', analytics.bills?.printedBills || 0],
+    ['Waiting', analytics.summary?.waiting || 0],
     ['Cancelled', analytics.summary?.cancelled || 0],
     ['No-show', analytics.summary?.noShow || 0],
-    ['Direct Bills', analytics.bills?.directBills || 0],
+    ['Bills Without Token', analytics.bills?.directBills || 0],
   ] : [];
 
   return (
@@ -187,8 +197,8 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-gray-950">{isStaffQueue ? 'My Queue' : 'Walk-In Token Queue'}</h1>
-            <p className="mt-1 text-sm text-gray-600">Generate, track, print, and bill walk-in salon tokens.</p>
+            <h1 className="text-3xl font-semibold text-gray-950">{isStaffQueue ? 'Staff Queue' : 'Walk-In Token Queue'}</h1>
+            <p className="mt-1 text-sm text-gray-600">Generate simple walk-in tokens and convert them to bills.</p>
           </div>
           <button onClick={() => { fetchTokens(); fetchAnalytics(); }} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700">
             <RefreshCw className="h-4 w-4" /> Refresh
@@ -199,7 +209,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
 
         {canAudit && analytics ? (
           <>
-            <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
               {cards.map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-gray-200 bg-white p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
@@ -219,7 +229,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
           {canCreate ? (
             <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold text-gray-950">Generate Token</h2>
-              <form onSubmit={createToken} className="space-y-3">
+              <div className="space-y-3">
                 <input value={form.customer_name} onChange={(event) => setForm({ ...form, customer_name: event.target.value })} placeholder="Customer name optional" className="w-full rounded-lg border border-gray-300 px-4 py-3" />
                 <input value={form.customer_phone} onChange={(event) => setForm({ ...form, customer_phone: event.target.value })} placeholder="Phone optional" className="w-full rounded-lg border border-gray-300 px-4 py-3" />
                 <select value={form.service_id} onChange={(event) => setForm({ ...form, service_id: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3">
@@ -231,16 +241,16 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                   {staff.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
                 </select>
                 <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Notes optional" rows={3} className="w-full rounded-lg border border-gray-300 px-4 py-3" />
-                <button className="w-full rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white">Generate Token</button>
-              </form>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={() => createToken(false)} className="rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white">Generate Token</button>
+                  <button type="button" onClick={() => createToken(true)} className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white">Generate & Print Token</button>
+                </div>
+              </div>
               {lastToken ? (
                 <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4">
                   <p className="text-sm font-semibold text-green-800">Token generated</p>
                   <p className="mt-1 text-3xl font-bold text-green-900">{lastToken.token_number}</p>
                   <p className="mt-2 text-sm text-green-800">There are {lastToken.people_ahead} customer(s) ahead. Estimated wait {lastToken.wait_label}.</p>
-                  <button onClick={() => printToken(lastToken)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 font-semibold text-green-800">
-                    <Printer className="h-4 w-4" /> Print Token
-                  </button>
                 </div>
               ) : null}
             </section>
@@ -251,15 +261,17 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
               <h2 className="text-xl font-semibold text-gray-950">{isStaffQueue ? `${staffRole || 'Staff'} Queue` : 'Today Queue'}</h2>
               <div className="flex gap-2">
                 <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2" />
-                <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2">
-                  <option value="">All</option>
-                  {['WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'BILLED', 'CANCELLED', 'NO_SHOW'].map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
-                </select>
+                {!isStaffQueue ? (
+                  <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2">
+                    <option value="">All</option>
+                    {['WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW'].map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
+                  </select>
+                ) : null}
               </div>
             </div>
 
             {loading ? <div className="rounded-lg bg-gray-50 p-8 text-center text-gray-500">Loading queue...</div> : null}
-            {!loading && activeTokens.length === 0 && tokens.length === 0 ? <div className="rounded-lg bg-gray-50 p-8 text-center text-gray-500">No tokens found.</div> : null}
+            {!loading && waitingTokens.length === 0 && tokens.length === 0 ? <div className="rounded-lg bg-gray-50 p-8 text-center text-gray-500">No tokens found.</div> : null}
             <div className="grid gap-3">
               {tokens.map((token) => (
                 <article key={token.id} className="rounded-lg border border-gray-200 p-4">
@@ -268,10 +280,13 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-2xl font-bold text-gray-950">{token.token_number}</p>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[token.status] || 'bg-gray-100 text-gray-700'}`}>{token.status_label}</span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${token.is_printed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                          {token.is_printed ? 'Printed' : 'Digital'}
+                        </span>
                       </div>
                       <p className="mt-1 font-semibold text-gray-900">{token.service_name}</p>
                       <p className="text-sm text-gray-600">{token.customer_name || 'Walk-in Customer'} {token.customer_phone ? `- ${token.customer_phone}` : ''}</p>
-                      {canCreate && !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status) ? (
+                      {canCreate && token.status === 'WAITING' ? (
                         <select value={token.assigned_staff_id || ''} onChange={(event) => assignStaff(token, event.target.value)} className="mt-3 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-950">
                           <option value="">Assign staff</option>
                           {staff.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
@@ -283,15 +298,14 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                         <span>{new Date(token.created_at).toLocaleString()}</span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {token.status === 'WAITING' ? <button onClick={() => updateToken(token, 'call')} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700">Call</button> : null}
-                      {['WAITING', 'CALLED'].includes(token.status) ? <button onClick={() => updateToken(token, 'start')} className="rounded-lg border border-purple-200 px-3 py-2 text-sm font-semibold text-purple-700">Start</button> : null}
-                      {token.status === 'IN_SERVICE' ? <button onClick={() => updateToken(token, 'complete')} className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700">Complete</button> : null}
-                      {canCreate && ['WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED'].includes(token.status) ? <button onClick={() => printToken(token)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><Printer className="inline h-4 w-4" /> Print</button> : null}
-                      {canCreate && !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status) ? <button onClick={() => convertToBill(token)} className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white">Convert to Bill</button> : null}
-                      {canCreate && !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status) ? <button onClick={() => updateToken(token, 'cancel')} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700"><XCircle className="inline h-4 w-4" /> Cancel</button> : null}
-                      {canCreate && !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status) ? <button onClick={() => updateToken(token, 'no_show')} className="rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700">No-show</button> : null}
-                    </div>
+                    {canCreate ? (
+                      <div className="flex flex-wrap gap-2">
+                        {token.status === 'WAITING' ? <button onClick={() => printExistingToken(token)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><Printer className="inline h-4 w-4" /> Print</button> : null}
+                        {token.status === 'WAITING' ? <button onClick={() => convertToBill(token)} className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white">Convert to Bill</button> : null}
+                        {token.status === 'WAITING' ? <button onClick={() => updateToken(token, 'cancel')} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700"><XCircle className="inline h-4 w-4" /> Cancel</button> : null}
+                        {token.status === 'WAITING' ? <button onClick={() => updateToken(token, 'no_show')} className="rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700">No-show</button> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ))}

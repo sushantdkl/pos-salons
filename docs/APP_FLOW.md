@@ -115,20 +115,25 @@ Billing validation:
 ```mermaid
 flowchart TD
   A["Customer arrives"] --> B["Cashier creates token"]
-  B --> C["Print token receipt"]
-  C --> D["Staff sees assigned queue"]
-  D --> E["Call token"]
-  E --> F["Start service"]
-  F --> G["Complete service"]
-  G --> H["Cashier converts token to bill"]
-  H --> I["Token becomes billed"]
+  B --> C{"Print needed?"}
+  C -->|No| D["Digital token saved"]
+  C -->|Yes| E["Token saved and print popup opens"]
+  D --> F["Staff sees assigned WAITING queue"]
+  E --> F
+  F --> G["Customer receives service"]
+  G --> H{"Billing action"}
+  H -->|Bill| I["Digital invoice saved"]
+  H -->|Bill & Print| J["Invoice saved and receipt print popup opens"]
+  I --> K["Token becomes BILLED"]
+  J --> K
 ```
 
 Token controls:
 
-- Cashier and Admin can generate, print, cancel, mark no-show, assign staff, and convert tokens to bills.
-- Barber, Stylist, and Beautician can view assigned queues and move tokens through call, start, and complete states.
-- Admin can review token analytics and token-vs-bill mismatch warnings.
+- Cashier and Admin can generate digital tokens, generate and print tokens, cancel, mark no-show, assign staff, and convert waiting tokens to bills.
+- Barber, Stylist, and Beautician can view assigned WAITING tokens only. They do not call, start, or complete token statuses.
+- Staff performance updates only when a bill is created.
+- Admin can review digital vs printed token/bill analytics and token-vs-bill mismatch warnings.
 
 ## Customer Flow
 

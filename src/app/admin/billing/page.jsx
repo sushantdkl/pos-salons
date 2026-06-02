@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/layout/dashboard-layout';
-import { CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, Wallet } from 'lucide-react';
+import { CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 const draftKey = 'salon_pos_bill_draft';
@@ -47,7 +47,7 @@ function BillingContent() {
       ) || []);
     }
     if (tokenResponse.ok) {
-      setTokens(((await tokenResponse.json()).tokens || []).filter((token) => !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status)));
+      setTokens(((await tokenResponse.json()).tokens || []).filter((token) => token.status === 'WAITING'));
     }
   };
 
@@ -164,7 +164,7 @@ function BillingContent() {
     }
   };
 
-  const completeBill = async () => {
+  const completeBill = async (shouldPrint = false) => {
     setError('');
     if (cartServices.length === 0 && cartProducts.length === 0) {
       setError('Add at least one service or product.');
@@ -183,6 +183,7 @@ function BillingContent() {
       return;
     }
 
+    const receiptWindow = shouldPrint ? window.open('', '', 'width=340,height=700') : null;
     const response = await fetch('/api/admin/billing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -196,16 +197,18 @@ function BillingContent() {
         discount_value: Number(discountValue || 0),
         tax_percent: Number(taxPercent || 0),
         payment_method: paymentMethod,
-        amount_paid: Number(amountPaid || total)
+        amount_paid: Number(amountPaid || total),
+        should_print: shouldPrint
       })
     });
     const data = await response.json();
     if (!response.ok) {
+      if (receiptWindow) receiptWindow.close();
       setError(data.error || 'Could not complete bill');
       return;
     }
     setLastBill(data);
-    printReceipt(data);
+    if (shouldPrint) printReceipt(data, receiptWindow);
     setCartServices([]);
     setCartProducts([]);
     setDiscountValue('');
@@ -216,9 +219,9 @@ function BillingContent() {
     fetchData();
   };
 
-  const printReceipt = (billData = lastBill) => {
+  const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=340,height=700')) => {
     if (!billData?.bill) return;
-    const printWindow = window.open('', '', 'width=340,height=700');
+    if (!printWindow) return;
     const rows = billData.items.map((item) => `<tr><td>${item.name} x${item.quantity}</td><td style="text-align:right">${formatCurrency(item.subtotal)}</td></tr>`).join('');
     printWindow.document.write(`
       <html><head><title>${billData.bill.bill_number}</title><style>
@@ -267,7 +270,7 @@ function BillingContent() {
                   if (token) loadToken(token);
                   else setSelectedToken(null);
                 }} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-gray-950">
-                  <option value="">Select completed token for billing optional</option>
+                  <option value="">Select waiting token for billing optional</option>
                   {tokens.map((token) => <option key={token.id} value={token.id}>{token.token_number} - {token.customer_name || 'Walk-in'} - {token.service_name}</option>)}
                 </select>
                 {selectedToken ? <div className="rounded-lg bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">Token {selectedToken.token_number} loaded</div> : null}
@@ -399,11 +402,13 @@ function BillingContent() {
                   {amountPaid && change >= 0 && <p className="mt-2 text-sm font-medium text-green-700">Change: {formatCurrency(change)}</p>}
                 </div>
               )}
-              <button onClick={completeBill} className="w-full rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700">Confirm Payment</button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button onClick={() => completeBill(false)} className="rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">Bill</button>
+                <button onClick={() => completeBill(true)} className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700">Bill & Print</button>
+              </div>
               {lastBill && (
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => printReceipt()} className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"><Printer className="mr-2 inline h-4 w-4" />Print</button>
-                  <button onClick={sendDigitalReceipt} className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"><MessageCircle className="mr-2 inline h-4 w-4" />Receipt</button>
+                <div className="grid gap-2">
+                  <button onClick={sendDigitalReceipt} className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"><MessageCircle className="mr-2 inline h-4 w-4" />Send Digital Receipt</button>
                 </div>
               )}
             </div>

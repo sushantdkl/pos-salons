@@ -76,16 +76,24 @@ export async function GET(request) {
     const tokenStats = db.prepare(`
       SELECT
         COUNT(*) as generated,
-        SUM(CASE WHEN status IN ('WAITING', 'CALLED') THEN 1 ELSE 0 END) as waiting,
-        SUM(CASE WHEN status = 'IN_SERVICE' THEN 1 ELSE 0 END) as inService,
-        SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN COALESCE(is_printed, 0) = 0 THEN 1 ELSE 0 END) as digitalTokens,
+        SUM(CASE WHEN COALESCE(is_printed, 0) = 1 THEN 1 ELSE 0 END) as printedTokens,
+        SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
         SUM(CASE WHEN status = 'BILLED' THEN 1 ELSE 0 END) as billed,
         SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled,
         SUM(CASE WHEN status = 'NO_SHOW' THEN 1 ELSE 0 END) as noShow
       FROM walk_in_tokens
-      WHERE token_date = DATE('now')
+      WHERE token_date = DATE('now') AND status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')
     `).get();
-    const billsWithoutToken = db.prepare("SELECT COUNT(*) as count FROM salon_bills WHERE DATE(created_at) = DATE('now') AND status = 'paid' AND token_id IS NULL").get().count;
+    const billPrintStats = db.prepare(`
+      SELECT
+        COUNT(*) as billsDone,
+        SUM(CASE WHEN COALESCE(is_printed, 0) = 0 THEN 1 ELSE 0 END) as digitalBills,
+        SUM(CASE WHEN COALESCE(is_printed, 0) = 1 THEN 1 ELSE 0 END) as printedBills,
+        SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END) as billsWithoutToken
+      FROM salon_bills
+      WHERE DATE(created_at) = DATE('now') AND status = 'paid'
+    `).get();
 
     return NextResponse.json({
       stats: {
@@ -106,14 +114,17 @@ export async function GET(request) {
         commissionSummary: commissionSummary || 0,
         tokenStats: {
           generated: tokenStats.generated || 0,
+          digitalTokens: tokenStats.digitalTokens || 0,
+          printedTokens: tokenStats.printedTokens || 0,
           waiting: tokenStats.waiting || 0,
-          inService: tokenStats.inService || 0,
-          completed: tokenStats.completed || 0,
           billed: tokenStats.billed || 0,
           cancelled: tokenStats.cancelled || 0,
           noShow: tokenStats.noShow || 0,
-          billsWithoutToken: billsWithoutToken || 0,
-          mismatchWarning: Number(tokenStats.completed || 0) > 0 || Number(billsWithoutToken || 0) > 0
+          billsDone: billPrintStats.billsDone || 0,
+          digitalBills: billPrintStats.digitalBills || 0,
+          printedBills: billPrintStats.printedBills || 0,
+          billsWithoutToken: billPrintStats.billsWithoutToken || 0,
+          mismatchWarning: Number(tokenStats.waiting || 0) > 0 || Number(billPrintStats.billsWithoutToken || 0) > 0
         },
         topCustomers,
         topServices,
