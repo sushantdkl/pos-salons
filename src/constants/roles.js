@@ -57,9 +57,13 @@ export function canAccessPath(role, pathname) {
   const normalized = normalizeRole(role);
 
   if (pathname.startsWith('/dashboard/admin')) return normalized === 'admin';
+  if (pathname.startsWith('/dashboard/cashier/tokens')) return normalized === 'cashier';
   if (pathname.startsWith('/dashboard/cashier')) return normalized === 'cashier';
+  if (pathname.startsWith('/dashboard/barber/queue')) return normalized === 'barber';
   if (pathname.startsWith('/dashboard/barber')) return normalized === 'barber';
+  if (pathname.startsWith('/dashboard/stylist/queue')) return normalized === 'stylist';
   if (pathname.startsWith('/dashboard/stylist')) return normalized === 'stylist';
+  if (pathname.startsWith('/dashboard/beautician/queue')) return normalized === 'beautician';
   if (pathname.startsWith('/dashboard/beautician')) return normalized === 'beautician';
 
   if (pathname.startsWith('/admin/employees') || pathname.startsWith('/admin/reports') || pathname.startsWith('/admin/settings')) {

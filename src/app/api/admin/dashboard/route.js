@@ -73,6 +73,19 @@ export async function GET(request) {
     const commissionSummary = db.prepare("SELECT COALESCE(SUM(commission_amount), 0) as total FROM salon_bill_items WHERE item_type = 'service'").get().total;
     const repeatCustomers = db.prepare('SELECT COUNT(*) as count FROM customers WHERE COALESCE(total_visits, 0) >= 2').get().count;
     const repeatCustomerRate = totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0;
+    const tokenStats = db.prepare(`
+      SELECT
+        COUNT(*) as generated,
+        SUM(CASE WHEN status IN ('WAITING', 'CALLED') THEN 1 ELSE 0 END) as waiting,
+        SUM(CASE WHEN status = 'IN_SERVICE' THEN 1 ELSE 0 END) as inService,
+        SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'BILLED' THEN 1 ELSE 0 END) as billed,
+        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled,
+        SUM(CASE WHEN status = 'NO_SHOW' THEN 1 ELSE 0 END) as noShow
+      FROM walk_in_tokens
+      WHERE token_date = DATE('now')
+    `).get();
+    const billsWithoutToken = db.prepare("SELECT COUNT(*) as count FROM salon_bills WHERE DATE(created_at) = DATE('now') AND status = 'paid' AND token_id IS NULL").get().count;
 
     return NextResponse.json({
       stats: {
@@ -91,6 +104,17 @@ export async function GET(request) {
         avgOrder: monthlySales.avg || 0,
         repeatCustomerRate,
         commissionSummary: commissionSummary || 0,
+        tokenStats: {
+          generated: tokenStats.generated || 0,
+          waiting: tokenStats.waiting || 0,
+          inService: tokenStats.inService || 0,
+          completed: tokenStats.completed || 0,
+          billed: tokenStats.billed || 0,
+          cancelled: tokenStats.cancelled || 0,
+          noShow: tokenStats.noShow || 0,
+          billsWithoutToken: billsWithoutToken || 0,
+          mismatchWarning: Number(tokenStats.completed || 0) > 0 || Number(billsWithoutToken || 0) > 0
+        },
         topCustomers,
         topServices,
         topStaff,

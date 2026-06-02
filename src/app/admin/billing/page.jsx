@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/layout/dashboard-layout';
 import { CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 const draftKey = 'salon_pos_bill_draft';
 
-export default function AdminBilling() {
+function BillingContent() {
+  const searchParams = useSearchParams();
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -23,15 +25,18 @@ export default function AdminBilling() {
   const [taxPercent, setTaxPercent] = useState(0);
   const [error, setError] = useState('');
   const [lastBill, setLastBill] = useState(null);
+  const [tokens, setTokens] = useState([]);
+  const [selectedToken, setSelectedToken] = useState(null);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
 
   const fetchData = async () => {
-    const [serviceResponse, productResponse, customerResponse, staffResponse] = await Promise.all([
+    const [serviceResponse, productResponse, customerResponse, staffResponse, tokenResponse] = await Promise.all([
       fetch('/api/admin/services', { headers: headers() }),
       fetch('/api/admin/salon-products', { headers: headers() }),
       fetch('/api/admin/customers', { headers: headers() }),
-      fetch('/api/admin/employees', { headers: headers() })
+      fetch('/api/admin/employees', { headers: headers() }),
+      fetch('/api/admin/tokens', { headers: headers() })
     ]);
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services?.filter((item) => item.is_active) || []);
     if (productResponse.ok) setProducts((await productResponse.json()).products?.filter((item) => item.status === 'active') || []);
@@ -40,6 +45,9 @@ export default function AdminBilling() {
       setStaff((await staffResponse.json()).employees?.filter((employee) =>
         employee.is_active && ['barber', 'stylist', 'beautician'].includes(employee.salon_role)
       ) || []);
+    }
+    if (tokenResponse.ok) {
+      setTokens(((await tokenResponse.json()).tokens || []).filter((token) => !['BILLED', 'CANCELLED', 'NO_SHOW'].includes(token.status)));
     }
   };
 
@@ -83,6 +91,34 @@ export default function AdminBilling() {
   const addService = (service) => {
     setCartServices((items) => [...items, { ...service, cart_id: crypto.randomUUID(), staff_id: customer.preferred_stylist_id || customer.preferred_barber_id || customer.preferred_beautician_id || '' }]);
   };
+
+  function loadToken(token) {
+    const service = services.find((item) => Number(item.id) === Number(token.service_id));
+    if (!service) {
+      setError('Token service is not available for billing.');
+      return;
+    }
+    setSelectedToken(token);
+    setCustomer({
+      id: token.customer_id || '',
+      name: token.customer_name || 'Walk-in Customer',
+      phone: token.customer_phone || ''
+    });
+    setCartServices([{
+      ...service,
+      cart_id: `token-${token.id}`,
+      staff_id: token.assigned_staff_id || '',
+    }]);
+    setSearchTerm('');
+  }
+
+  useEffect(() => {
+    const tokenId = searchParams.get('tokenId');
+    if (tokenId && tokens.length && services.length) {
+      const token = tokens.find((item) => String(item.id) === String(tokenId));
+      if (token) loadToken(token);
+    }
+  }, [tokens, services, searchParams]);
 
   const staffForService = (service) => {
     const serviceKeys = [service.name, ...String(service.package_items || '').split(',')]
@@ -155,6 +191,7 @@ export default function AdminBilling() {
         customer,
         services: cartServices.map((service) => ({ id: service.id, staff_id: service.staff_id })),
         products: cartProducts.map((product) => ({ id: product.id, quantity: product.quantity })),
+        token_id: selectedToken?.id || null,
         discount_type: discountType,
         discount_value: Number(discountValue || 0),
         tax_percent: Number(taxPercent || 0),
@@ -174,6 +211,7 @@ export default function AdminBilling() {
     setDiscountValue('');
     setAmountPaid('');
     setCustomer({ id: '', name: 'Walk-in Customer', phone: '' });
+    setSelectedToken(null);
     localStorage.removeItem(draftKey);
     fetchData();
   };
@@ -190,6 +228,7 @@ export default function AdminBilling() {
         .center{text-align:center;margin-top:8px}
       </style></head><body>
         <h1>The Hair Cut</h1><div class="meta">${billData.bill.bill_number}<br/>${new Date().toLocaleString()}<br/>${billData.bill.customer_name || 'Walk-in Customer'}</div>
+        ${billData.bill.token_number ? `<div class="center">Token: ${billData.bill.token_number}</div>` : ''}
         <table>${rows}
           <tr><td>Subtotal</td><td style="text-align:right">${formatCurrency(billData.bill.subtotal)}</td></tr>
           <tr><td>Discount</td><td style="text-align:right">-${formatCurrency(billData.bill.discount_amount)}</td></tr>
@@ -222,6 +261,17 @@ export default function AdminBilling() {
             <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5">
               <h1 className="text-3xl font-semibold text-gray-950">Salon Billing</h1>
               <p className="mt-1 text-sm text-gray-600">Select customer, add services/products, assign stylist, and complete payment.</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                <select value={selectedToken?.id || ''} onChange={(event) => {
+                  const token = tokens.find((item) => String(item.id) === event.target.value);
+                  if (token) loadToken(token);
+                  else setSelectedToken(null);
+                }} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-gray-950">
+                  <option value="">Select completed token for billing optional</option>
+                  {tokens.map((token) => <option key={token.id} value={token.id}>{token.token_number} - {token.customer_name || 'Walk-in'} - {token.service_name}</option>)}
+                </select>
+                {selectedToken ? <div className="rounded-lg bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">Token {selectedToken.token_number} loaded</div> : null}
+              </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <select value={customer.id} onChange={(event) => selectCustomer(event.target.value)} className="rounded-lg border border-gray-300 px-4 py-3 text-gray-950">
                   <option value="">Walk-in customer</option>
@@ -361,5 +411,13 @@ export default function AdminBilling() {
         </div>
       </div>
     </AdminLayout>
+  );
+}
+
+export default function AdminBilling() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading billing...</div>}>
+      <BillingContent />
+    </Suspense>
   );
 }

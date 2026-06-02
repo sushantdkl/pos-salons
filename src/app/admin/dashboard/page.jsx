@@ -132,6 +132,20 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+          {[
+            ['Tokens Generated', stats?.tokenStats?.generated || 0],
+            ['Active Queue', Number(stats?.tokenStats?.waiting || 0) + Number(stats?.tokenStats?.inService || 0)],
+            ['Completed Not Billed', stats?.tokenStats?.completed || 0],
+            ['Bills Without Token', stats?.tokenStats?.billsWithoutToken || 0],
+          ].map(([label, value]) => (
+            <div key={label} className={`rounded-xl border p-5 shadow-sm ${label.includes('Not') || label.includes('Without') ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-950">{value}</p>
+            </div>
+          ))}
+        </div>
+
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
           {/* Sales Chart */}

@@ -144,6 +144,9 @@ Fields:
 - `payment_method`: text enum. Values: cash, card, online, split.
 - `amount_paid`: real.
 - `cashier_id`: integer, optional.
+- `token_id`: integer, optional walk-in token reference.
+- `transaction_time`: datetime.
+- `printed_at`: datetime.
 - `notes`: text, optional.
 - `status`: text enum. Values: paid, cancelled.
 - `created_at`: datetime.
@@ -153,6 +156,7 @@ Relationships:
 - One invoice belongs to one customer when known.
 - One invoice has many invoice items.
 - Cashier references user.
+- Optional token references walk-in token.
 
 Validation:
 
@@ -163,7 +167,56 @@ Validation:
 Indexes:
 
 - Unique index on `bill_number`.
-- Recommended indexes on `created_at`, `customer_id`, `cashier_id`, and `payment_method`.
+- Recommended indexes on `created_at`, `customer_id`, `cashier_id`, `token_id`, and `payment_method`.
+
+## WalkInToken
+
+Physical table: `walk_in_tokens`.
+
+Fields:
+
+- `id`: integer primary key.
+- `token_number`: text, required. Daily sequence such as `TKN-001`.
+- `token_date`: date, required.
+- `customer_id`: integer, optional.
+- `customer_name`: text, optional.
+- `customer_phone`: text, optional.
+- `service_id`: integer, required.
+- `package_id`: integer, optional.
+- `assigned_staff_id`: integer, optional.
+- `status`: text enum. Values: WAITING, CALLED, IN_SERVICE, COMPLETED, CANCELLED, NO_SHOW, BILLED.
+- `people_ahead`: integer.
+- `estimated_wait_minutes_min`: integer.
+- `estimated_wait_minutes_max`: integer.
+- `created_by`: integer user ID.
+- `called_at`, `started_at`, `completed_at`, `billed_at`, `cancelled_at`, `no_show_at`: datetime lifecycle timestamps.
+- `invoice_id`: integer, optional.
+- `notes`: text, optional.
+- `created_at`: datetime.
+- `updated_at`: datetime.
+
+Relationships:
+
+- Token references a service/package and optional assigned staff.
+- Token can link to one invoice after billing.
+- Created by admin or cashier.
+
+Validation:
+
+- Token number is unique per date.
+- Token cannot be completed before service starts.
+- Cancelled or no-show tokens cannot be billed.
+- Billed tokens cannot be billed again.
+- Staff must be assigned before service starts.
+
+Indexes:
+
+- `token_date`
+- `token_number`
+- `status`
+- `assigned_staff_id`
+- `invoice_id`
+- `created_at`
 
 ## InvoiceItem
 

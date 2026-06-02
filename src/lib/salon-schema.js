@@ -13,6 +13,12 @@ const CUSTOMER_COLUMNS = [
   ['updated_at', 'DATETIME']
 ];
 
+const BILL_COLUMNS = [
+  ['token_id', 'INTEGER'],
+  ['transaction_time', 'DATETIME'],
+  ['printed_at', 'DATETIME']
+];
+
 const BARBER_SERVICES = 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading';
 const BEAUTY_SERVICES = 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading';
 
@@ -310,7 +316,7 @@ function repairUserForeignKeyReferences(db) {
         'id', 'bill_number', 'customer_id', 'customer_name', 'customer_phone',
         'subtotal', 'discount_amount', 'discount_type', 'tax', 'tax_percent',
         'service_charge', 'grand_total', 'payment_method', 'amount_paid',
-        'cashier_id', 'notes', 'status', 'created_at'
+        'cashier_id', 'token_id', 'transaction_time', 'printed_at', 'notes', 'status', 'created_at'
       ],
       createSql: `
         CREATE TABLE salon_bills (
@@ -329,10 +335,14 @@ function repairUserForeignKeyReferences(db) {
           payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'online', 'split')),
           amount_paid REAL NOT NULL CHECK(amount_paid >= 0),
           cashier_id INTEGER,
+          token_id INTEGER,
+          transaction_time DATETIME,
+          printed_at DATETIME,
           notes TEXT,
           status TEXT DEFAULT 'paid' CHECK(status IN ('paid', 'cancelled')),
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+          FOREIGN KEY (token_id) REFERENCES walk_in_tokens(id) ON DELETE SET NULL,
           FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
         )
       `
@@ -550,6 +560,49 @@ export function ensureSalonSchema(db) {
   `).run();
 
   db.prepare(`
+    CREATE TABLE IF NOT EXISTS walk_in_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_number TEXT NOT NULL,
+      token_date DATE NOT NULL,
+      customer_id INTEGER,
+      customer_name TEXT,
+      customer_phone TEXT,
+      service_id INTEGER NOT NULL,
+      package_id INTEGER,
+      assigned_staff_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'WAITING' CHECK(status IN ('WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'BILLED')),
+      people_ahead INTEGER DEFAULT 0 CHECK(people_ahead >= 0),
+      estimated_wait_minutes_min INTEGER DEFAULT 0 CHECK(estimated_wait_minutes_min >= 0),
+      estimated_wait_minutes_max INTEGER DEFAULT 0 CHECK(estimated_wait_minutes_max >= 0),
+      created_by INTEGER,
+      called_at DATETIME,
+      started_at DATETIME,
+      completed_at DATETIME,
+      billed_at DATETIME,
+      cancelled_at DATETIME,
+      no_show_at DATETIME,
+      invoice_id INTEGER,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+      FOREIGN KEY (service_id) REFERENCES salon_services(id) ON DELETE RESTRICT,
+      FOREIGN KEY (assigned_staff_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (invoice_id) REFERENCES salon_bills(id) ON DELETE SET NULL,
+      UNIQUE(token_date, token_number)
+    )
+  `).run();
+  [
+    'CREATE INDEX IF NOT EXISTS idx_tokens_date ON walk_in_tokens(token_date)',
+    'CREATE INDEX IF NOT EXISTS idx_tokens_number ON walk_in_tokens(token_number)',
+    'CREATE INDEX IF NOT EXISTS idx_tokens_status ON walk_in_tokens(status)',
+    'CREATE INDEX IF NOT EXISTS idx_tokens_staff ON walk_in_tokens(assigned_staff_id)',
+    'CREATE INDEX IF NOT EXISTS idx_tokens_invoice ON walk_in_tokens(invoice_id)',
+    'CREATE INDEX IF NOT EXISTS idx_tokens_created_at ON walk_in_tokens(created_at)'
+  ].forEach((sql) => db.prepare(sql).run());
+
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_bills (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bill_number TEXT UNIQUE NOT NULL,
@@ -566,13 +619,18 @@ export function ensureSalonSchema(db) {
       payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'online', 'split')),
       amount_paid REAL NOT NULL CHECK(amount_paid >= 0),
       cashier_id INTEGER,
+      token_id INTEGER,
+      transaction_time DATETIME,
+      printed_at DATETIME,
       notes TEXT,
       status TEXT DEFAULT 'paid' CHECK(status IN ('paid', 'cancelled')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+      FOREIGN KEY (token_id) REFERENCES walk_in_tokens(id) ON DELETE SET NULL,
       FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `).run();
+  BILL_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'salon_bills', column, definition));
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS salon_bill_items (

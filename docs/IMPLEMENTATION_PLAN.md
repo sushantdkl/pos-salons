@@ -99,6 +99,35 @@ Acceptance Criteria:
 - Bills cannot complete without required staff assignments.
 - Totals and discounts calculate correctly.
 - Product stock decreases correctly.
+- Token-linked bills mark the token as billed and block duplicate billing.
+
+## Phase 4B: Walk-In Token Queue
+
+Objectives:
+
+- Manage physical walk-in customers with daily token numbers, staff queues, estimated waiting time, and fraud-control reporting.
+
+Deliverables:
+
+- Token schema and API.
+- Cashier/Admin token generation and queue pages.
+- Staff queue pages for Barber, Stylist, and Beautician.
+- Token-to-bill conversion.
+- Token analytics and mismatch warnings.
+
+Risks:
+
+- Tokens being billed twice.
+- Staff completing unassigned services.
+- Completed tokens not being billed.
+
+Acceptance Criteria:
+
+- Token number increments daily.
+- Token lifecycle rules are enforced.
+- Token receipt print works.
+- Completed token can convert to bill.
+- Cancelled/no-show/billed tokens cannot be billed.
 
 ## Phase 5: Customers
 

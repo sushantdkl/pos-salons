@@ -110,6 +110,26 @@ Billing validation:
 - Discount cannot be negative or exceed allowed limits.
 - Amount paid must cover total unless split payment is supported.
 
+## Walk-In Token Flow
+
+```mermaid
+flowchart TD
+  A["Customer arrives"] --> B["Cashier creates token"]
+  B --> C["Print token receipt"]
+  C --> D["Staff sees assigned queue"]
+  D --> E["Call token"]
+  E --> F["Start service"]
+  F --> G["Complete service"]
+  G --> H["Cashier converts token to bill"]
+  H --> I["Token becomes billed"]
+```
+
+Token controls:
+
+- Cashier and Admin can generate, print, cancel, mark no-show, assign staff, and convert tokens to bills.
+- Barber, Stylist, and Beautician can view assigned queues and move tokens through call, start, and complete states.
+- Admin can review token analytics and token-vs-bill mismatch warnings.
+
 ## Customer Flow
 
 1. Staff searches by name or phone.

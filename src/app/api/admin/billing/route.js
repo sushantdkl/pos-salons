@@ -46,6 +46,14 @@ export async function POST(request) {
 
     const createBill = db.transaction(() => {
       let customerId = data.customer_id || null;
+      const tokenId = Number(data.token_id || 0) || null;
+      let linkedToken = null;
+      if (tokenId) {
+        linkedToken = db.prepare('SELECT * FROM walk_in_tokens WHERE id = ?').get(tokenId);
+        if (!linkedToken) throw new Error('Selected token was not found');
+        if (linkedToken.invoice_id || linkedToken.status === 'BILLED') throw new Error('This token has already been billed');
+        if (['CANCELLED', 'NO_SHOW'].includes(linkedToken.status)) throw new Error('Cancelled or no-show token cannot be billed');
+      }
       const customerName = cleanText(data.customer?.name || data.customer_name || 'Walk-in Customer');
       const customerPhone = cleanText(data.customer?.phone || data.customer_phone, null);
 
@@ -139,8 +147,9 @@ export async function POST(request) {
         INSERT INTO salon_bills (
           bill_number, customer_id, customer_name, customer_phone, subtotal,
           discount_amount, discount_type, tax, tax_percent, service_charge,
-          grand_total, payment_method, amount_paid, cashier_id, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          grand_total, payment_method, amount_paid, cashier_id, token_id,
+          transaction_time, printed_at, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
       `).run(
         billNumber,
         customerId,
@@ -156,6 +165,7 @@ export async function POST(request) {
         paymentMethod,
         amountPaid,
         user.id,
+        tokenId,
         cleanText(data.notes, null)
       );
 
@@ -220,6 +230,17 @@ export async function POST(request) {
       db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
         .run(user.id, 'create', 'bill', billId, billNumber);
 
+      if (tokenId) {
+        db.prepare(`
+          UPDATE walk_in_tokens
+          SET status = 'BILLED',
+              billed_at = CURRENT_TIMESTAMP,
+              invoice_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(billId, tokenId);
+      }
+
       return {
         bill: {
           id: billId,
@@ -236,6 +257,8 @@ export async function POST(request) {
           grand_total: grandTotal,
           payment_method: paymentMethod,
           amount_paid: amountPaid,
+          token_id: tokenId,
+          token_number: linkedToken?.token_number || null,
           created_at: new Date().toISOString()
         },
         items
