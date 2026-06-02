@@ -90,6 +90,7 @@ export default function AdminLayout({ children }) {
     { roles: ['admin', 'cashier'], icon: Users, label: 'Customers', href: '/admin/customers', color: 'text-pink-600' },
     { roles: ['admin'], icon: FileText, label: 'Reports', href: '/admin/reports', color: 'text-purple-600' },
     { roles: ['admin'], icon: Users, label: 'Performance', href: '/dashboard/admin/staff-performance', color: 'text-amber-700' },
+    { roles: ['admin'], icon: DollarSign, label: 'Expenses & Salary', href: '/dashboard/admin/expenses', color: 'text-emerald-700' },
     { roles: ['admin'], icon: Globe, label: 'Website CMS', href: '/dashboard/admin/website', color: 'text-blue-700' },
     { roles: ['admin', 'cashier'], icon: MessageCircle, label: 'Reminders', href: '/admin/reminders', color: 'text-green-600' },
     { roles: ['admin'], icon: Settings, label: 'Settings', href: '/admin/settings', color: 'text-gray-600' },

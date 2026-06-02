@@ -307,6 +307,108 @@ Validation:
 - Commission percentage must be between 0 and 100.
 - Commission amount cannot be negative.
 
+## Expense
+
+Physical table: `expenses`.
+
+Fields:
+
+- `id`: integer primary key.
+- `title`: text, required.
+- `category`: text enum. Values: Staff Salary, Staff Commission, Product Purchase, Rent, Electricity, Water, Internet, Maintenance, Marketing, Equipment, Cleaning, Other.
+- `amount`: real, required.
+- `payment_method`: text enum. Values: cash, online, mixed.
+- `cash_amount`: real.
+- `online_amount`: real.
+- `paid_by`: text, optional.
+- `paid_to`: text, optional.
+- `expense_date`: date.
+- `notes`: text, optional.
+- `description`: text, compatibility field mirroring notes/title for legacy expense tables.
+- `reference_number`: text, optional.
+- `attachment_url`: text, optional.
+- `created_by`: integer user ID.
+- `is_deleted`: integer boolean.
+- `created_at`: datetime.
+- `updated_at`: datetime.
+
+Relationships:
+
+- Created by an admin user.
+- Salary and commission payments create linked expense rows through deterministic salary reference numbers.
+
+Validation:
+
+- Admin role is required for all expense API actions.
+- Title and category are required.
+- Amount cannot be negative.
+- Cash and online values cannot be negative.
+- For `mixed` payment, cash plus online must exactly equal the expense amount.
+- For `cash` payment, online amount is zero.
+- For `online` payment, cash amount is zero.
+- Soft delete is used so historical reporting remains auditable.
+
+Indexes:
+
+- `expense_date`
+- `category`
+- `payment_method`
+- `created_at`
+
+## SalaryPayment
+
+Physical table: `salary_payments`.
+
+Fields:
+
+- `id`: integer primary key.
+- `staff_id`: integer, required.
+- `staff_name`: text snapshot.
+- `staff_role`: text snapshot.
+- `salary_month`: text in `YYYY-MM` format.
+- `base_salary`: real.
+- `commission_earned`: real.
+- `bonus`: real.
+- `deduction`: real.
+- `total_payable`: real.
+- `amount_paid`: real.
+- `remaining_balance`: real.
+- `payment_method`: text enum. Values: cash, online, mixed.
+- `cash_amount`: real.
+- `online_amount`: real.
+- `payment_date`: date.
+- `status`: text enum. Values: unpaid, partially_paid, paid.
+- `notes`: text, optional.
+- `created_by`: integer user ID.
+- `is_deleted`: integer boolean.
+- `created_at`: datetime.
+- `updated_at`: datetime.
+
+Relationships:
+
+- Belongs to one staff user.
+- Creates linked `expenses` rows for Staff Salary and Commission Paid.
+- Commission values are derived from completed service invoice items for the selected month and can be reviewed before saving.
+
+Validation:
+
+- Admin role is required for all salary payment API actions.
+- Staff member and salary month are required.
+- Base salary, commission, bonus, deduction, and paid amount cannot be negative.
+- Total payable is calculated as `base_salary + commission_earned + bonus - deduction`.
+- Remaining balance is calculated as `total_payable - amount_paid`.
+- Amount paid cannot exceed total payable.
+- Mixed payment cash plus online must equal amount paid.
+- Payment status is calculated automatically from amount paid and remaining balance.
+- Soft delete also removes the linked salary and commission expense rows from active reporting.
+
+Indexes:
+
+- `staff_id`
+- `salary_month`
+- `status`
+- `created_at`
+
 ## InventoryProduct
 
 Physical table: `salon_products`.

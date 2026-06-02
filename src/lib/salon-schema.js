@@ -42,6 +42,69 @@ const STAFF_WEBSITE_COLUMNS = [
   ['website_photo', 'TEXT']
 ];
 
+const EXPENSE_CATEGORIES = [
+  'Staff Salary',
+  'Staff Commission',
+  'Product Purchase',
+  'Rent',
+  'Electricity',
+  'Water',
+  'Internet',
+  'Maintenance',
+  'Marketing',
+  'Equipment',
+  'Cleaning',
+  'Other'
+];
+
+const EXPENSE_COLUMNS = [
+  ['title', "TEXT DEFAULT 'Expense'"],
+  ['category', "TEXT DEFAULT 'Other'"],
+  ['amount', 'REAL DEFAULT 0'],
+  ['payment_method', "TEXT DEFAULT 'cash'"],
+  ['cash_amount', 'REAL DEFAULT 0'],
+  ['online_amount', 'REAL DEFAULT 0'],
+  ['paid_by', 'TEXT'],
+  ['paid_to', 'TEXT'],
+  ['expense_date', 'DATE'],
+  ['description', 'TEXT'],
+  ['notes', 'TEXT'],
+  ['reference_number', 'TEXT'],
+  ['attachment_url', 'TEXT'],
+  ['salary_payment_id', 'INTEGER'],
+  ['created_by', 'INTEGER'],
+  ['updated_by', 'INTEGER'],
+  ['deleted_at', 'DATETIME'],
+  ['created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP'],
+  ['updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP']
+];
+
+const SALARY_PAYMENT_COLUMNS = [
+  ['staff_id', 'INTEGER'],
+  ['salary_month', 'TEXT'],
+  ['base_salary', 'REAL DEFAULT 0'],
+  ['commission_earned', 'REAL DEFAULT 0'],
+  ['services_completed', 'INTEGER DEFAULT 0'],
+  ['revenue_generated', 'REAL DEFAULT 0'],
+  ['bonus', 'REAL DEFAULT 0'],
+  ['deduction', 'REAL DEFAULT 0'],
+  ['total_payable', 'REAL DEFAULT 0'],
+  ['amount_paid', 'REAL DEFAULT 0'],
+  ['remaining_balance', 'REAL DEFAULT 0'],
+  ['payment_method', "TEXT DEFAULT 'cash'"],
+  ['cash_amount', 'REAL DEFAULT 0'],
+  ['online_amount', 'REAL DEFAULT 0'],
+  ['payment_status', "TEXT DEFAULT 'unpaid'"],
+  ['payment_date', 'DATE'],
+  ['notes', 'TEXT'],
+  ['expense_id', 'INTEGER'],
+  ['created_by', 'INTEGER'],
+  ['updated_by', 'INTEGER'],
+  ['deleted_at', 'DATETIME'],
+  ['created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP'],
+  ['updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP']
+];
+
 const BARBER_SERVICES = 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading';
 const BEAUTY_SERVICES = 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading';
 
@@ -929,6 +992,82 @@ export function ensureSalonSchema(db) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `).run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount REAL NOT NULL CHECK(amount >= 0),
+      payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'online', 'bank_transfer', 'mixed')),
+      cash_amount REAL DEFAULT 0 CHECK(cash_amount >= 0),
+      online_amount REAL DEFAULT 0 CHECK(online_amount >= 0),
+      paid_by TEXT,
+      paid_to TEXT,
+      expense_date DATE NOT NULL,
+      notes TEXT,
+      reference_number TEXT,
+      attachment_url TEXT,
+      salary_payment_id INTEGER,
+      created_by INTEGER,
+      updated_by INTEGER,
+      deleted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (salary_payment_id) REFERENCES salary_payments(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `).run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS salary_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staff_id INTEGER NOT NULL,
+      salary_month TEXT NOT NULL,
+      base_salary REAL DEFAULT 0 CHECK(base_salary >= 0),
+      commission_earned REAL DEFAULT 0 CHECK(commission_earned >= 0),
+      services_completed INTEGER DEFAULT 0 CHECK(services_completed >= 0),
+      revenue_generated REAL DEFAULT 0 CHECK(revenue_generated >= 0),
+      bonus REAL DEFAULT 0 CHECK(bonus >= 0),
+      deduction REAL DEFAULT 0 CHECK(deduction >= 0),
+      total_payable REAL NOT NULL CHECK(total_payable >= 0),
+      amount_paid REAL DEFAULT 0 CHECK(amount_paid >= 0),
+      remaining_balance REAL DEFAULT 0 CHECK(remaining_balance >= 0),
+      payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'online', 'bank_transfer', 'mixed')),
+      cash_amount REAL DEFAULT 0 CHECK(cash_amount >= 0),
+      online_amount REAL DEFAULT 0 CHECK(online_amount >= 0),
+      payment_status TEXT NOT NULL CHECK(payment_status IN ('unpaid', 'partially_paid', 'paid')),
+      payment_date DATE NOT NULL,
+      notes TEXT,
+      expense_id INTEGER,
+      created_by INTEGER,
+      updated_by INTEGER,
+      deleted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `).run();
+  EXPENSE_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'expenses', column, definition));
+  SALARY_PAYMENT_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'salary_payments', column, definition));
+  db.prepare("UPDATE expenses SET expense_date = DATE(created_at) WHERE expense_date IS NULL").run();
+  db.prepare("UPDATE salary_payments SET payment_date = DATE(created_at) WHERE payment_date IS NULL").run();
+  db.prepare("UPDATE salary_payments SET salary_month = strftime('%Y-%m', COALESCE(payment_date, created_at)) WHERE salary_month IS NULL OR salary_month = ''").run();
+
+  [
+    'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date)',
+    'CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)',
+    'CREATE INDEX IF NOT EXISTS idx_expenses_payment_method ON expenses(payment_method)',
+    'CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_salary_staff ON salary_payments(staff_id)',
+    'CREATE INDEX IF NOT EXISTS idx_salary_month ON salary_payments(salary_month)',
+    'CREATE INDEX IF NOT EXISTS idx_salary_status ON salary_payments(payment_status)',
+    'CREATE INDEX IF NOT EXISTS idx_salary_created_at ON salary_payments(created_at)'
+  ].forEach((sql) => db.prepare(sql).run());
   repairUserForeignKeyReferences(db);
 
   CUSTOMER_COLUMNS.forEach(([column, definition]) => addColumnIfMissing(db, 'customers', column, definition));

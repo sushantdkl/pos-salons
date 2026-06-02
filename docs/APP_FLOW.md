@@ -42,7 +42,7 @@ flowchart TD
 
 1. Admin logs in with PIN.
 2. Admin lands on the admin dashboard.
-3. Admin can manage users, services, customers, billing, inventory, reports, reminders, settings, and staff performance.
+3. Admin can manage users, services, customers, billing, inventory, reports, reminders, settings, staff performance, and expenses/salary.
 4. Admin reviews revenue cards and staff leaderboard.
 5. Admin creates or updates staff users and commission percentages.
 6. Admin reviews reports and business insights.
@@ -158,6 +158,40 @@ Token controls:
 2. Admin selects date range where available.
 3. Server aggregates revenue, bills, services, product sales, staff performance, customer activity, low stock, commissions, and payment methods.
 4. Dashboard shows summary cards, clean lists, and business insights.
+
+## Expenses & Salary Flow
+
+```mermaid
+flowchart TD
+  A["Admin opens Expenses & Salary"] --> B{"Choose workflow"}
+  B -->|Expense| C["Create or edit expense"]
+  C --> D["Validate amount and payment method"]
+  D --> E["Save expense with soft-delete audit trail"]
+  B -->|Salary| F["Select staff and salary month"]
+  F --> G["Review base salary, commission, bonus, and deduction"]
+  G --> H["Validate paid amount and mixed payment split"]
+  H --> I["Save salary payment"]
+  I --> J["Create salary and commission expense rows"]
+  E --> K["Update expense reports"]
+  J --> K
+  K --> L["Show net revenue after expenses"]
+```
+
+Expense controls:
+
+- Admin-only route: `/dashboard/admin/expenses`.
+- Admin-only API: `/api/admin/expenses`.
+- Expense categories include rent, electricity, product purchase, staff salary, commission paid, maintenance, marketing, and other costs.
+- Payment methods support cash, online, and mixed payment.
+- Mixed payment is accepted only when cash plus online equals the expense or salary amount.
+- Delete actions use soft delete so reports and audit history remain traceable.
+
+Salary controls:
+
+- Admin selects staff, salary month, base salary, commission earned, bonus, deduction, amount paid, and payment method.
+- Total payable is calculated as base salary plus commission plus bonus minus deduction.
+- Remaining balance and payment status are calculated automatically.
+- Salary and commission payments are recorded as expense rows so net revenue reflects real salon operating costs.
 
 ## Website CMS Flow
 
