@@ -14,9 +14,9 @@ function validateProduct(data) {
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, ['admin', 'cashier']);
 
     const { searchParams } = new URL(request.url);
     const search = cleanText(searchParams.get('search'));
@@ -32,13 +32,13 @@ export async function GET(request) {
       params.push(category);
     }
 
-    const products = db.prepare(`
+    const products = await db.all(`
       SELECT *, current_stock <= low_stock_threshold as is_low_stock,
              current_stock * purchase_price as stock_value
       FROM salon_products
       ${where}
       ORDER BY status DESC, name ASC
-    `).all(...params);
+    `, params);
 
     return NextResponse.json({ products });
   } catch (error) {
@@ -48,19 +48,19 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const validationError = validateProduct(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const result = db.prepare(`
+    const result = await db.run(`
       INSERT INTO salon_products (
         name, category, purchase_price, selling_price, current_stock,
         low_stock_threshold, supplier, expiry_date, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       cleanText(data.name),
       cleanText(data.category),
       Number(data.purchase_price),
@@ -70,12 +70,12 @@ export async function POST(request) {
       cleanText(data.supplier, null),
       data.expiry_date || null,
       data.status === 'inactive' ? 'inactive' : 'active'
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'create', 'product', result.lastInsertRowid, cleanText(data.name));
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'create', 'product', result.lastInsertRowid, cleanText(data.name)]);
 
-    const product = db.prepare('SELECT * FROM salon_products WHERE id = ?').get(result.lastInsertRowid);
+    const product = await db.get('SELECT * FROM salon_products WHERE id = ?', [result.lastInsertRowid]);
     return NextResponse.json({ product, message: 'Product created successfully' }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to create product' }, { status: error.status || 500 });
@@ -84,39 +84,39 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
 
     if (data.movement_type) {
       const quantity = Number(data.quantity);
       if (!Number.isInteger(quantity) || quantity <= 0) return NextResponse.json({ error: 'Movement quantity must be positive' }, { status: 400 });
-      const product = db.prepare('SELECT * FROM salon_products WHERE id = ?').get(data.id);
+      const product = await db.get('SELECT * FROM salon_products WHERE id = ?', [data.id]);
       if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
       const isOut = ['stock_out', 'sale'].includes(data.movement_type);
       const newStock = isOut ? product.current_stock - quantity : product.current_stock + quantity;
       if (newStock < 0) return NextResponse.json({ error: 'Stock cannot go negative' }, { status: 400 });
 
-      db.prepare('UPDATE salon_products SET current_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newStock, data.id);
-      db.prepare(`
+      await db.run('UPDATE salon_products SET current_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newStock, data.id]);
+      await db.run(`
         INSERT INTO inventory_movements (product_id, movement_type, quantity, previous_stock, new_stock, notes)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(data.id, data.movement_type, quantity, product.current_stock, newStock, cleanText(data.notes, null));
+      `, [data.id, data.movement_type, quantity, product.current_stock, newStock, cleanText(data.notes, null)]);
 
-      const updated = db.prepare('SELECT * FROM salon_products WHERE id = ?').get(data.id);
+      const updated = await db.get('SELECT * FROM salon_products WHERE id = ?', [data.id]);
       return NextResponse.json({ product: updated, message: 'Stock updated successfully' });
     }
 
     const validationError = validateProduct(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
-    db.prepare(`
+    await db.run(`
       UPDATE salon_products
       SET name = ?, category = ?, purchase_price = ?, selling_price = ?, current_stock = ?,
           low_stock_threshold = ?, supplier = ?, expiry_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       cleanText(data.name),
       cleanText(data.category),
       Number(data.purchase_price),
@@ -127,11 +127,11 @@ export async function PUT(request) {
       data.expiry_date || null,
       data.status === 'inactive' ? 'inactive' : 'active',
       data.id
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'update', 'product', data.id, cleanText(data.name));
-    const product = db.prepare('SELECT * FROM salon_products WHERE id = ?').get(data.id);
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'update', 'product', data.id, cleanText(data.name)]);
+    const product = await db.get('SELECT * FROM salon_products WHERE id = ?', [data.id]);
     return NextResponse.json({ product, message: 'Product updated successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to update product' }, { status: error.status || 500 });
@@ -140,16 +140,16 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
 
-    db.prepare('DELETE FROM salon_products WHERE id = ?').run(id);
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'delete', 'product', id, 'Product deleted');
+    await db.run('DELETE FROM salon_products WHERE id = ?', [id]);
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'delete', 'product', id, 'Product deleted']);
     return NextResponse.json({ message: 'Product deleted successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to delete product' }, { status: error.status || 500 });

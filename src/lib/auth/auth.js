@@ -2,51 +2,47 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import Database from '../db/index.js';
 import { dashboardPathForRole, normalizeRole } from '@/constants/roles';
-import { ensureSalonSchema } from '@/lib/salon-schema';
 
 export class AuthService {
   constructor() {
     this.db = Database.getInstance();
-    ensureSalonSchema(this.db.db);
   }
-  
+
   async authenticate(username, password) {
-    const user = this.db.get(`
+    const user = await this.db.get(`
       SELECT u.*, sp.salon_role
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE u.username = ? AND u.is_active = 1
+      WHERE u.username = ? AND u.is_active = TRUE
     `, [username]);
-    
+
     if (!user) {
       return { success: false, error: 'User not found' };
     }
-    
+
     if (!user.password_hash) {
       console.error('User found but password_hash is null:', username);
       return { success: false, error: 'User account not properly configured' };
     }
-    
+
     if (!password || typeof password !== 'string') {
       return { success: false, error: 'Invalid password format' };
     }
-    
-    // Verify password using bcrypt
+
     const isValidPassword = bcrypt.compareSync(password, user.password_hash);
-    
+
     if (!isValidPassword) {
       return { success: false, error: 'Invalid password' };
     }
-    
-    // Create session
+
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    this.db.run(`
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await this.db.run(`
       INSERT INTO sessions (user_id, token, expires_at)
       VALUES (?, ?, ?)
     `, [user.id, sessionToken, expiresAt.toISOString()]);
-    
+
     const role = normalizeRole(user.role);
     return {
       success: true,
@@ -62,21 +58,21 @@ export class AuthService {
       redirectPath: dashboardPathForRole(role)
     };
   }
-  
+
   async verifySession(token) {
-    const session = this.db.get(`
+    const session = await this.db.get(`
       SELECT s.*, u.id as user_id, u.username, u.full_name, u.role, u.email, u.phone,
              sp.salon_role
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE s.token = ? AND s.expires_at > datetime('now')
+      WHERE s.token = ? AND s.expires_at > NOW() AND u.is_active = TRUE
     `, [token]);
-    
+
     if (!session) {
       return null;
     }
-    
+
     return {
       id: session.user_id,
       username: session.username,
@@ -86,13 +82,13 @@ export class AuthService {
       phone: session.phone
     };
   }
-  
+
   async logout(token) {
     return this.db.run(`
       DELETE FROM sessions WHERE token = ?
     `, [token]);
   }
-  
+
   hasPermission(userRole, permission) {
     const permissions = {
       admin: ['*'],
@@ -101,13 +97,11 @@ export class AuthService {
       stylist: ['billing.view', 'customers.view', 'services.view'],
       beautician: ['billing.view', 'customers.view', 'services.view']
     };
-    
+
     const userPermissions = permissions[userRole] || [];
-    
-    // Admin has all permissions
+
     if (userPermissions.includes('*')) return true;
-    
-    // Check exact match or wildcard match
+
     return userPermissions.some(p => {
       if (p.endsWith('.*')) {
         return permission.startsWith(p.slice(0, -2));
@@ -115,20 +109,25 @@ export class AuthService {
       return p === permission;
     });
   }
-  
-  registerDevice(deviceId, userId, deviceType, ipAddress) {
+
+  async registerDevice(deviceId, userId, deviceType, ipAddress) {
     return this.db.run(`
-      INSERT OR REPLACE INTO devices (device_id, user_id, device_type, ip_address, last_seen)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO devices (device_id, user_id, device_type, ip_address, last_seen)
+      VALUES (?, ?, ?, ?, NOW())
+      ON CONFLICT (device_id) DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        device_type = EXCLUDED.device_type,
+        ip_address = EXCLUDED.ip_address,
+        last_seen = NOW()
     `, [deviceId, userId, deviceType, ipAddress]);
   }
-  
-  getActiveDevices() {
+
+  async getActiveDevices() {
     return this.db.all(`
       SELECT d.*, u.full_name as user_name, u.role
       FROM devices d
       LEFT JOIN users u ON d.user_id = u.id
-      WHERE d.is_active = 1
+      WHERE d.is_active = TRUE
       ORDER BY d.last_seen DESC
     `);
   }

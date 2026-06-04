@@ -1,9 +1,4 @@
-const PERIODS = {
-  today: "DATE(b.created_at) = DATE('now')",
-  week: "DATE(b.created_at) >= DATE('now', '-6 days')",
-  month: "DATE(b.created_at) >= DATE('now', '-29 days')",
-  lifetime: '1=1',
-};
+import { STAFF_PERF_PERIODS } from '@/lib/db/postgres-dates';
 
 function emptyMetric() {
   return {
@@ -14,27 +9,25 @@ function emptyMetric() {
   };
 }
 
-export function getStaffPerformance(db, staffId) {
-  const metrics = Object.fromEntries(
-    Object.entries(PERIODS).map(([period, clause]) => {
-      const row = db.prepare(`
-        SELECT COUNT(i.id) as servicesCompleted,
-               COUNT(DISTINCT b.customer_id) as customersServed,
-               COALESCE(SUM(i.subtotal), 0) as revenue,
-               COALESCE(SUM(i.commission_amount), 0) as commission
-        FROM salon_bill_items i
-        JOIN salon_bills b ON b.id = i.bill_id
-        WHERE i.item_type = 'service'
-          AND i.staff_id = ?
-          AND b.status = 'paid'
-          AND ${clause}
-      `).get(staffId);
+export async function getStaffPerformance(db, staffId) {
+  const metrics = {};
+  for (const [period, clause] of Object.entries(STAFF_PERF_PERIODS)) {
+    const row = await db.get(`
+      SELECT COUNT(i.id)::int as servicesCompleted,
+             COUNT(DISTINCT b.customer_id)::int as customersServed,
+             COALESCE(SUM(i.subtotal), 0) as revenue,
+             COALESCE(SUM(i.commission_amount), 0) as commission
+      FROM salon_bill_items i
+      JOIN salon_bills b ON b.id = i.bill_id
+      WHERE i.item_type = 'service'
+        AND i.staff_id = ?
+        AND b.status = 'paid'
+        AND ${clause}
+    `, [staffId]);
+    metrics[period] = { ...emptyMetric(), ...row };
+  }
 
-      return [period, { ...emptyMetric(), ...row }];
-    })
-  );
-
-  const recentServices = db.prepare(`
+  const recentServices = await db.all(`
     SELECT b.customer_name as customerName,
            i.name as serviceName,
            b.bill_number as invoice,
@@ -48,17 +41,15 @@ export function getStaffPerformance(db, staffId) {
       AND b.status = 'paid'
     ORDER BY b.created_at DESC
     LIMIT 12
-  `).all(staffId);
+  `, [staffId]);
 
-  const daysActive = Math.max(
-    1,
-    db.prepare(`
-      SELECT COUNT(DISTINCT DATE(b.created_at)) as count
-      FROM salon_bill_items i
-      JOIN salon_bills b ON b.id = i.bill_id
-      WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
-    `).get(staffId).count || 1
-  );
+  const daysRow = await db.get(`
+    SELECT COUNT(DISTINCT b.created_at::date)::int as count
+    FROM salon_bill_items i
+    JOIN salon_bills b ON b.id = i.bill_id
+    WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
+  `, [staffId]);
+  const daysActive = Math.max(1, Number(daysRow?.count || 1));
 
   return {
     metrics,
@@ -70,31 +61,31 @@ export function getStaffPerformance(db, staffId) {
   };
 }
 
-export function getStaffLeaderboard(db, period = 'month') {
-  const clause = PERIODS[period] || PERIODS.month;
-  return db.prepare(`
+export async function getStaffLeaderboard(db, period = 'month') {
+  const clause = STAFF_PERF_PERIODS[period] || STAFF_PERF_PERIODS.month;
+  return db.all(`
     SELECT u.id,
            COALESCE(NULLIF(sp.display_name, ''), u.full_name) as name,
            sp.salon_role as role,
-           COUNT(i.id) as servicesCompleted,
-           COUNT(DISTINCT b.customer_id) as customersServed,
+           COUNT(i.id)::int as servicesCompleted,
+           COUNT(DISTINCT b.customer_id)::int as customersServed,
            COALESCE(SUM(i.subtotal), 0) as revenue,
            COALESCE(SUM(i.commission_amount), 0) as commission
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
     LEFT JOIN salon_bill_items i ON i.staff_id = u.id AND i.item_type = 'service'
     LEFT JOIN salon_bills b ON b.id = i.bill_id AND b.status = 'paid' AND ${clause}
-    WHERE u.is_active = 1 AND sp.salon_role IN ('barber', 'stylist', 'beautician')
-    GROUP BY u.id
+    WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
+    GROUP BY u.id, sp.display_name, u.full_name, sp.salon_role
     ORDER BY revenue DESC, servicesCompleted DESC
-  `).all();
+  `);
 }
 
-export function getAdminStaffAnalytics(db) {
-  const today = getStaffLeaderboard(db, 'today');
-  const week = getStaffLeaderboard(db, 'week');
-  const month = getStaffLeaderboard(db, 'month');
-  const lifetime = getStaffLeaderboard(db, 'lifetime');
+export async function getAdminStaffAnalytics(db) {
+  const today = await getStaffLeaderboard(db, 'today');
+  const week = await getStaffLeaderboard(db, 'week');
+  const month = await getStaffLeaderboard(db, 'month');
+  const lifetime = await getStaffLeaderboard(db, 'lifetime');
 
   const byRevenue = [...month].sort((a, b) => b.revenue - a.revenue);
   const byCommission = [...month].sort((a, b) => b.commission - a.commission);

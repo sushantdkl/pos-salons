@@ -10,13 +10,13 @@ import type { PublicPackage, PublicService, PublicStaffMember } from '@/modules/
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return cms.seo;
 }
 
-export default function HomePage() {
-  const cms = getPublicWebsiteData();
+export default async function HomePage() {
+  const cms = await getPublicWebsiteData();
   const { info, sections } = cms;
   const hero = sections.hero;
   const servicesSection = sections.services;

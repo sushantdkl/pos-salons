@@ -1,124 +1,104 @@
-import BetterSqlite3 from 'better-sqlite3';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { Pool } from 'pg';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-function resolveDatabasePathFromUrl(databaseUrl) {
-  if (!databaseUrl) return '';
-
-  if (databaseUrl.startsWith('file:')) {
-    return fileURLToPath(databaseUrl);
+function normalizeParams(args) {
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return args[0];
   }
-
-  if (databaseUrl.startsWith('sqlite://')) {
-    return databaseUrl.replace(/^sqlite:\/\//, '');
-  }
-
-  if (/^(postgres|postgresql|mysql|https?):\/\//i.test(databaseUrl)) {
-    console.warn('DATABASE_URL is not a SQLite path. Falling back to local SQLite storage.');
-    return '';
-  }
-
-  return databaseUrl;
+  return args;
 }
 
-export class PosDatabase {
-  constructor(dbPath) {
-    const isVercel = !!process.env.VERCEL;
+function replacePlaceholders(sql) {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+}
 
-    // Use explicit path, DATABASE_URL, isolated license file, DB_NAME, or default SQLite file.
-    if (!dbPath) {
-      dbPath = resolveDatabasePathFromUrl(process.env.DATABASE_URL);
-    }
+function withReturningId(sql) {
+  const trimmed = sql.trim();
+  if (/^INSERT\s/i.test(trimmed) && !/\bRETURNING\b/i.test(trimmed)) {
+    return `${trimmed} RETURNING id`;
+  }
+  return trimmed;
+}
 
-    if (!dbPath) {
-      const licensePath = path.join(process.cwd(), 'databases', '.license');
-      if (fs.existsSync(licensePath)) {
-        try {
-          const licenseData = JSON.parse(fs.readFileSync(licensePath, 'utf8'));
-          dbPath = `databases/${licenseData.db_name}`;
-        } catch (error) {
-          console.error('Error reading license file:', error);
-        }
-      }
-    }
+class PostgresAdapter {
+  constructor(queryFn) {
+    this.queryFn = queryFn;
+    this.provider = 'postgres';
+  }
 
-    if (!dbPath) {
-      dbPath = process.env.DB_NAME ? `databases/${process.env.DB_NAME}` : 'salon_pos.db';
-    }
+  async query(sql, params = []) {
+    const text = replacePlaceholders(withReturningId(sql));
+    return this.queryFn(text, params);
+  }
 
-    const fullPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
-    let runtimePath = fullPath;
+  prepare(sql) {
+    return {
+      run: async (...params) => {
+        const values = normalizeParams(params);
+        const result = await this.query(sql, values);
+        return {
+          rowCount: result.rowCount,
+          lastInsertRowid: result.rows?.[0]?.id,
+          rows: result.rows,
+        };
+      },
+      get: async (...params) => {
+        const values = normalizeParams(params);
+        const text = replacePlaceholders(sql);
+        const result = await this.queryFn(text, values);
+        return result.rows?.[0] ?? null;
+      },
+      all: async (...params) => {
+        const values = normalizeParams(params);
+        const text = replacePlaceholders(sql);
+        const result = await this.queryFn(text, values);
+        return result.rows;
+      },
+    };
+  }
 
-    // Vercel serverless filesystem is read-only except /tmp. Mirror or create the DB there.
-    if (isVercel) {
-      const tmpBaseDir = path.join('/tmp', 'databases');
-      if (!fs.existsSync(tmpBaseDir)) {
-        fs.mkdirSync(tmpBaseDir, { recursive: true });
-      }
+  async run(sql, params = []) {
+    return this.prepare(sql).run(params);
+  }
 
-      const dbFileName = path.basename(fullPath);
-      const tmpDbPath = path.join(tmpBaseDir, dbFileName);
+  async get(sql, params = []) {
+    return this.prepare(sql).get(params);
+  }
 
-      if (!fs.existsSync(tmpDbPath) && fs.existsSync(fullPath)) {
-        fs.copyFileSync(fullPath, tmpDbPath);
-      }
+  async all(sql, params = []) {
+    return this.prepare(sql).all(params);
+  }
+}
 
-      runtimePath = tmpDbPath;
-    }
-
-    const dbExists = fs.existsSync(runtimePath);
-
-    console.log('Using database:', runtimePath);
-
-    this.db = new BetterSqlite3(runtimePath, {
-      verbose: process.env.NODE_ENV === 'development' ? console.log : null,
+class PostgresDatabase extends PostgresAdapter {
+  constructor(databaseUrl) {
+    const pool = new Pool({
+      connectionString: databaseUrl,
+      max: Number(process.env.PG_POOL_MAX || 5),
+      ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false },
     });
-
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-
-    if (!dbExists) {
-      console.log('Database file not found. The application will initialize the salon schema on first use.');
-    }
+    super((text, values) => pool.query(text, values));
+    this.pool = pool;
   }
 
-  run(sql, params = []) {
+  async transaction(fn) {
+    const client = await this.pool.connect();
+    const tx = new PostgresAdapter((text, values) => client.query(text, values));
     try {
-      return this.db.prepare(sql).run(params);
+      await client.query('BEGIN');
+      const result = await fn(tx);
+      await client.query('COMMIT');
+      return result;
     } catch (error) {
-      console.error('Database run error:', error);
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   }
 
-  get(sql, params = []) {
-    try {
-      return this.db.prepare(sql).get(params);
-    } catch (error) {
-      console.error('Database get error:', error);
-      throw error;
-    }
-  }
-
-  all(sql, params = []) {
-    try {
-      return this.db.prepare(sql).all(params);
-    } catch (error) {
-      console.error('Database all error:', error);
-      throw error;
-    }
-  }
-
-  transaction(fn) {
-    return this.db.transaction(fn);
-  }
-
-  close() {
-    this.db.close();
+  async close() {
+    await this.pool.end();
   }
 }
 
@@ -127,7 +107,13 @@ class Database {
 
   static getInstance() {
     if (!Database.instance) {
-      Database.instance = new PosDatabase();
+      const databaseUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || '';
+      if (!/^(postgres|postgresql):\/\//i.test(databaseUrl)) {
+        throw new Error(
+          'SUPABASE_DB_URL or DATABASE_URL must be a postgres:// connection string. Apply docs/supabase-schema.sql and docs/supabase-seed.sql in Supabase first.'
+        );
+      }
+      Database.instance = new PostgresDatabase(databaseUrl);
     }
     return Database.instance;
   }

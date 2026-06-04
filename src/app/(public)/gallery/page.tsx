@@ -6,13 +6,13 @@ import type { GalleryItem } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return { title: `Gallery | ${cms.info.name}`, description: 'Photos from the salon space, services, opening moments, customers, and hygiene setup.' };
 }
 
-export default function GalleryPage() {
-  const cms = getPublicWebsiteData();
+export default async function GalleryPage() {
+  const cms = await getPublicWebsiteData();
   return (
     <PublicLayout info={cms.info}>
       <Section eyebrow="Gallery" title="Salon gallery" description="Real moments from The Hair Cut, including the salon space, services, opening day, customers, and hygiene setup.">

@@ -16,75 +16,83 @@ function validateStaff(data, editing = false) {
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, ['admin', 'cashier']);
 
-    const employees = db.prepare(`
+    const employees = await db.all(`
       SELECT u.id, u.username, COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name, u.role, u.email, u.phone, u.is_active, u.created_at,
              COALESCE(sp.salon_role, u.role) as salon_role,
              COALESCE(sp.assigned_services, '') as assigned_services,
              COALESCE(sp.commission_percentage, 0) as commission_percentage,
              COALESCE(sp.base_salary, 0) as base_salary,
-             COALESCE(SUM(CASE WHEN sbi.item_type = 'service' THEN sbi.subtotal ELSE 0 END), 0) as service_revenue,
-             COALESCE(SUM(sbi.commission_amount), 0) as commission_earned,
-             COUNT(DISTINCT sbi.bill_id) as invoice_count
+             COALESCE(agg.service_revenue, 0) as service_revenue,
+             COALESCE(agg.commission_earned, 0) as commission_earned,
+             COALESCE(agg.invoice_count, 0) as invoice_count
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      LEFT JOIN salon_bill_items sbi ON sbi.staff_id = u.id
-      GROUP BY u.id
+      LEFT JOIN (
+        SELECT staff_id,
+               COALESCE(SUM(CASE WHEN item_type = 'service' THEN subtotal ELSE 0 END), 0) as service_revenue,
+               COALESCE(SUM(commission_amount), 0) as commission_earned,
+               COUNT(DISTINCT bill_id)::int as invoice_count
+        FROM salon_bill_items
+        WHERE staff_id IS NOT NULL
+        GROUP BY staff_id
+      ) agg ON agg.staff_id = u.id
       ORDER BY u.is_active DESC, u.full_name ASC
-    `).all();
+    `);
 
     return NextResponse.json({ employees });
   } catch (error) {
+    console.error('GET /api/admin/employees:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch staff' }, { status: error.status || 500 });
   }
 }
 
 export async function POST(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     const validationError = validateStaff(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanText(data.username));
+    const existing = await db.get('SELECT id FROM users WHERE username = ?', [cleanText(data.username)]);
     if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
 
     const role = normalizeRole(data.salon_role || data.role);
     const hashedPassword = bcrypt.hashSync(String(data.password), 10);
-    const result = db.prepare(`
+    const result = await db.run(`
       INSERT INTO users (username, full_name, role, password_hash, email, phone, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       cleanText(data.username),
       cleanText(data.full_name),
       role,
       hashedPassword,
       cleanText(data.email, null),
       cleanText(data.phone, null),
-      data.is_active === false ? 0 : 1
-    );
+      data.is_active !== false
+    ]);
 
-    db.prepare(`
+    await db.run(`
       INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       result.lastInsertRowid,
       cleanText(data.full_name),
       role,
       Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
       Number(data.commission_percentage || 0),
       Number(data.base_salary || 0)
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'create', 'staff', result.lastInsertRowid, cleanText(data.full_name));
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'create', 'staff', result.lastInsertRowid, cleanText(data.full_name)]);
 
-    const employee = db.prepare('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?').get(result.lastInsertRowid);
+    const employee = await db.get('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?', [result.lastInsertRowid]);
     return NextResponse.json({ employee, message: 'Staff member created successfully' }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to create staff member' }, { status: error.status || 500 });
@@ -93,15 +101,15 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
     const validationError = validateStaff(data, true);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(cleanText(data.username), data.id);
+    const existing = await db.get('SELECT id FROM users WHERE username = ? AND id != ?', [cleanText(data.username), data.id]);
     if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
     const role = normalizeRole(data.salon_role || data.role);
 
@@ -111,9 +119,9 @@ export async function PUT(request) {
       role,
       cleanText(data.email, null),
       cleanText(data.phone, null),
-      data.is_active ? 1 : 0
+      data.is_active !== false
     ];
-    let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?';
+    let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?, updated_at = NOW()';
     const newPassword = data.password;
     if (newPassword) {
       if (!/^\d{4,8}$/.test(String(newPassword))) return NextResponse.json({ error: 'PIN must be 4 to 8 digits' }, { status: 400 });
@@ -122,31 +130,31 @@ export async function PUT(request) {
     }
     sql += ' WHERE id = ?';
     params.push(data.id);
-    db.prepare(sql).run(...params);
+    await db.run(sql, params);
 
-    db.prepare(`
+    await db.run(`
       INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
       VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        display_name = excluded.display_name,
-        salon_role = excluded.salon_role,
-        assigned_services = excluded.assigned_services,
-        commission_percentage = excluded.commission_percentage,
-        base_salary = excluded.base_salary,
-        updated_at = CURRENT_TIMESTAMP
-    `).run(
+      ON CONFLICT (user_id) DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        salon_role = EXCLUDED.salon_role,
+        assigned_services = EXCLUDED.assigned_services,
+        commission_percentage = EXCLUDED.commission_percentage,
+        base_salary = EXCLUDED.base_salary,
+        updated_at = NOW()
+    `, [
       data.id,
       cleanText(data.full_name),
       role,
       Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
       Number(data.commission_percentage || 0),
       Number(data.base_salary || 0)
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'update', 'staff', data.id, cleanText(data.full_name));
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'update', 'staff', data.id, cleanText(data.full_name)]);
 
-    const employee = db.prepare('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?').get(data.id);
+    const employee = await db.get('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?', [data.id]);
     return NextResponse.json({ employee, message: 'Staff member updated successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to update staff member' }, { status: error.status || 500 });
@@ -155,15 +163,15 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
-    db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'deactivate', 'staff', id, 'Staff set inactive');
+    await db.run('UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?', [id]);
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'deactivate', 'staff', id, 'Staff set inactive']);
     return NextResponse.json({ message: 'Staff member deactivated successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to deactivate staff member' }, { status: error.status || 500 });

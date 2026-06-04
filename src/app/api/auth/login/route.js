@@ -18,7 +18,7 @@ export async function POST(request) {
 
     if (deviceId) {
       try {
-        authService.registerDevice(
+        await authService.registerDevice(
           deviceId,
           result.user.id,
           result.user.role,

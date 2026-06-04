@@ -25,9 +25,9 @@
   "dependencies": {
     "autoprefixer": "^10.4.22",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.4.1",
     "lucide-react": "^0.553.0",
-    "next": "16.0.7",
+    "next": "^16.2.7",
+    "pg": "^8.12.0",
     "react": "19.2.1",
     "react-dom": "19.2.1"
   },

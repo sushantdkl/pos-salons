@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const EXPENSE_CATEGORIES = [
-  'Staff Salary',
-  'Staff Commission',
-  'Product Purchase',
-  'Rent',
-  'Electricity',
-  'Water',
-  'Internet',
-  'Maintenance',
-  'Marketing',
-  'Equipment',
-  'Cleaning',
-  'Other'
+  'Staff Salary', 'Staff Commission', 'Product Purchase', 'Rent', 'Electricity',
+  'Water', 'Internet', 'Maintenance', 'Marketing', 'Equipment', 'Cleaning', 'Other',
 ];
 const PAYMENT_METHODS = ['cash', 'online', 'bank_transfer', 'mixed'];
 const PAYMENT_STATUSES = ['unpaid', 'partially_paid', 'paid'];
@@ -78,7 +69,7 @@ function mapExpense(row) {
     createdByName: row.created_by_name || '',
     updatedByName: row.updated_by_name || '',
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 }
 
@@ -105,36 +96,30 @@ function mapSalary(row) {
     paymentDate: row.payment_date,
     notes: row.notes || '',
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 }
 
-function getStaff(db) {
-  return db.prepare(`
-    SELECT u.id,
-           u.full_name as name,
-           sp.salon_role as role,
-           COALESCE(sp.base_salary, 0) as baseSalary
+async function getStaff(db) {
+  return db.all(`
+    SELECT u.id, u.full_name as name, sp.salon_role as role, COALESCE(sp.base_salary, 0) as baseSalary
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
-    WHERE u.is_active = 1 AND sp.salon_role IN ('barber', 'stylist', 'beautician')
+    WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
     ORDER BY u.full_name ASC
-  `).all();
+  `);
 }
 
-function getStaffMonthMetrics(db, staffId, month) {
-  return db.prepare(`
-    SELECT COUNT(i.id) as servicesCompleted,
+async function getStaffMonthMetrics(db, staffId, month) {
+  return db.get(`
+    SELECT COUNT(i.id)::int as servicesCompleted,
            COALESCE(SUM(i.subtotal), 0) as revenueGenerated,
            COALESCE(SUM(i.commission_amount), 0) as commissionEarned
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
-    WHERE i.item_type = 'service'
-      AND i.staff_id = ?
-      AND b.status = 'paid'
-      AND DATE(b.created_at) >= DATE(?)
-      AND DATE(b.created_at) < DATE(?)
-  `).get(staffId, monthStart(month), nextMonthStart(month));
+    WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
+      AND b.created_at::date >= ?::date AND b.created_at::date < ?::date
+  `, [staffId, monthStart(month), nextMonthStart(month)]);
 }
 
 function buildFilters(searchParams) {
@@ -158,11 +143,11 @@ function buildFilters(searchParams) {
   const from = cleanText(searchParams.get('from'), '');
   const to = cleanText(searchParams.get('to'), '');
   if (from) {
-    clauses.push('DATE(e.expense_date) >= DATE(?)');
+    clauses.push('e.expense_date >= ?::date');
     params.push(from);
   }
   if (to) {
-    clauses.push('DATE(e.expense_date) <= DATE(?)');
+    clauses.push('e.expense_date <= ?::date');
     params.push(to);
   }
   const createdBy = Number(searchParams.get('createdBy') || 0);
@@ -173,22 +158,21 @@ function buildFilters(searchParams) {
   return { where: clauses.join(' AND '), params };
 }
 
-function getExpenses(db, searchParams) {
+async function getExpenses(db, searchParams) {
   const { where, params } = buildFilters(searchParams);
-  return db.prepare(`
-    SELECT e.*,
-           COALESCE(c.full_name, '') as created_by_name,
-           COALESCE(u.full_name, '') as updated_by_name
+  const rows = await db.all(`
+    SELECT e.*, COALESCE(c.full_name, '') as created_by_name, COALESCE(u.full_name, '') as updated_by_name
     FROM expenses e
     LEFT JOIN users c ON c.id = e.created_by
     LEFT JOIN users u ON u.id = e.updated_by
     WHERE ${where}
-    ORDER BY DATE(e.expense_date) DESC, e.id DESC
+    ORDER BY e.expense_date DESC, e.id DESC
     LIMIT 300
-  `).all(...params).map(mapExpense);
+  `, params);
+  return rows.map(mapExpense);
 }
 
-function getSalaries(db, searchParams) {
+async function getSalaries(db, searchParams) {
   const clauses = ['s.deleted_at IS NULL'];
   const params = [];
   const search = cleanText(searchParams.get('search'), '');
@@ -217,7 +201,7 @@ function getSalaries(db, searchParams) {
     params.push(paymentMethod);
   }
 
-  return db.prepare(`
+  const rows = await db.all(`
     SELECT s.*, u.full_name as staff_name, sp.salon_role
     FROM salary_payments s
     JOIN users u ON u.id = s.staff_id
@@ -225,43 +209,42 @@ function getSalaries(db, searchParams) {
     WHERE ${clauses.join(' AND ')}
     ORDER BY s.salary_month DESC, s.id DESC
     LIMIT 300
-  `).all(...params).map(mapSalary);
+  `, params);
+  return rows.map(mapSalary);
 }
 
-function getSummary(db) {
-  const expenseRow = db.prepare(`
+async function getSummary(db) {
+  const expenseRow = await db.get(`
     SELECT
-      COALESCE(SUM(CASE WHEN DATE(expense_date) = DATE('now') THEN amount ELSE 0 END), 0) as today,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', '-6 days') THEN amount ELSE 0 END), 0) as week,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', 'start of month') THEN amount ELSE 0 END), 0) as month,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', 'start of month') AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', 'start of month') AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', 'start of month') AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
-      COALESCE(SUM(CASE WHEN DATE(expense_date) >= DATE('now', 'start of month') AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') THEN amount ELSE 0 END), 0) as otherExpenses
-    FROM expenses
-    WHERE deleted_at IS NULL
-  `).get();
-  const revenue = db.prepare(`
-    SELECT COALESCE(SUM(grand_total), 0) as total
-    FROM salon_bills
-    WHERE status = 'paid' AND DATE(created_at) >= DATE('now', 'start of month')
-  `).get().total;
-  const pendingSalary = db.prepare(`
-    SELECT COALESCE(SUM(remaining_balance), 0) as total
-    FROM salary_payments
+      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE THEN amount ELSE 0 END), 0) as today,
+      COALESCE(SUM(CASE WHEN expense_date >= CURRENT_DATE - INTERVAL '6 days' THEN amount ELSE 0 END), 0) as week,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date THEN amount ELSE 0 END), 0) as month,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') THEN amount ELSE 0 END), 0) as otherExpenses
+    FROM expenses WHERE deleted_at IS NULL
+  `);
+  const revenueRow = await db.get(`
+    SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills
+    WHERE status = 'paid' AND created_at::date >= date_trunc('month', CURRENT_DATE)::date
+  `);
+  const pendingRow = await db.get(`
+    SELECT COALESCE(SUM(remaining_balance), 0) as total FROM salary_payments
     WHERE deleted_at IS NULL AND payment_status <> 'paid'
-  `).get().total;
+  `);
+  const revenue = Number(revenueRow?.total || 0);
   return {
-    totalExpensesToday: expenseRow.today || 0,
-    totalExpensesWeek: expenseRow.week || 0,
-    totalExpensesMonth: expenseRow.month || 0,
-    staffSalaryPaidMonth: expenseRow.salaryPaid || 0,
-    commissionPaidMonth: expenseRow.commissionPaid || 0,
-    productPurchaseMonth: expenseRow.productPurchase || 0,
-    otherExpensesMonth: expenseRow.otherExpenses || 0,
-    pendingSalaryBalance: pendingSalary || 0,
-    monthlyRevenue: revenue || 0,
-    netRevenueAfterExpenses: Number(revenue || 0) - Number(expenseRow.month || 0)
+    totalExpensesToday: Number(expenseRow?.today || 0),
+    totalExpensesWeek: Number(expenseRow?.week || 0),
+    totalExpensesMonth: Number(expenseRow?.month || 0),
+    staffSalaryPaidMonth: Number(expenseRow?.salaryPaid || 0),
+    commissionPaidMonth: Number(expenseRow?.commissionPaid || 0),
+    productPurchaseMonth: Number(expenseRow?.productPurchase || 0),
+    otherExpensesMonth: Number(expenseRow?.otherExpenses || 0),
+    pendingSalaryBalance: Number(pendingRow?.total || 0),
+    monthlyRevenue: revenue,
+    netRevenueAfterExpenses: revenue - Number(expenseRow?.month || 0),
   };
 }
 
@@ -271,63 +254,53 @@ function validateCategory(category) {
   return value;
 }
 
-function saveExpense(db, data, userId) {
+async function saveExpense(db, data, userId) {
   const category = validateCategory(data.category);
   const amount = money(data.amount);
   const payment = normalizePayment(data.paymentMethod || data.payment_method, amount, data.cashAmount || data.cash_amount, data.onlineAmount || data.online_amount);
   const title = cleanText(data.title, '');
   if (!title) throw new Error('Expense title is required');
   const expenseDate = cleanText(data.expenseDate || data.expense_date, today());
-  const notes = cleanText(data.notes, '');
+  const notes = cleanText(data.notes, '') || title;
   const values = [
-    title,
-    category,
-    amount,
-    payment.paymentMethod,
-    payment.cash,
-    payment.online,
-    cleanText(data.paidBy || data.paid_by, ''),
-    cleanText(data.paidTo || data.paid_to, ''),
-    expenseDate,
-    notes,
-    notes || title,
-    cleanText(data.referenceNumber || data.reference_number, ''),
-    cleanText(data.attachmentUrl || data.attachment_url, ''),
-    userId
+    title, category, amount, payment.paymentMethod, payment.cash, payment.online,
+    cleanText(data.paidBy || data.paid_by, ''), cleanText(data.paidTo || data.paid_to, ''),
+    expenseDate, notes, cleanText(data.referenceNumber || data.reference_number, ''),
+    cleanText(data.attachmentUrl || data.attachment_url, ''), userId,
   ];
   if (data.id) {
-    db.prepare(`
+    await db.run(`
       UPDATE expenses
       SET title = ?, category = ?, amount = ?, payment_method = ?, cash_amount = ?,
-          online_amount = ?, paid_by = ?, paid_to = ?, expense_date = ?, notes = ?,
-          description = ?, reference_number = ?, attachment_url = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+          online_amount = ?, paid_by = ?, paid_to = ?, expense_date = ?::date, notes = ?,
+          reference_number = ?, attachment_url = ?, updated_by = ?, updated_at = NOW()
       WHERE id = ? AND deleted_at IS NULL
-    `).run(...values, Number(data.id));
+    `, [...values, Number(data.id)]);
     return Number(data.id);
   }
-  const result = db.prepare(`
+  const result = await db.run(`
     INSERT INTO expenses (
       title, category, amount, payment_method, cash_amount, online_amount,
-      paid_by, paid_to, expense_date, notes, description, reference_number, attachment_url,
+      paid_by, paid_to, expense_date, notes, reference_number, attachment_url,
       created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(...values, userId);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?)
+  `, [...values, userId]);
   return result.lastInsertRowid;
 }
 
-function saveSalary(db, data, userId) {
+async function saveSalary(db, data, userId) {
   const staffId = Number(data.staffId || data.staff_id || 0);
   if (!staffId) throw new Error('Select staff member');
-  const staff = db.prepare(`
+  const staff = await db.get(`
     SELECT u.full_name, sp.salon_role, COALESCE(sp.base_salary, 0) as base_salary
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
-    WHERE u.id = ? AND u.is_active = 1
-  `).get(staffId);
+    WHERE u.id = ? AND u.is_active = TRUE
+  `, [staffId]);
   if (!staff) throw new Error('Selected staff was not found');
   const salaryMonth = cleanText(data.salaryMonth || data.salary_month, new Date().toISOString().slice(0, 7));
   if (!/^\d{4}-\d{2}$/.test(salaryMonth)) throw new Error('Salary month must be YYYY-MM');
-  const metrics = getStaffMonthMetrics(db, staffId, salaryMonth);
+  const metrics = await getStaffMonthMetrics(db, staffId, salaryMonth);
   const baseSalary = money(data.baseSalary ?? data.base_salary ?? staff.base_salary);
   const commissionEarned = money(data.commissionEarned ?? data.commission_earned ?? metrics.commissionEarned);
   const bonus = money(data.bonus);
@@ -342,49 +315,49 @@ function saveSalary(db, data, userId) {
   const paymentDate = cleanText(data.paymentDate || data.payment_date, today());
   const notes = cleanText(data.notes, '');
 
-  const transaction = db.transaction(() => {
+  return db.transaction(async (tx) => {
     let salaryId = Number(data.id || 0) || null;
     if (salaryId) {
-      db.prepare(`
+      await tx.run(`
         UPDATE salary_payments
         SET staff_id = ?, salary_month = ?, base_salary = ?, commission_earned = ?,
             services_completed = ?, revenue_generated = ?, bonus = ?, deduction = ?,
             total_payable = ?, amount_paid = ?, remaining_balance = ?, payment_method = ?,
-            cash_amount = ?, online_amount = ?, payment_status = ?, payment_date = ?,
-            notes = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+            cash_amount = ?, online_amount = ?, payment_status = ?, payment_date = ?::date,
+            notes = ?, updated_by = ?, updated_at = NOW()
         WHERE id = ? AND deleted_at IS NULL
-      `).run(
+      `, [
         staffId, salaryMonth, baseSalary, commissionEarned,
         metrics.servicesCompleted || 0, metrics.revenueGenerated || 0, bonus, deduction,
         totalPayable, amountPaid, remainingBalance, payment.paymentMethod,
-        payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, salaryId
-      );
+        payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, salaryId,
+      ]);
     } else {
-      const result = db.prepare(`
+      const result = await tx.run(`
         INSERT INTO salary_payments (
           staff_id, salary_month, base_salary, commission_earned, services_completed,
           revenue_generated, bonus, deduction, total_payable, amount_paid,
           remaining_balance, payment_method, cash_amount, online_amount,
           payment_status, payment_date, notes, created_by, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?)
+      `, [
         staffId, salaryMonth, baseSalary, commissionEarned,
         metrics.servicesCompleted || 0, metrics.revenueGenerated || 0, bonus, deduction,
         totalPayable, amountPaid, remainingBalance, payment.paymentMethod,
-        payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, userId
-      );
+        payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, userId,
+      ]);
       salaryId = result.lastInsertRowid;
     }
 
     const salaryReference = `SALARY-${salaryMonth}-${staffId}`;
     const commissionReference = `COMMISSION-${salaryMonth}-${staffId}`;
-    db.prepare(`
-      UPDATE expenses
-      SET deleted_at = CURRENT_TIMESTAMP, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    await tx.run(`
+      UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW()
       WHERE reference_number IN (?, ?) AND deleted_at IS NULL
-    `).run(userId, salaryReference, commissionReference);
+    `, [userId, salaryReference, commissionReference]);
+
     if (amountPaid > 0) {
-      const salaryExpenseId = saveExpense(db, {
+      const salaryExpenseId = await saveExpense(tx, {
         title: `Salary payment - ${staff.full_name} - ${salaryMonth}`,
         category: 'Staff Salary',
         amount: Math.max(0, amountPaid - commissionEarned > 0 ? amountPaid - Math.min(commissionEarned, amountPaid) : 0),
@@ -400,7 +373,7 @@ function saveSalary(db, data, userId) {
       let commissionExpenseId = null;
       const commissionPaid = Math.min(amountPaid, commissionEarned);
       if (commissionPaid > 0) {
-        commissionExpenseId = saveExpense(db, {
+        commissionExpenseId = await saveExpense(tx, {
           title: `Commission payment - ${staff.full_name} - ${salaryMonth}`,
           category: 'Staff Commission',
           amount: commissionPaid,
@@ -414,34 +387,36 @@ function saveSalary(db, data, userId) {
           referenceNumber: commissionReference,
         }, userId);
       }
-      db.prepare('UPDATE salary_payments SET expense_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(commissionExpenseId || salaryExpenseId, salaryId);
+      await tx.run('UPDATE salary_payments SET expense_id = ?, updated_at = NOW() WHERE id = ?', [commissionExpenseId || salaryExpenseId, salaryId]);
     }
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(userId, data.id ? 'update' : 'create', 'salary_payment', salaryId, `${staff.full_name} ${salaryMonth}`);
+    await logAction(tx, userId, data.id ? 'update' : 'create', 'salary_payment', salaryId, `${staff.full_name} ${salaryMonth}`);
     return salaryId;
   });
-  return transaction();
 }
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const staffId = Number(searchParams.get('staffId') || 0);
     const salaryMonth = cleanText(searchParams.get('salaryMonth'), new Date().toISOString().slice(0, 7));
+    const staffList = await getStaff(db);
+    const staff = await Promise.all(staffList.map(async (member) => ({
+      ...member,
+      monthMetrics: staffId && staffId === member.id
+        ? await getStaffMonthMetrics(db, member.id, salaryMonth)
+        : undefined,
+    })));
     return NextResponse.json({
-      summary: getSummary(db),
-      expenses: getExpenses(db, searchParams),
-      salaries: getSalaries(db, searchParams),
-      staff: getStaff(db).map((member) => ({
-        ...member,
-        monthMetrics: staffId && staffId === member.id ? getStaffMonthMetrics(db, member.id, salaryMonth) : undefined
-      })),
+      summary: await getSummary(db),
+      expenses: await getExpenses(db, searchParams),
+      salaries: await getSalaries(db, searchParams),
+      staff,
       categories: EXPENSE_CATEGORIES,
       paymentMethods: PAYMENT_METHODS,
-      paymentStatuses: PAYMENT_STATUSES
+      paymentStatuses: PAYMENT_STATUSES,
     });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to load expenses' }, { status: error.status || 500 });
@@ -450,17 +425,16 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     if (data.type === 'salary') {
-      const id = saveSalary(db, data, user.id);
+      const id = await saveSalary(db, data, user.id);
       return NextResponse.json({ message: 'Salary payment saved', id }, { status: 201 });
     }
-    const id = saveExpense(db, data, user.id);
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'create', 'expense', id, cleanText(data.title, 'Expense'));
+    const id = await saveExpense(db, data, user.id);
+    await logAction(db, user.id, 'create', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense saved', id }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to save expense' }, { status: error.status || 400 });
@@ -469,18 +443,17 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     if (data.type === 'salary') {
-      const id = saveSalary(db, data, user.id);
+      const id = await saveSalary(db, data, user.id);
       return NextResponse.json({ message: 'Salary payment updated', id });
     }
     if (!data.id) return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
-    const id = saveExpense(db, data, user.id);
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'update', 'expense', id, cleanText(data.title, 'Expense'));
+    const id = await saveExpense(db, data, user.id);
+    await logAction(db, user.id, 'update', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense updated', id });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to update expense' }, { status: error.status || 400 });
@@ -489,28 +462,26 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id') || 0);
     const type = cleanText(searchParams.get('type'), 'expense');
     if (!id) return NextResponse.json({ error: 'Record ID is required' }, { status: 400 });
     if (type === 'salary') {
-      const salary = db.prepare('SELECT staff_id, salary_month FROM salary_payments WHERE id = ?').get(id);
-      db.prepare('UPDATE salary_payments SET deleted_at = CURRENT_TIMESTAMP, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user.id, id);
+      const salary = await db.get('SELECT staff_id, salary_month FROM salary_payments WHERE id = ?', [id]);
+      await db.run('UPDATE salary_payments SET deleted_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?', [user.id, id]);
       if (salary) {
-        db.prepare(`
-          UPDATE expenses
-          SET deleted_at = CURRENT_TIMESTAMP, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        await db.run(`
+          UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW()
           WHERE reference_number IN (?, ?) AND deleted_at IS NULL
-        `).run(user.id, `SALARY-${salary.salary_month}-${salary.staff_id}`, `COMMISSION-${salary.salary_month}-${salary.staff_id}`);
+        `, [user.id, `SALARY-${salary.salary_month}-${salary.staff_id}`, `COMMISSION-${salary.salary_month}-${salary.staff_id}`]);
       }
     } else {
-      db.prepare('UPDATE expenses SET deleted_at = CURRENT_TIMESTAMP, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user.id, id);
+      await db.run('UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?', [user.id, id]);
     }
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'delete', type === 'salary' ? 'salary_payment' : 'expense', id, 'Soft deleted');
+    await logAction(db, user.id, 'delete', type === 'salary' ? 'salary_payment' : 'expense', id, 'Soft deleted');
     return NextResponse.json({ message: 'Record deleted' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to delete record' }, { status: error.status || 400 });

@@ -6,13 +6,13 @@ import { createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return { title: `Contact | ${cms.info.name}`, description: cms.sections.contact.description };
 }
 
-export default function ContactPage() {
-  const cms = getPublicWebsiteData();
+export default async function ContactPage() {
+  const cms = await getPublicWebsiteData();
   const { info } = cms;
   return (
     <PublicLayout info={info}>

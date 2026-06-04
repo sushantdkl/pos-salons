@@ -10,24 +10,24 @@ function validateCustomer(data) {
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, ['admin', 'cashier']);
 
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (id) {
-      const customer = db.prepare(`
+      const customer = await db.get(`
         SELECT c.*, u.full_name as preferred_stylist_name
         FROM customers c
         LEFT JOIN users u ON u.id = c.preferred_stylist_id
         WHERE c.id = ?
-      `).get(id);
-      const bills = db.prepare(`
+      `, [id]);
+      const bills = await db.all(`
         SELECT * FROM salon_bills
         WHERE customer_id = ?
         ORDER BY created_at DESC
-      `).all(id);
+      `, [id]);
       return NextResponse.json({ customer, bills });
     }
 
@@ -39,14 +39,14 @@ export async function GET(request) {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    const customers = db.prepare(`
+    const customers = await db.all(`
       SELECT c.*, u.full_name as preferred_stylist_name,
              CASE WHEN COALESCE(c.total_visits, 0) >= 2 THEN 1 ELSE 0 END as is_repeat
       FROM customers c
       LEFT JOIN users u ON u.id = c.preferred_stylist_id
       ${where}
       ORDER BY c.updated_at DESC, c.name ASC
-    `).all(...params);
+    `, params);
 
     return NextResponse.json({ customers });
   } catch (error) {
@@ -56,19 +56,19 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const validationError = validateCustomer(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const result = db.prepare(`
+    const result = await db.run(`
       INSERT INTO customers (
         name, phone, email, address, gender, favorite_services,
         preferred_stylist_id, notes, credit_limit
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       cleanText(data.name),
       cleanText(data.phone, null),
       cleanText(data.email, null),
@@ -78,12 +78,12 @@ export async function POST(request) {
       data.preferred_stylist_id || null,
       cleanText(data.notes, null),
       Number(data.credit_limit || 0)
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'create', 'customer', result.lastInsertRowid, cleanText(data.name));
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'create', 'customer', result.lastInsertRowid, cleanText(data.name)]);
 
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(result.lastInsertRowid);
+    const customer = await db.get('SELECT * FROM customers WHERE id = ?', [result.lastInsertRowid]);
     return NextResponse.json({ customer, message: 'Customer created successfully' }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to create customer' }, { status: error.status || 500 });
@@ -92,21 +92,21 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     const validationError = validateCustomer(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    db.prepare(`
+    await db.run(`
       UPDATE customers
       SET name = ?, phone = ?, email = ?, address = ?, gender = ?,
           favorite_services = ?, preferred_stylist_id = ?, notes = ?,
           credit_limit = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       cleanText(data.name),
       cleanText(data.phone, null),
       cleanText(data.email, null),
@@ -117,12 +117,12 @@ export async function PUT(request) {
       cleanText(data.notes, null),
       Number(data.credit_limit || 0),
       data.id
-    );
+    ]);
 
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'update', 'customer', data.id, cleanText(data.name));
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'update', 'customer', data.id, cleanText(data.name)]);
 
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(data.id);
+    const customer = await db.get('SELECT * FROM customers WHERE id = ?', [data.id]);
     return NextResponse.json({ customer, message: 'Customer updated successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to update customer' }, { status: error.status || 500 });
@@ -131,16 +131,16 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
 
-    db.prepare('DELETE FROM customers WHERE id = ?').run(id);
-    db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(user.id, 'delete', 'customer', id, 'Customer deleted');
+    await db.run('DELETE FROM customers WHERE id = ?', [id]);
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, 'delete', 'customer', id, 'Customer deleted']);
     return NextResponse.json({ message: 'Customer deleted successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to delete customer' }, { status: error.status || 500 });

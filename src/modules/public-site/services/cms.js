@@ -278,25 +278,25 @@ function buildInfo(sections) {
   };
 }
 
-export function getPublicWebsiteData() {
+export async function getPublicWebsiteData() {
   const fallback = fallbackData();
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
     const defaults = sectionFallback();
-    const rows = db.prepare('SELECT * FROM website_content ORDER BY sort_order ASC, id ASC').all();
+    const rows = await db.all('SELECT * FROM website_content ORDER BY sort_order ASC, id ASC');
     const sections = { ...defaults };
     rows.forEach((row) => {
       if (SECTION_KEYS.includes(row.section_key)) {
         sections[row.section_key] = mapSection(row, defaults[row.section_key]);
       }
     });
-    const serviceRows = db.prepare(`
+    const serviceRows = await db.all(`
       SELECT *
       FROM salon_services
-      WHERE is_active = 1 AND COALESCE(show_on_website, 1) = 1
-      ORDER BY COALESCE(featured_on_website, 0) DESC, is_package ASC, name ASC
-    `).all();
+      WHERE is_active = TRUE AND COALESCE(show_on_website, TRUE) = TRUE
+      ORDER BY COALESCE(featured_on_website, FALSE) DESC, is_package ASC, name ASC
+    `);
     const services = serviceRows.filter((row) => !row.is_package).map(mapService);
     const packages = serviceRows.filter((row) => row.is_package).map((row) => {
       const mapped = mapService(row);
@@ -314,16 +314,17 @@ export function getPublicWebsiteData() {
         showOnWebsite: mapped.showOnWebsite
       };
     });
-    const staff = db.prepare(`
+    const staffRows = await db.all(`
       SELECT u.id, u.full_name, sp.display_name, sp.salon_role, sp.assigned_services,
              sp.website_title, sp.website_bio, sp.website_photo, sp.show_on_website, sp.featured_on_website
       FROM users u
       JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE u.is_active = 1
+      WHERE u.is_active = TRUE
         AND sp.salon_role IN ('barber', 'stylist', 'beautician')
-        AND COALESCE(sp.show_on_website, 1) = 1
-      ORDER BY COALESCE(sp.featured_on_website, 0) DESC, u.full_name ASC
-    `).all().map((row) => ({
+        AND COALESCE(sp.show_on_website, TRUE) = TRUE
+      ORDER BY COALESCE(sp.featured_on_website, FALSE) DESC, u.full_name ASC
+    `);
+    const staff = staffRows.map((row) => ({
       id: row.id,
       name: row.display_name || row.full_name,
       role: row.website_title || row.salon_role,
@@ -333,12 +334,13 @@ export function getPublicWebsiteData() {
       featured: bool(row.featured_on_website),
       showOnWebsite: bool(row.show_on_website)
     }));
-    const gallery = db.prepare(`
+    const galleryRows = await db.all(`
       SELECT *
       FROM website_gallery_images
-      WHERE COALESCE(is_visible, 1) = 1
+      WHERE COALESCE(is_visible, TRUE) = TRUE
       ORDER BY sort_order ASC, id ASC
-    `).all().map((row) => ({
+    `);
+    const gallery = galleryRows.map((row) => ({
       id: row.id,
       title: row.title || row.alt_text || 'Salon photo',
       description: row.description || row.category || '',
@@ -388,144 +390,131 @@ function normalizeSection(input, fallback) {
     buttonLink: safeLink(input.buttonLink, ''),
     secondaryButtonText: text(input.secondaryButtonText, ''),
     secondaryButtonLink: safeLink(input.secondaryButtonLink, ''),
-    isVisible: input.isVisible === false ? 0 : 1,
+    isVisible: input.isVisible !== false,
     sortOrder: number(input.sortOrder, fallback.sortOrder || 0),
     metadata: JSON.stringify(metadata)
   };
 }
 
-export function saveWebsiteCms(db, data, userId) {
-  ensureSalonSchema(db);
+export async function saveWebsiteCms(db, data, userId) {
+  await ensureSalonSchema();
   const defaults = sectionFallback();
   const sections = data.sections || {};
-  const upsertSection = db.prepare(`
-    INSERT INTO website_content (
-      section_key, title, subtitle, description, image_url, button_text,
-      button_link, secondary_button_text, secondary_button_link, is_visible,
-      sort_order, metadata, updated_by, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(section_key) DO UPDATE SET
-      title = excluded.title,
-      subtitle = excluded.subtitle,
-      description = excluded.description,
-      image_url = excluded.image_url,
-      button_text = excluded.button_text,
-      button_link = excluded.button_link,
-      secondary_button_text = excluded.secondary_button_text,
-      secondary_button_link = excluded.secondary_button_link,
-      is_visible = excluded.is_visible,
-      sort_order = excluded.sort_order,
-      metadata = excluded.metadata,
-      updated_by = excluded.updated_by,
-      updated_at = CURRENT_TIMESTAMP
-  `);
-  SECTION_KEYS.forEach((key) => {
+  for (const key of SECTION_KEYS) {
     const row = normalizeSection(sections[key] || {}, defaults[key]);
-    upsertSection.run(
-      row.sectionKey,
-      row.title,
-      row.subtitle,
-      row.description,
-      row.imageUrl,
-      row.buttonText,
-      row.buttonLink,
-      row.secondaryButtonText,
-      row.secondaryButtonLink,
-      row.isVisible,
-      row.sortOrder,
-      row.metadata,
-      userId
-    );
-  });
+    await db.run(`
+      INSERT INTO website_content (
+        section_key, title, subtitle, description, image_url, button_text,
+        button_link, secondary_button_text, secondary_button_link, is_visible,
+        sort_order, metadata, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON CONFLICT (section_key) DO UPDATE SET
+        title = EXCLUDED.title,
+        subtitle = EXCLUDED.subtitle,
+        description = EXCLUDED.description,
+        image_url = EXCLUDED.image_url,
+        button_text = EXCLUDED.button_text,
+        button_link = EXCLUDED.button_link,
+        secondary_button_text = EXCLUDED.secondary_button_text,
+        secondary_button_link = EXCLUDED.secondary_button_link,
+        is_visible = EXCLUDED.is_visible,
+        sort_order = EXCLUDED.sort_order,
+        metadata = EXCLUDED.metadata,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+    `, [
+      row.sectionKey, row.title, row.subtitle, row.description, row.imageUrl,
+      row.buttonText, row.buttonLink, row.secondaryButtonText, row.secondaryButtonLink,
+      row.isVisible, row.sortOrder, row.metadata, userId,
+    ]);
+  }
 
-  const updateService = db.prepare(`
-    UPDATE salon_services
-    SET name = ?, category = ?, price = ?, duration_minutes = ?,
-        description = ?, package_items = ?, show_on_website = ?, featured_on_website = ?,
-        website_image = ?, website_description = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `);
-  [...(data.services || []), ...(data.packages || [])].forEach((item) => {
-    if (!item.id) return;
-    updateService.run(
+  for (const item of [...(data.services || []), ...(data.packages || [])]) {
+    if (!item.id) continue;
+    await db.run(`
+      UPDATE salon_services
+      SET name = ?, category = ?, price = ?, duration_minutes = ?,
+          description = ?, package_items = ?, show_on_website = ?, featured_on_website = ?,
+          website_image = ?, website_description = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [
       text(item.name, 'Service'),
       text(item.serviceCategory || item.category, item.isPackage ? 'Other' : 'Haircut'),
       Math.max(0, number(item.price, 0)),
       Math.max(1, number(item.duration, item.duration_minutes || 30)),
       text(item.description, ''),
-      Array.isArray(item.includes) ? item.includes.map((value) => text(value, '')).filter(Boolean).join(',') : undefined,
-      item.showOnWebsite === false ? 0 : 1,
-      item.featured ? 1 : 0,
+      Array.isArray(item.includes) ? item.includes.map((value) => text(value, '')).filter(Boolean).join(',') : null,
+      item.showOnWebsite !== false,
+      Boolean(item.featured),
       imageUrl(item.image || item.websiteImage, ''),
       text(item.websiteDescription || item.description, ''),
-      Number(item.id)
-    );
-  });
+      Number(item.id),
+    ]);
+  }
 
-  const updateStaff = db.prepare(`
-    UPDATE staff_profiles
-    SET display_name = ?, website_title = ?, website_bio = ?, website_photo = ?,
-        show_on_website = ?, featured_on_website = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE user_id = ?
-  `);
-  (data.staff || []).forEach((member) => {
-    if (!member.id) return;
-    updateStaff.run(
+  for (const member of data.staff || []) {
+    if (!member.id) continue;
+    await db.run(`
+      UPDATE staff_profiles
+      SET display_name = ?, website_title = ?, website_bio = ?, website_photo = ?,
+          show_on_website = ?, featured_on_website = ?, updated_at = NOW()
+      WHERE user_id = ?
+    `, [
       text(member.name, 'Staff'),
       text(member.role, ''),
       text(member.bio, ''),
       imageUrl(member.image, ''),
-      member.showOnWebsite === false ? 0 : 1,
-      member.featured ? 1 : 0,
-      Number(member.id)
-    );
-  });
+      member.showOnWebsite !== false,
+      Boolean(member.featured),
+      Number(member.id),
+    ]);
+  }
 
   const submittedGallery = Array.isArray(data.gallery) ? data.gallery : [];
   const submittedGalleryIds = submittedGallery.map((item) => Number(item.id || 0)).filter(Boolean);
   if (Array.isArray(data.gallery)) {
     if (submittedGalleryIds.length) {
       const placeholders = submittedGalleryIds.map(() => '?').join(',');
-      db.prepare(`DELETE FROM website_gallery_images WHERE id NOT IN (${placeholders})`).run(...submittedGalleryIds);
+      await db.run(`DELETE FROM website_gallery_images WHERE id NOT IN (${placeholders})`, submittedGalleryIds);
     } else {
-      db.prepare('DELETE FROM website_gallery_images').run();
+      await db.run('DELETE FROM website_gallery_images');
     }
   }
 
-  const upsertGallery = db.prepare(`
-    INSERT INTO website_gallery_images (
-      id, image_url, title, alt_text, category, description, sort_order,
-      is_visible, updated_by, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET
-      image_url = excluded.image_url,
-      title = excluded.title,
-      alt_text = excluded.alt_text,
-      category = excluded.category,
-      description = excluded.description,
-      sort_order = excluded.sort_order,
-      is_visible = excluded.is_visible,
-      updated_by = excluded.updated_by,
-      updated_at = CURRENT_TIMESTAMP
-  `);
-  submittedGallery.forEach((item, index) => {
+  for (const [index, item] of submittedGallery.entries()) {
     const url = imageUrl(item.image || item.imageUrl, '');
-    if (!url) return;
+    if (!url) continue;
     const id = Number(item.id || 0) || null;
-    upsertGallery.run(
-      id,
-      url,
+    await db.run(`
+      INSERT INTO website_gallery_images (
+        id, image_url, title, alt_text, category, description, sort_order,
+        is_visible, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        image_url = EXCLUDED.image_url,
+        title = EXCLUDED.title,
+        alt_text = EXCLUDED.alt_text,
+        category = EXCLUDED.category,
+        description = EXCLUDED.description,
+        sort_order = EXCLUDED.sort_order,
+        is_visible = EXCLUDED.is_visible,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+    `, [
+      id, url,
       text(item.title, 'Salon photo'),
       text(item.altText || item.alt_text, item.title || 'Salon photo'),
       text(item.category, ''),
       text(item.description, ''),
       number(item.sortOrder, index + 1),
-      item.isVisible === false ? 0 : 1,
-      userId
-    );
-  });
+      item.isVisible !== false,
+      userId,
+    ]);
+  }
 
-  db.prepare('INSERT INTO action_logs (user_id, action, entity_type, details) VALUES (?, ?, ?, ?)')
-    .run(userId, 'update', 'website_cms', 'Website CMS updated');
+  await db.run(
+    'INSERT INTO action_logs (user_id, action, entity_type, details) VALUES (?, ?, ?, ?)',
+    [userId, 'update', 'website_cms', 'Website CMS updated']
+  );
   return getPublicWebsiteData();
 }

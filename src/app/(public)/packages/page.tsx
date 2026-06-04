@@ -6,13 +6,13 @@ import type { PublicPackage } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return { title: `Packages | ${cms.info.name}`, description: cms.sections.packages.description };
 }
 
-export default function PackagesPage() {
-  const cms = getPublicWebsiteData();
+export default async function PackagesPage() {
+  const cms = await getPublicWebsiteData();
   const section = cms.sections.packages;
   return (
     <PublicLayout info={cms.info}>

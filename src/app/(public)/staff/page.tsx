@@ -6,13 +6,13 @@ import type { PublicStaffMember } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return { title: `Staff | ${cms.info.name}`, description: cms.sections.staff.description };
 }
 
-export default function StaffPage() {
-  const cms = getPublicWebsiteData();
+export default async function StaffPage() {
+  const cms = await getPublicWebsiteData();
   const section = cms.sections.staff;
   return (
     <PublicLayout info={cms.info}>

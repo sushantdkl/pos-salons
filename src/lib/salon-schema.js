@@ -701,7 +701,14 @@ function cleanLegacyStaffIdentity(db) {
   `).run(...legacyTerms.map((term) => `%${term}%`));
 }
 
-export function ensureSalonSchema(db) {
+export async function ensureSalonSchema() {
+  // Postgres schema is applied via docs/supabase-schema.sql in Supabase.
+  return;
+}
+
+async function ensureSalonSchemaLegacySqlite(db) {
+  if (db?.provider === 'postgres') return;
+
   db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1108,21 +1115,21 @@ export function ensureSalonSchema(db) {
   seedWebsiteCmsData(db);
 }
 
-export function getAuthUser(request, db) {
+export async function getAuthUser(request, db) {
   const header = request.headers.get('authorization') || '';
   const token = header.replace(/^Bearer\s+/i, '').trim();
   if (!token) return null;
 
-  return db.prepare(`
+  return await db.get(`
     SELECT u.id, u.username, u.full_name, u.role
     FROM sessions s
     JOIN users u ON u.id = s.user_id
-    WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1
-  `).get(token);
+    WHERE s.token = ? AND s.expires_at > NOW() AND u.is_active = TRUE
+  `, [token]);
 }
 
-export function requireAuth(request, db) {
-  const user = getAuthUser(request, db);
+export async function requireAuth(request, db) {
+  const user = await getAuthUser(request, db);
   if (!user) {
     const error = new Error('Unauthorized');
     error.status = 401;
@@ -1131,8 +1138,8 @@ export function requireAuth(request, db) {
   return user;
 }
 
-export function requireRole(request, db, roles) {
-  const user = requireAuth(request, db);
+export async function requireRole(request, db, roles) {
+  const user = await requireAuth(request, db);
   const allowed = Array.isArray(roles) ? roles : [roles];
   if (!allowed.includes(user.role)) {
     const error = new Error('Access denied');

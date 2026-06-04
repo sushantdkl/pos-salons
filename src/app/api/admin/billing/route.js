@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 function normalizeDiscount(type, value, subtotal) {
@@ -15,17 +16,17 @@ function normalizeDiscount(type, value, subtotal) {
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, ['admin', 'cashier']);
-    const bills = db.prepare(`
-      SELECT b.*, COUNT(i.id) as item_count
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, ['admin', 'cashier']);
+    const bills = await db.all(`
+      SELECT b.*, COUNT(i.id)::int as item_count
       FROM salon_bills b
       LEFT JOIN salon_bill_items i ON i.bill_id = b.id
       GROUP BY b.id
       ORDER BY b.created_at DESC
       LIMIT 100
-    `).all();
+    `);
     return NextResponse.json({ bills });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to fetch bills' }, { status: error.status || 500 });
@@ -34,9 +35,9 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'cashier']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const services = Array.isArray(data.services) ? data.services : [];
     const products = Array.isArray(data.products) ? data.products : [];
@@ -45,12 +46,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Add at least one service or product' }, { status: 400 });
     }
 
-    const createBill = db.transaction(() => {
+    const result = await db.transaction(async (tx) => {
       let customerId = data.customer_id || null;
       const tokenId = Number(data.token_id || 0) || null;
       let linkedToken = null;
       if (tokenId) {
-        linkedToken = db.prepare('SELECT * FROM walk_in_tokens WHERE id = ?').get(tokenId);
+        linkedToken = await tx.get('SELECT * FROM walk_in_tokens WHERE id = ?', [tokenId]);
         if (!linkedToken) throw new Error('Selected token was not found');
         if (linkedToken.invoice_id || linkedToken.status === 'BILLED') throw new Error('This token has already been billed');
         if (linkedToken.status !== 'WAITING') throw new Error('Only waiting tokens can be billed');
@@ -59,26 +60,30 @@ export async function POST(request) {
       const customerPhone = cleanText(data.customer?.phone || data.customer_phone, null);
 
       if (!customerId && customerPhone) {
-        const existing = db.prepare('SELECT id FROM customers WHERE phone = ?').get(customerPhone);
+        const existing = await tx.get('SELECT id FROM customers WHERE phone = ?', [customerPhone]);
         if (existing) {
           customerId = existing.id;
-          db.prepare('UPDATE customers SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(customerName, customerId);
+          await tx.run('UPDATE customers SET name = ?, updated_at = NOW() WHERE id = ?', [customerName, customerId]);
         } else {
-          const customerResult = db.prepare('INSERT INTO customers (name, phone, notes) VALUES (?, ?, ?)').run(customerName, customerPhone, cleanText(data.customer?.notes, null));
+          const customerResult = await tx.run(
+            'INSERT INTO customers (name, phone, notes) VALUES (?, ?, ?)',
+            [customerName, customerPhone, cleanText(data.customer?.notes, null)]
+          );
           customerId = customerResult.lastInsertRowid;
         }
       }
 
-      const serviceRows = services.map((item) => {
-        const service = db.prepare('SELECT * FROM salon_services WHERE id = ? AND is_active = 1').get(item.id);
+      const serviceRows = [];
+      for (const item of services) {
+        const service = await tx.get('SELECT * FROM salon_services WHERE id = ? AND is_active = TRUE', [item.id]);
         if (!service) throw new Error(`Service unavailable: ${item.name || item.id}`);
         const staffId = Number(item.staff_id || 0) || null;
         if (!staffId) throw new Error(`Assign staff for ${service.name}`);
-        const staffProfile = db.prepare(`
+        const staffProfile = await tx.get(`
           SELECT salon_role, commission_percentage, assigned_services
           FROM staff_profiles
           WHERE user_id = ? AND salon_role IN ('barber', 'stylist', 'beautician')
-        `).get(staffId);
+        `, [staffId]);
         if (!staffProfile) throw new Error(`Selected staff cannot perform ${service.name}`);
         const assignedServices = String(staffProfile.assigned_services || '')
           .split(',')
@@ -89,11 +94,11 @@ export async function POST(request) {
           .map((name) => name.trim().toLowerCase())
           .filter(Boolean);
         const serviceKeys = [service.name.toLowerCase(), ...packageServices];
-        if (assignedServices.length && !serviceKeys.some((name) => assignedServices.includes(name) || name.includes('facial') && assignedServices.includes('facial'))) {
+        if (assignedServices.length && !serviceKeys.some((name) => assignedServices.includes(name) || (name.includes('facial') && assignedServices.includes('facial')))) {
           throw new Error(`${staffProfile.salon_role} is not assigned to ${service.name}`);
         }
         const commissionPercentage = Number(staffProfile?.commission_percentage || 0);
-        return {
+        serviceRows.push({
           item_type: 'service',
           item_id: service.id,
           name: service.name,
@@ -103,17 +108,18 @@ export async function POST(request) {
           staff_id: staffId,
           staff_role: staffProfile.salon_role,
           commission_percentage: commissionPercentage,
-          commission_amount: Number(service.price) * commissionPercentage / 100
-        };
-      });
+          commission_amount: Number(service.price) * commissionPercentage / 100,
+        });
+      }
 
-      const productRows = products.map((item) => {
-        const product = db.prepare('SELECT * FROM salon_products WHERE id = ? AND status = ?').get(item.id, 'active');
+      const productRows = [];
+      for (const item of products) {
+        const product = await tx.get('SELECT * FROM salon_products WHERE id = ? AND status = ?', [item.id, 'active']);
         if (!product) throw new Error(`Product unavailable: ${item.name || item.id}`);
         const quantity = Number(item.quantity || 1);
         if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Invalid quantity for ${product.name}`);
         if (product.current_stock < quantity) throw new Error(`Not enough stock for ${product.name}`);
-        return {
+        productRows.push({
           item_type: 'product',
           item_id: product.id,
           name: product.name,
@@ -124,9 +130,9 @@ export async function POST(request) {
           commission_percentage: 0,
           commission_amount: 0,
           previous_stock: product.current_stock,
-          new_stock: product.current_stock - quantity
-        };
-      });
+          new_stock: product.current_stock - quantity,
+        });
+      }
 
       const items = [...serviceRows, ...productRows];
       const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
@@ -144,14 +150,14 @@ export async function POST(request) {
       if (amountPaid < grandTotal && paymentMethod !== 'split') throw new Error('Amount paid is less than total');
 
       const billNumber = `SALON-${Date.now()}`;
-      const billResult = db.prepare(`
+      const billResult = await tx.run(`
         INSERT INTO salon_bills (
           bill_number, customer_id, customer_name, customer_phone, subtotal,
           discount_amount, discount_type, tax, tax_percent, service_charge,
           grand_total, payment_method, amount_paid, cashier_id, token_id,
           transaction_time, is_printed, printed_at, printed_by, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ${shouldPrint ? 'CURRENT_TIMESTAMP' : 'NULL'}, ?, ?)
-      `).run(
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
+      `, [
         billNumber,
         customerId,
         customerName,
@@ -167,28 +173,31 @@ export async function POST(request) {
         amountPaid,
         user.id,
         tokenId,
-        shouldPrint ? 1 : 0,
+        shouldPrint,
+        shouldPrint ? new Date().toISOString() : null,
         shouldPrint ? user.id : null,
-        cleanText(data.notes, null)
-      );
+        cleanText(data.notes, null),
+      ]);
 
       const billId = billResult.lastInsertRowid;
-      const insertItem = db.prepare(`
-        INSERT INTO salon_bill_items (
-          bill_id, item_type, item_id, name, quantity, unit_price,
-          subtotal, staff_id, commission_percentage, commission_amount
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      items.forEach((item) => {
-        insertItem.run(billId, item.item_type, item.item_id, item.name, item.quantity, item.unit_price, item.subtotal, item.staff_id, item.commission_percentage, item.commission_amount);
+      for (const item of items) {
+        await tx.run(`
+          INSERT INTO salon_bill_items (
+            bill_id, item_type, item_id, name, quantity, unit_price,
+            subtotal, staff_id, commission_percentage, commission_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          billId, item.item_type, item.item_id, item.name, item.quantity, item.unit_price,
+          item.subtotal, item.staff_id, item.commission_percentage, item.commission_amount,
+        ]);
         if (item.item_type === 'product') {
-          db.prepare('UPDATE salon_products SET current_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(item.new_stock, item.item_id);
-          db.prepare(`
+          await tx.run('UPDATE salon_products SET current_stock = ?, updated_at = NOW() WHERE id = ?', [item.new_stock, item.item_id]);
+          await tx.run(`
             INSERT INTO inventory_movements (product_id, movement_type, quantity, previous_stock, new_stock, notes)
             VALUES (?, 'sale', ?, ?, ?, ?)
-          `).run(item.item_id, item.quantity, item.previous_stock, item.new_stock, billNumber);
+          `, [item.item_id, item.quantity, item.previous_stock, item.new_stock, billNumber]);
         }
-      });
+      }
 
       if (customerId) {
         const serviceNames = serviceRows.map((item) => item.name).join(', ');
@@ -198,7 +207,7 @@ export async function POST(request) {
           if (item.staff_role === 'beautician' && !acc.beautician) acc.beautician = item.staff_id;
           return acc;
         }, {});
-        db.prepare(`
+        await tx.run(`
           UPDATE customers
           SET total_visits = COALESCE(total_visits, 0) + 1,
               total_spent = COALESCE(total_spent, 0) + ?,
@@ -215,33 +224,23 @@ export async function POST(request) {
                 WHEN COALESCE(total_visits, 0) + 1 >= 2 THEN 'Returning Customer'
                 ELSE 'New Customer'
               END,
-              updated_at = CURRENT_TIMESTAMP
+              updated_at = NOW()
           WHERE id = ?
-        `).run(
-          grandTotal,
-          serviceNames,
-          serviceNames,
-          serviceNames,
-          preferred.barber || null,
-          preferred.stylist || null,
-          preferred.beautician || null,
-          grandTotal,
-          customerId
-        );
+        `, [
+          grandTotal, serviceNames, serviceNames, serviceNames,
+          preferred.barber || null, preferred.stylist || null, preferred.beautician || null,
+          grandTotal, customerId,
+        ]);
       }
 
-      db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-        .run(user.id, shouldPrint ? 'create_printed' : 'create', 'bill', billId, billNumber);
+      await logAction(tx, user.id, shouldPrint ? 'create_printed' : 'create', 'bill', billId, billNumber);
 
       if (tokenId) {
-        db.prepare(`
+        await tx.run(`
           UPDATE walk_in_tokens
-          SET status = 'BILLED',
-              billed_at = CURRENT_TIMESTAMP,
-              invoice_id = ?,
-              updated_at = CURRENT_TIMESTAMP
+          SET status = 'BILLED', billed_at = NOW(), invoice_id = ?, updated_at = NOW()
           WHERE id = ?
-        `).run(billId, tokenId);
+        `, [billId, tokenId]);
       }
 
       return {
@@ -265,13 +264,12 @@ export async function POST(request) {
           is_printed: shouldPrint,
           printed_at: shouldPrint ? new Date().toISOString() : null,
           printed_by: shouldPrint ? user.id : null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         },
-        items
+        items,
       };
     });
 
-    const result = createBill();
     return NextResponse.json({ message: 'Bill completed successfully', ...result }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to complete bill' }, { status: 400 });

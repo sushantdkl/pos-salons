@@ -6,13 +6,13 @@ import type { PublicService } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return { title: `Services | ${cms.info.name}`, description: cms.sections.services.description };
 }
 
-export default function ServicesPage() {
-  const cms = getPublicWebsiteData();
+export default async function ServicesPage() {
+  const cms = await getPublicWebsiteData();
   const section = cms.sections.services;
   return (
     <PublicLayout info={cms.info}>

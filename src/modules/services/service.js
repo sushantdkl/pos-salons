@@ -2,6 +2,7 @@ import { SERVICE_CATEGORIES } from '@/constants/salon';
 import { sanitizeText } from '@/utils/sanitize';
 import { normalizeServiceInput } from './validation';
 import { ServiceRepository } from './repository';
+import { logAction } from '@/lib/db/helpers';
 
 export class ServiceManagementService {
   constructor(db) {
@@ -9,9 +10,9 @@ export class ServiceManagementService {
     this.db = db;
   }
 
-  list(filters) {
+  async list(filters) {
     return {
-      services: this.repository.list({
+      services: await this.repository.list({
         search: sanitizeText(filters.search),
         category: sanitizeText(filters.category),
       }),
@@ -19,27 +20,26 @@ export class ServiceManagementService {
     };
   }
 
-  create(data, userId) {
-    const service = this.repository.create(normalizeServiceInput(data));
-    this.log(userId, 'create', service.id, service.name);
+  async create(data, userId) {
+    const service = await this.repository.create(normalizeServiceInput(data));
+    await this.log(userId, 'create', service.id, service.name);
     return service;
   }
 
-  update(data, userId) {
+  async update(data, userId) {
     if (!data.id) throw new Error('Service ID is required');
-    const service = this.repository.update(normalizeServiceInput(data));
-    this.log(userId, 'update', service.id, service.name);
+    const service = await this.repository.update(normalizeServiceInput(data));
+    await this.log(userId, 'update', service.id, service.name);
     return service;
   }
 
-  delete(id, userId) {
+  async delete(id, userId) {
     if (!id) throw new Error('Service ID is required');
-    this.repository.remove(id);
-    this.log(userId, 'delete', id, 'Service deleted');
+    await this.repository.remove(id);
+    await this.log(userId, 'delete', id, 'Service deleted');
   }
 
-  log(userId, action, entityId, details) {
-    this.db.prepare('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)')
-      .run(userId, action, 'service', entityId, details);
+  async log(userId, action, entityId, details) {
+    await logAction(this.db, userId, action, 'service', entityId, details);
   }
 }

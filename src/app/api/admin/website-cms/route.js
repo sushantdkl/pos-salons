@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    requireRole(request, db, 'admin');
-    return NextResponse.json(getPublicWebsiteData());
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, 'admin');
+    return NextResponse.json(await getPublicWebsiteData());
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to load website CMS' }, { status: error.status || 500 });
   }
@@ -19,11 +19,12 @@ export async function GET(request) {
 
 export async function PUT(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, 'admin');
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
-    return NextResponse.json({ message: 'Website CMS saved successfully', cms: saveWebsiteCms(db, data, user.id) });
+    const cms = await saveWebsiteCms(db, data, user.id);
+    return NextResponse.json({ message: 'Website CMS saved successfully', cms });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to save website CMS' }, { status: error.status || 400 });
   }

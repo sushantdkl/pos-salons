@@ -3,7 +3,7 @@ export class ServiceRepository {
     this.db = db;
   }
 
-  list({ search = '', category = '' } = {}) {
+  async list({ search = '', category = '' } = {}) {
     const params = [];
     let where = 'WHERE 1=1';
 
@@ -17,25 +17,24 @@ export class ServiceRepository {
       params.push(category);
     }
 
-    return this.db.prepare(`
-      SELECT s.*, COALESCE(GROUP_CONCAT(u.full_name, ', '), '') as assigned_staff_names
+    const sql = `
+      SELECT s.*
       FROM salon_services s
-      LEFT JOIN users u ON instr(',' || COALESCE(s.assigned_staff_ids, '') || ',', ',' || u.id || ',') > 0
       ${where}
-      GROUP BY s.id
       ORDER BY s.is_active DESC, s.name ASC
-    `).all(...params);
+    `;
+    return await this.db.all(sql, params);
   }
 
-  findById(id) {
-    return this.db.prepare('SELECT * FROM salon_services WHERE id = ?').get(id);
+  async findById(id) {
+    return await this.db.get('SELECT * FROM salon_services WHERE id = ?', [id]);
   }
 
-  create(service) {
-    const result = this.db.prepare(`
+  async create(service) {
+    const result = await this.db.run(`
       INSERT INTO salon_services (name, category, price, duration_minutes, assigned_staff_ids, description, is_active, is_package, package_items)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       service.name,
       service.category,
       service.price,
@@ -45,18 +44,18 @@ export class ServiceRepository {
       service.is_active,
       service.is_package,
       service.package_items
-    );
+    ]);
 
-    return this.findById(result.lastInsertRowid);
+    return await this.findById(result.lastInsertRowid);
   }
 
-  update(service) {
-    this.db.prepare(`
+  async update(service) {
+    await this.db.run(`
       UPDATE salon_services
       SET name = ?, category = ?, price = ?, duration_minutes = ?, assigned_staff_ids = ?,
           description = ?, is_active = ?, is_package = ?, package_items = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       service.name,
       service.category,
       service.price,
@@ -67,12 +66,12 @@ export class ServiceRepository {
       service.is_package,
       service.package_items,
       service.id
-    );
+    ]);
 
-    return this.findById(service.id);
+    return await this.findById(service.id);
   }
 
-  remove(id) {
-    return this.db.prepare('DELETE FROM salon_services WHERE id = ?').run(id);
+  async remove(id) {
+    return await this.db.run('DELETE FROM salon_services WHERE id = ?', [id]);
   }
 }

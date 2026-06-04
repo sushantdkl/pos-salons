@@ -9,10 +9,10 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const dbInstance = Database.getInstance();
-    const db = dbInstance.db;
-    ensureSalonSchema(db);
+    const db = dbInstance;
+    await ensureSalonSchema();
     
-    const users = db.prepare(`
+    const users = await db.all(`
       SELECT u.id, u.username,
              COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name,
              u.role,
@@ -20,7 +20,7 @@ export async function GET() {
              u.email, u.phone
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE u.is_active = 1
+      WHERE u.is_active = TRUE
       ORDER BY 
         CASE u.username
           WHEN 'admin' THEN 1
@@ -31,7 +31,7 @@ export async function GET() {
           ELSE 6
         END,
         u.full_name
-    `).all();
+    `);
 
     return NextResponse.json({
       success: true,

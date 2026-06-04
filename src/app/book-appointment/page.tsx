@@ -3,16 +3,16 @@ import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata() {
-  const cms = getPublicWebsiteData();
+export async function generateMetadata() {
+  const cms = await getPublicWebsiteData();
   return {
     title: `Book Appointment | ${cms.info.name}`,
     description: `Send a WhatsApp appointment request to ${cms.info.name}.`,
   };
 }
 
-export default function BookAppointmentPage() {
-  const cms = getPublicWebsiteData();
+export default async function BookAppointmentPage() {
+  const cms = await getPublicWebsiteData();
   return (
     <BookingForm
       info={cms.info}

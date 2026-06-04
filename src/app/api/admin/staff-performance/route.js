@@ -5,21 +5,21 @@ import { getAdminStaffAnalytics, getStaffPerformance } from '@/modules/staff/ser
 
 export async function GET(request) {
   try {
-    const db = Database.getInstance().db;
-    ensureSalonSchema(db);
-    const user = requireRole(request, db, ['admin', 'barber', 'stylist', 'beautician']);
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, ['admin', 'barber', 'stylist', 'beautician']);
     const { searchParams } = new URL(request.url);
     const staffId = Number(searchParams.get('staffId') || user.id);
 
     if (user.role === 'admin' && searchParams.get('scope') === 'admin') {
-      return NextResponse.json(getAdminStaffAnalytics(db));
+      return NextResponse.json(await getAdminStaffAnalytics(db));
     }
 
     if (user.role !== 'admin' && staffId !== user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json(getStaffPerformance(db, staffId));
+    return NextResponse.json(await getStaffPerformance(db, staffId));
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to fetch staff performance' }, { status: error.status || 500 });
   }
