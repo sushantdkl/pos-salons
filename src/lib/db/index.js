@@ -15,6 +15,9 @@ function replacePlaceholders(sql) {
 function withReturningId(sql) {
   const trimmed = sql.trim();
   if (/^INSERT\s/i.test(trimmed) && !/\bRETURNING\b/i.test(trimmed)) {
+    if (/\bstaff_profiles\b/i.test(trimmed)) {
+      return `${trimmed} RETURNING user_id`;
+    }
     return `${trimmed} RETURNING id`;
   }
   return trimmed;
@@ -38,7 +41,7 @@ class PostgresAdapter {
         const result = await this.query(sql, values);
         return {
           rowCount: result.rowCount,
-          lastInsertRowid: result.rows?.[0]?.id,
+          lastInsertRowid: result.rows?.[0]?.id ?? result.rows?.[0]?.user_id,
           rows: result.rows,
         };
       },
@@ -70,13 +73,28 @@ class PostgresAdapter {
   }
 }
 
+function resolvePoolConfig(databaseUrl) {
+  const isServerless = !!process.env.VERCEL;
+  const config = {
+    connectionString: databaseUrl,
+    max: isServerless ? 1 : Number(process.env.PG_POOL_MAX || 5),
+    idleTimeoutMillis: isServerless ? 5000 : 30000,
+    connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10000),
+    ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false },
+  };
+
+  // Supabase transaction pooler (port 6543) needs this for prepared statements.
+  if (/pooler\.supabase\.com:6543/i.test(databaseUrl) && !/[?&]pgbouncer=/i.test(databaseUrl)) {
+    const separator = databaseUrl.includes('?') ? '&' : '?';
+    config.connectionString = `${databaseUrl}${separator}pgbouncer=true`;
+  }
+
+  return config;
+}
+
 class PostgresDatabase extends PostgresAdapter {
   constructor(databaseUrl) {
-    const pool = new Pool({
-      connectionString: databaseUrl,
-      max: Number(process.env.PG_POOL_MAX || 5),
-      ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
+    const pool = new Pool(resolvePoolConfig(databaseUrl));
     super((text, values) => pool.query(text, values));
     this.pool = pool;
   }

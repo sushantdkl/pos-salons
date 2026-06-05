@@ -29,7 +29,13 @@ export class AuthService {
       return { success: false, error: 'Invalid password format' };
     }
 
-    const isValidPassword = bcrypt.compareSync(password, user.password_hash);
+    let isValidPassword = false;
+    try {
+      isValidPassword = bcrypt.compareSync(password, user.password_hash);
+    } catch (error) {
+      console.error('PIN verification failed for user:', username, error.message);
+      return { success: false, error: 'Invalid password' };
+    }
 
     if (!isValidPassword) {
       return { success: false, error: 'Invalid password' };
