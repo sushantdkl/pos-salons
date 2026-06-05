@@ -211,7 +211,7 @@ function fallbackData() {
       }
     },
     services: publicServices,
-    popularServices: publicServices.filter((service) => ['Hair Cut', 'Shaving', 'Head Massage', 'Wine Facial', 'Hair Colouring', 'Threading'].includes(service.name)),
+    popularServices: publicServices.filter((service) => ['Hair Cut', 'Shaving', 'Head Massage', 'Wine Facial'].includes(service.name)),
     packages: publicPackages,
     staff: publicStaff,
     gallery: galleryItems,
@@ -354,7 +354,7 @@ export async function getPublicWebsiteData() {
       sections,
       info: buildInfo(sections),
       services: services.length ? services : fallback.services,
-      popularServices: services.filter((service) => service.featured).length ? services.filter((service) => service.featured) : services.slice(0, 6),
+      popularServices: (services.filter((service) => service.featured).length ? services.filter((service) => service.featured) : services.slice(0, 4)).slice(0, 4),
       packages: packages.length ? packages : fallback.packages,
       staff: staff.length ? staff : fallback.staff,
       gallery: gallery.length ? gallery : fallback.gallery,

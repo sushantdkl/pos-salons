@@ -1,8 +1,9 @@
+import Link from 'next/link';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
+import { PageHero } from '@/modules/public-site/components/page-hero';
 import { Section } from '@/modules/public-site/components/section';
-import { ServiceCard } from '@/modules/public-site/components/cards';
+import { ServiceMenuList } from '@/modules/public-site/components/service-menu-list';
 import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
-import type { PublicService } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +17,21 @@ export default async function ServicesPage() {
   const section = cms.sections.services;
   return (
     <PublicLayout info={cms.info}>
-      <Section eyebrow={section.subtitle || 'Rate card'} title="Services" description={section.description || 'Transparent pricing for grooming, beauty care, and treatments.'}>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {cms.services.map((service: PublicService) => <ServiceCard key={service.name} service={service} />)}
+      <PageHero
+        eyebrow={section.subtitle || 'Rate card'}
+        title="Services"
+        description={section.description || 'Transparent pricing for grooming, beauty care, and treatments.'}
+        imageUrl={section.imageUrl || cms.info.assets.services}
+      />
+      <Section hideHeader className="!py-10 md:!py-14">
+        <ServiceMenuList services={cms.services} />
+        <div className="mt-8">
+          <Link
+            href="/book-appointment"
+            className="inline-flex items-center justify-center bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#c39e2e]"
+          >
+            Book a service
+          </Link>
         </div>
       </Section>
     </PublicLayout>

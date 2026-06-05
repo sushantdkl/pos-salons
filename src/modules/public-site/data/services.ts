@@ -19,5 +19,5 @@ export const publicServices: PublicService[] = [
 ];
 
 export const popularServices = publicServices.filter((service) =>
-  ['Hair Cut', 'Shaving', 'Head Massage', 'Wine Facial', 'Hair Colouring', 'Threading'].includes(service.name)
+  ['Hair Cut', 'Shaving', 'Head Massage', 'Wine Facial'].includes(service.name)
 );

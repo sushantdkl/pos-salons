@@ -93,7 +93,7 @@ export default async function HomePage() {
             description={servicesSection.description}
           >
             <div className="grid items-start gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-14">
-              <div className="relative min-h-[420px] overflow-hidden bg-[#0d0b0a] lg:min-h-[560px]">
+              <div className="relative min-h-[420px] overflow-hidden bg-[#3a3530] lg:min-h-[560px]">
                 <Image
                   src={servicesSection.imageUrl || info.assets.services}
                   alt="Haircut service at The Hair Cut"
@@ -101,8 +101,8 @@ export default async function HomePage() {
                   sizes="(min-width: 1024px) 42vw, 100vw"
                   className="object-cover opacity-75"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 bg-[#0d0b0a]/80 px-6 py-5 backdrop-blur-sm">
+                <div className="absolute inset-0 bg-gradient-to-t from-[#141210] via-[#141210]/30 to-[#2e2a26]/40" />
+                <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 bg-[#161412]/75 px-6 py-5 backdrop-blur-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Signature grooming</p>
                   <p className="mt-2 max-w-sm font-serif text-lg font-light leading-snug text-white/85">
                     Precision cuts, clean shaves, and treatments done with care.
@@ -111,8 +111,8 @@ export default async function HomePage() {
               </div>
               <div>
                 <div className="border-t border-white/10">
-                  {cms.popularServices.map((service: PublicService) => (
-                    <ServiceCard key={service.name} service={service} variant="menu" />
+                  {cms.popularServices.slice(0, 4).map((service: PublicService) => (
+                    <ServiceCard key={service.name} service={service} variant="menu" compact />
                   ))}
                 </div>
                 <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -176,7 +176,7 @@ export default async function HomePage() {
           >
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {cms.staff.map((member: PublicStaffMember) => (
-                <StaffCard key={member.name} member={member} variant="profile" />
+                <StaffCard key={member.name} member={member} variant="profile" tone="dark" />
               ))}
             </div>
             <div className="mt-10">

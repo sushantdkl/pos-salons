@@ -45,7 +45,7 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
     : "sticky top-0 z-40 border-b border-[#e8dcc4] bg-[#fbfaf7]/95 backdrop-blur text-[#171411] transition-all duration-300";
 
   return (
-    <div className="min-h-screen bg-[#fbfaf7] text-[#171411]">
+    <div className="min-h-screen bg-salon-cream text-salon-ink">
       <header className={headerClass}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="flex items-center gap-3 font-semibold transition hover:opacity-90">
@@ -130,7 +130,7 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
         <MessageCircle className="h-6 w-6" />
       </a>
 
-      <footer className="border-t border-[#e7ded2] bg-[#171411] text-white">
+      <footer className="border-t border-salon-border bg-salon-dark text-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 md:grid-cols-3">
           <div>
             <div className="flex items-center gap-3">

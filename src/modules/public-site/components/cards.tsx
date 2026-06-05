@@ -4,22 +4,72 @@ import type { PublicPackage, PublicService, PublicStaffMember } from '../types';
 export function ServiceCard({
   service,
   variant = 'card',
+  compact = false,
+  hideCategory = false,
+  tone = 'dark',
 }: {
   service: PublicService;
   variant?: 'card' | 'menu';
+  compact?: boolean;
+  hideCategory?: boolean;
+  tone?: 'light' | 'dark';
 }) {
   if (variant === 'menu') {
+    const isLight = tone === 'light';
+
     return (
-      <article className="group grid gap-5 border-b border-white/10 py-7 last:border-b-0 md:grid-cols-[1fr_auto] md:items-start">
+      <article
+        className={`group grid last:border-b-0 md:grid-cols-[1fr_auto] md:items-center ${
+          isLight ? 'border-b border-[#e7ded2]' : 'border-b border-white/10'
+        } ${compact ? 'gap-2 py-3' : 'gap-5 py-7 md:items-start'}`}
+      >
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{service.category}</p>
-          <h3 className="mt-2 font-serif text-xl font-light tracking-tight text-white md:text-2xl">{service.name}</h3>
-          <p className="mt-3 max-w-md text-sm font-light leading-relaxed text-white/60">{service.description}</p>
+          {!hideCategory ? (
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                isLight ? 'text-[#9b742d]' : 'text-[#d7b56d]'
+              }`}
+            >
+              {service.category}
+            </p>
+          ) : null}
+          <h3
+            className={`font-serif font-light tracking-tight ${
+              isLight ? 'text-[#171411]' : 'text-white'
+            } ${
+              compact
+                ? `${hideCategory ? '' : 'mt-1 '}text-base md:text-lg`
+                : 'mt-2 text-xl md:text-2xl'
+            }`}
+          >
+            {service.name}
+          </h3>
+          {!compact ? (
+            <p
+              className={`mt-3 max-w-md text-sm font-light leading-relaxed ${
+                isLight ? 'text-[#6d625b]' : 'text-white/60'
+              }`}
+            >
+              {service.description}
+            </p>
+          ) : null}
           {service.duration ? (
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">{service.duration} min</p>
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${
+                isLight ? 'text-[#8a6a52]' : 'text-white/40'
+              } ${compact ? 'mt-1' : 'mt-3'}`}
+            >
+              {service.duration} min
+            </p>
           ) : null}
         </div>
-        <p className="shrink-0 font-serif text-lg text-[#d7b56d] md:text-right md:text-xl">{service.priceLabel}</p>
+        <p
+          className={`shrink-0 font-serif ${
+            isLight ? 'text-[#9b742d]' : 'text-[#d7b56d]'
+          } ${compact ? 'text-sm md:text-right' : 'text-lg md:text-right md:text-xl'}`}
+        >
+          {service.priceLabel}
+        </p>
       </article>
     );
   }
@@ -60,24 +110,22 @@ export function PackageCard({
       <article
         className={`relative flex h-full flex-col border p-7 md:p-8 ${
           featured
-            ? 'border-[#d7b56d]/40 bg-[#171411] text-white'
+            ? 'border-[#d7b56d] bg-white shadow-[0_8px_30px_rgba(155,116,45,0.08)] ring-1 ring-[#d7b56d]/30'
             : 'border-[#e7ded2] bg-white text-[#171411]'
         }`}
       >
         <div className={`absolute left-0 top-0 h-1 w-full ${featured ? 'bg-[#d7b56d]' : 'bg-[#e7ded2]'}`} />
-        <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${featured ? 'text-[#d7b56d]' : 'text-[#8a6a52]'}`}>
+        <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${featured ? 'text-[#9b742d]' : 'text-[#8a6a52]'}`}>
           Grooming tier
         </p>
-        <h3 className="mt-4 font-serif text-2xl font-light tracking-tight md:text-3xl">{item.name}</h3>
-        <p className={`mt-5 font-serif text-4xl font-light tracking-tight ${featured ? 'text-[#d7b56d]' : 'text-[#171411]'}`}>
+        <h3 className="mt-4 font-serif text-2xl font-light tracking-tight text-[#171411] md:text-3xl">{item.name}</h3>
+        <p className={`mt-5 font-serif text-4xl font-light tracking-tight ${featured ? 'text-[#9b742d]' : 'text-[#171411]'}`}>
           Rs. {item.price}
         </p>
-        <p className={`mt-4 text-sm font-light leading-relaxed ${featured ? 'text-white/65' : 'text-[#6d625b]'}`}>
-          {item.description}
-        </p>
-        <ul className={`mt-8 flex-1 space-y-3 border-t pt-6 text-sm ${featured ? 'border-white/10' : 'border-[#e7ded2]'}`}>
+        <p className="mt-4 text-sm font-light leading-relaxed text-[#6d625b]">{item.description}</p>
+        <ul className="mt-8 flex-1 space-y-3 border-t border-[#e7ded2] pt-6 text-sm">
           {item.includes.map((service) => (
-            <li key={service} className={`flex items-start gap-3 ${featured ? 'text-white/80' : 'text-[#3a312b]'}`}>
+            <li key={service} className="flex items-start gap-3 text-[#3a312b]">
               <span className={`mt-2 h-1 w-1 shrink-0 ${featured ? 'bg-[#d7b56d]' : 'bg-[#9b742d]'}`} />
               <span className="font-light">{service}</span>
             </li>
@@ -103,40 +151,81 @@ export function PackageCard({
 export function StaffCard({
   member,
   variant = 'card',
+  tone = 'light',
 }: {
   member: PublicStaffMember;
   variant?: 'card' | 'profile';
+  tone?: 'light' | 'dark';
 }) {
   if (variant === 'profile') {
+    if (tone === 'dark') {
+      return (
+        <article className="group flex h-full flex-col border border-white/10 bg-[#0d0b0a]">
+          <div className="relative aspect-[3/4] overflow-hidden bg-[#171411]">
+            {member.image ? (
+              <Image
+                src={member.image}
+                alt={`${member.name} at The Hair Cut`}
+                fill
+                sizes="(min-width: 1024px) 25vw, 50vw"
+                className="object-cover opacity-85 transition-opacity duration-500 group-hover:opacity-100"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center font-serif text-5xl font-light text-[#d7b56d]">
+                {member.name.charAt(0)}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/10 to-transparent" />
+          </div>
+          <div className="flex flex-1 flex-col p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{member.role}</p>
+            <h3 className="mt-2 font-serif text-2xl font-light tracking-tight text-white">{member.name}</h3>
+            {member.bio ? (
+              <p className="mt-3 line-clamp-3 text-sm font-light leading-relaxed text-white/60">{member.bio}</p>
+            ) : null}
+            <div className="mt-auto flex flex-wrap gap-2 pt-5">
+              {member.specialties.map((item) => (
+                <span
+                  key={item}
+                  className="border border-white/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </article>
+      );
+    }
+
     return (
-      <article className="group flex h-full flex-col border border-white/10 bg-[#0d0b0a]">
-        <div className="relative aspect-[3/4] overflow-hidden bg-[#171411]">
+      <article className="group flex h-full flex-col overflow-hidden border border-[#e7ded2] bg-white transition-shadow duration-300 hover:shadow-md">
+        <div className="relative aspect-[4/5] overflow-hidden bg-[#f8f3ed]">
           {member.image ? (
             <Image
               src={member.image}
               alt={`${member.name} at The Hair Cut`}
               fill
               sizes="(min-width: 1024px) 25vw, 50vw"
-              className="object-cover opacity-85 transition-opacity duration-500 group-hover:opacity-100"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             />
           ) : (
-            <div className="flex h-full items-center justify-center font-serif text-5xl font-light text-[#d7b56d]">
+            <div className="flex h-full items-center justify-center bg-[#f8f3ed] font-serif text-5xl font-light text-[#9b742d]">
               {member.name.charAt(0)}
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/10 to-transparent" />
         </div>
-        <div className="flex flex-1 flex-col p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{member.role}</p>
-          <h3 className="mt-2 font-serif text-2xl font-light tracking-tight text-white">{member.name}</h3>
+        <div className="flex flex-1 flex-col p-5 md:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9b742d]">{member.role}</p>
+          <h3 className="mt-2 font-serif text-xl font-light tracking-tight text-[#171411] md:text-2xl">{member.name}</h3>
           {member.bio ? (
-            <p className="mt-3 line-clamp-3 text-sm font-light leading-relaxed text-white/60">{member.bio}</p>
+            <p className="mt-3 line-clamp-3 text-sm font-light leading-relaxed text-[#6d625b]">{member.bio}</p>
           ) : null}
-          <div className="mt-auto flex flex-wrap gap-2 pt-5">
+          <div className="mt-auto flex flex-wrap gap-2 pt-4">
             {member.specialties.map((item) => (
               <span
                 key={item}
-                className="border border-white/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70"
+                className="border border-[#e7ded2] bg-[#f8f3ed] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5f554e]"
               >
                 {item}
               </span>
