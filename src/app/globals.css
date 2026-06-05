@@ -87,7 +87,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
+  --font-sans: 'Outfit', 'Geist', 'Geist Fallback', sans-serif;
+  --font-serif: 'Cormorant Garamond', 'Playfair Display', serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);

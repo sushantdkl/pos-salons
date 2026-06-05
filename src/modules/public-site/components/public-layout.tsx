@@ -1,5 +1,7 @@
+"use client";
+
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Facebook, MessageCircle, Music2 } from 'lucide-react';
 import { salonInfo } from '../data/salon-info';
@@ -16,45 +18,101 @@ const navLinks = [
 
 type PublicLayoutInfo = typeof salonInfo;
 
-export function PublicLayout({ children, info = salonInfo }: { children: ReactNode; info?: PublicLayoutInfo }) {
+export function PublicLayout({ children, info = salonInfo, isHome = false }: { children: ReactNode; info?: PublicLayoutInfo; isHome?: boolean }) {
   const whatsappUrl = createWhatsAppLink(undefined, info.whatsappNumber);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!isHome) return;
+    const handleScroll = () => {
+      if (window.scrollY > 50) {
+        setScrolled(true);
+      } else {
+        setScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isHome]);
+
+  const isDarkTheme = isHome && !scrolled;
+
+  const headerClass = isHome
+    ? (scrolled 
+        ? "fixed top-0 left-0 right-0 z-40 border-b border-[#e8dcc4] bg-[#fbfaf7]/95 backdrop-blur text-[#171411] shadow-sm transition-all duration-300"
+        : "absolute top-0 left-0 right-0 z-40 border-b border-white/10 bg-transparent text-white transition-all duration-300"
+      )
+    : "sticky top-0 z-40 border-b border-[#e8dcc4] bg-[#fbfaf7]/95 backdrop-blur text-[#171411] transition-all duration-300";
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#171411]">
-      <header className="sticky top-0 z-40 border-b border-[#e8dcc4] bg-[#fbfaf7]/95 backdrop-blur">
+      <header className={headerClass}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
-          <Link href="/" className="flex items-center gap-3 font-semibold">
-            <span className="relative h-11 w-11 overflow-hidden rounded-full bg-[#171411]">
+          <Link href="/" className="flex items-center gap-3 font-semibold transition hover:opacity-90">
+            <span className="relative h-11 w-11 overflow-hidden rounded-full bg-[#171411] border border-white/10">
               <Image src={info.assets.logo} alt={`${info.name} logo`} fill sizes="44px" className="object-cover" />
             </span>
-            <span>{info.name}</span>
+            <span className={isDarkTheme ? "text-white" : "text-[#171411]"}>{info.name}</span>
           </Link>
-          <nav className="hidden items-center gap-5 text-sm font-medium text-[#5f554e] lg:flex">
+          <nav className="hidden items-center gap-6 text-sm font-semibold tracking-wider uppercase lg:flex">
             {navLinks.map(([label, href]) => (
-              <Link key={href} href={href} className="transition hover:text-[#211d1a]">
+              <Link 
+                key={href} 
+                href={href} 
+                className={isDarkTheme 
+                  ? "text-white/80 transition hover:text-white text-xs" 
+                  : "text-[#5f554e] transition hover:text-[#211d1a] text-xs"
+                }
+              >
                 {label}
               </Link>
             ))}
           </nav>
           <div className="flex items-center gap-2">
-            <Link href="/book-appointment" className="hidden rounded-full bg-[#171411] px-4 py-2 text-sm font-semibold text-white hover:bg-[#332920] sm:inline-flex">
+            <Link 
+              href="/book-appointment" 
+              className={isDarkTheme
+                ? "rounded-full bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#171411] hover:bg-[#fffaf5] transition-all"
+                : "rounded-full bg-[#171411] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#332920] transition-all"
+              }
+            >
               Book Appointment
             </Link>
-            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[#d7b56d] px-3 py-2 text-sm font-semibold text-[#171411] hover:bg-white">
-              WhatsApp
-            </a>
-            <Link href="/login" className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[#171411] shadow-sm hover:bg-[#fffaf5]">
+            <Link 
+              href="/login" 
+              className={isDarkTheme
+                ? "rounded-full border border-white/20 bg-white/10 backdrop-blur-sm px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-white/20 transition-all"
+                : "rounded-full bg-white border border-[#e8dcc4] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#171411] shadow-sm hover:bg-[#fffaf5] transition-all"
+              }
+            >
               POS Login
             </Link>
           </div>
         </div>
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 text-sm font-medium text-[#5f554e] lg:hidden">
+        <div className={`mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 text-xs font-bold uppercase tracking-wider lg:hidden ${
+          isDarkTheme ? "border-t border-white/10 pt-2 bg-black/10" : ""
+        }`}>
           {navLinks.map(([label, href]) => (
-            <Link key={href} href={href} className="shrink-0 rounded-full bg-white px-3 py-2">
+            <Link 
+              key={href} 
+              href={href} 
+              className={`shrink-0 rounded-full px-4 py-2 transition-all ${
+                isDarkTheme 
+                  ? "bg-white/10 text-white backdrop-blur-sm hover:bg-white/20" 
+                  : "bg-white text-[#5f554e] border border-[#e8dcc4] hover:bg-[#fffaf5]"
+              }`}
+            >
               {label}
             </Link>
           ))}
-          <Link href="/book-appointment" className="shrink-0 rounded-full bg-[#171411] px-3 py-2 text-white">
+          <Link 
+            href="/book-appointment" 
+            className={`shrink-0 rounded-full px-4 py-2 transition-all ${
+              isDarkTheme 
+                ? "bg-[#d4af37] text-[#171411] font-bold" 
+                : "bg-[#171411] text-white"
+            }`}
+          >
             Book
           </Link>
         </div>

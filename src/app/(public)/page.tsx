@@ -26,115 +26,316 @@ export default async function HomePage() {
   const contact = sections.contact;
   const aboutImages = about.metadata.galleryImages?.length ? about.metadata.galleryImages : [info.assets.banner, info.assets.details];
   return (
-    <PublicLayout info={info}>
+    <PublicLayout info={info} isHome={true}>
       <main>
-        {hero.isVisible ? <section className="px-4 py-16 sm:py-20">
-          <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <p className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#9b742d] shadow-sm">
-                {hero.subtitle || info.tagline}
-              </p>
-              <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-[#171411] sm:text-6xl">
-                {hero.title || info.name}
-              </h1>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-[#6d625b]">{hero.description || info.description}</p>
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link href={hero.buttonLink || '/book-appointment'} className="inline-flex items-center justify-center rounded-full bg-[#171411] px-6 py-3 font-semibold text-white hover:bg-[#332920]">
-                  {hero.buttonText || 'Book Appointment'}
-                </Link>
-                <a href={createWhatsAppLink(undefined, info.whatsappNumber)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d7b56d] bg-white px-6 py-3 font-semibold text-[#171411] hover:bg-[#fffaf5]">
-                  <MessageCircle className="h-5 w-5" />
-                  {hero.secondaryButtonText || 'WhatsApp'}
-                </a>
-              </div>
+        {hero.isVisible ? (
+          <section className="relative w-full h-[90vh] min-h-[600px] md:h-screen md:min-h-[750px] bg-[#12100e] overflow-hidden flex items-end">
+            {/* Background Image */}
+            <div className="absolute inset-0 w-full h-full">
+              <Image 
+                src={hero.imageUrl || info.assets.hero} 
+                alt="The Hair Cut premium salon interior" 
+                fill 
+                priority 
+                sizes="100vw" 
+                className="object-cover opacity-60 transition-all duration-1000 scale-102 hover:scale-100" 
+              />
+              {/* Premium dark gradient overlay to ensure readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/50 to-[#0d0b0a]/70" />
             </div>
-            <div className="relative min-h-[440px] overflow-hidden rounded-[2rem] bg-[#171411] text-white shadow-xl">
-              <Image src={hero.imageUrl || info.assets.hero} alt="The Hair Cut salon interior" fill priority sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover opacity-75" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-7">
-                <p className="text-sm uppercase tracking-wide text-[#f0c65d]">Salon experience</p>
-                <h2 className="mt-3 text-3xl font-semibold">Clean cuts, polished beauty, calm service.</h2>
-                <div className="mt-6 grid gap-3 text-sm text-white/85">
-                  <span>Haircuts and grooming packages</span>
-                  <span>Facials and beauty treatments</span>
-                  <span>WhatsApp appointment requests</span>
+
+            {/* Content Container (Bottom-Left Positioned) */}
+            <div className="relative z-10 w-full mx-auto max-w-7xl px-6 md:px-8 pb-16 md:pb-24 lg:pb-28">
+              <div className="max-w-2xl text-left">
+                {/* Small luxury sub-eyebrow */}
+                <span className="text-xs md:text-sm font-semibold uppercase tracking-widest text-[#d7b56d] block mb-4">
+                  {hero.subtitle || info.tagline}
+                </span>
+                
+                {/* Premium Serif Heading */}
+                <h1 className="text-4xl md:text-6xl lg:text-7xl font-light tracking-tight text-white leading-[1.15] font-serif">
+                  {hero.title || info.name}
+                </h1>
+                
+                {/* Minimal description */}
+                <p className="mt-6 max-w-lg text-sm md:text-base text-white/70 font-light leading-relaxed">
+                  {hero.description || info.description}
+                </p>
+                
+                {/* Elegant geometric buttons */}
+                <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                  <Link 
+                    href={hero.buttonLink || '/book-appointment'} 
+                    className="inline-flex items-center justify-center bg-[#d7b56d] text-[#171411] px-8 py-4 text-xs font-bold uppercase tracking-wider hover:bg-[#c39e2e] transition-all duration-300"
+                  >
+                    {hero.buttonText || 'Book Appointment'}
+                  </Link>
+                  <a 
+                    href={createWhatsAppLink(undefined, info.whatsappNumber)} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="inline-flex items-center justify-center gap-2 border border-white/20 bg-white/5 backdrop-blur-sm px-8 py-4 text-xs font-bold uppercase tracking-wider text-white hover:bg-white/10 hover:border-white/45 transition-all duration-300"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    {hero.secondaryButtonText || 'WhatsApp'}
+                  </a>
                 </div>
               </div>
             </div>
-          </div>
-        </section> : null}
+          </section>
+        ) : null}
 
-        {servicesSection.isVisible ? <Section eyebrow={servicesSection.subtitle || 'Services'} title={servicesSection.title} description={servicesSection.description}>
-          <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-            <div className="relative min-h-[320px] overflow-hidden rounded-3xl bg-[#171411]">
-              <Image src={servicesSection.imageUrl || info.assets.services} alt="Haircut service at The Hair Cut" fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
+        {servicesSection.isVisible ? (
+          <Section
+            theme="dark"
+            eyebrow={servicesSection.subtitle || 'Services'}
+            title={servicesSection.title}
+            description={servicesSection.description}
+          >
+            <div className="grid items-start gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-14">
+              <div className="relative min-h-[420px] overflow-hidden bg-[#0d0b0a] lg:min-h-[560px]">
+                <Image
+                  src={servicesSection.imageUrl || info.assets.services}
+                  alt="Haircut service at The Hair Cut"
+                  fill
+                  sizes="(min-width: 1024px) 42vw, 100vw"
+                  className="object-cover opacity-75"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 bg-[#0d0b0a]/80 px-6 py-5 backdrop-blur-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Signature grooming</p>
+                  <p className="mt-2 max-w-sm font-serif text-lg font-light leading-snug text-white/85">
+                    Precision cuts, clean shaves, and treatments done with care.
+                  </p>
+                </div>
+              </div>
+              <div>
+                <div className="border-t border-white/10">
+                  {cms.popularServices.map((service: PublicService) => (
+                    <ServiceCard key={service.name} service={service} variant="menu" />
+                  ))}
+                </div>
+                <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <Link
+                    href="/services"
+                    className="inline-flex items-center justify-center bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#c39e2e]"
+                  >
+                    View full rate card
+                  </Link>
+                  <Link
+                    href="/book-appointment"
+                    className="inline-flex items-center justify-center border border-white/20 bg-white/5 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-colors duration-300 hover:border-white/45 hover:bg-white/10"
+                  >
+                    Book a service
+                  </Link>
+                </div>
+              </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {cms.popularServices.map((service: PublicService) => <ServiceCard key={service.name} service={service} />)}
+          </Section>
+        ) : null}
+
+        {packagesSection.isVisible ? (
+          <Section
+            eyebrow={packagesSection.subtitle || 'Packages'}
+            title={packagesSection.title}
+            description={packagesSection.description}
+          >
+            <div className="grid gap-6 lg:grid-cols-3 lg:gap-0 lg:border lg:border-[#e7ded2]">
+              {cms.packages.map((item: PublicPackage, index: number) => (
+                <PackageCard
+                  key={item.name}
+                  item={item}
+                  variant="tier"
+                  featured={index === 1}
+                />
+              ))}
             </div>
-          </div>
-        </Section> : null}
+            <div className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <Link
+                href="/packages"
+                className="inline-flex items-center justify-center border border-[#171411] bg-[#171411] px-8 py-4 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-300 hover:bg-[#332920]"
+              >
+                Compare all packages
+              </Link>
+              <Link
+                href="/book-appointment"
+                className="inline-flex items-center justify-center border border-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#f8f3ed]"
+              >
+                Book a package
+              </Link>
+            </div>
+          </Section>
+        ) : null}
 
-        {packagesSection.isVisible ? <Section eyebrow={packagesSection.subtitle || 'Packages'} title={packagesSection.title} description={packagesSection.description}>
-          <div className="grid gap-5 lg:grid-cols-3">
-            {cms.packages.map((item: PublicPackage) => <PackageCard key={item.name} item={item} />)}
-          </div>
-        </Section> : null}
+        {staffSection.isVisible ? (
+          <Section
+            theme="dark"
+            eyebrow={staffSection.subtitle || 'Team'}
+            title={staffSection.title}
+            description={staffSection.description}
+          >
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {cms.staff.map((member: PublicStaffMember) => (
+                <StaffCard key={member.name} member={member} variant="profile" />
+              ))}
+            </div>
+            <div className="mt-10">
+              <Link
+                href="/staff"
+                className="inline-flex items-center justify-center border border-white/20 bg-white/5 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-colors duration-300 hover:border-white/45 hover:bg-white/10"
+              >
+                Meet the full team
+              </Link>
+            </div>
+          </Section>
+        ) : null}
 
-        {staffSection.isVisible ? <Section eyebrow={staffSection.subtitle || 'Team'} title={staffSection.title} description={staffSection.description}>
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {cms.staff.map((member: PublicStaffMember) => <StaffCard key={member.name} member={member} />)}
-          </div>
-        </Section> : null}
-
-        <Section eyebrow="Why choose us" title="Simple, premium, and reliable" description="Designed around everyday salon needs.">
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="grid gap-5 md:grid-cols-3 lg:grid-cols-1">
+        <Section
+          eyebrow="Why choose us"
+          title="Simple, premium, and reliable"
+          description="Designed around everyday salon needs."
+        >
+          <div className="grid items-stretch gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+            <div className="divide-y divide-[#e7ded2] border border-[#e7ded2]">
               {[
                 [Sparkles, 'Premium finish', 'Clean service flow with careful grooming and beauty treatments.'],
                 [Users, 'Friendly staff', 'A focused team for barbering, beauty care, and reception.'],
                 [Star, 'Clear packages', 'Transparent service and package pricing before you visit.'],
-              ].map(([Icon, title, description]) => (
-                <div key={String(title)} className="rounded-2xl border border-[#e7ded2] bg-white p-6 shadow-sm">
-                  <Icon className="h-7 w-7 text-[#9b742d]" />
-                  <h3 className="mt-4 text-xl font-semibold">{String(title)}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6d625b]">{String(description)}</p>
+              ].map(([Icon, title, description], index) => (
+                <div key={String(title)} className="flex gap-6 p-7 md:p-8">
+                  <span className="shrink-0 font-serif text-3xl font-light leading-none text-[#d7b56d]/50">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div>
+                    <Icon className="mb-4 h-5 w-5 text-[#9b742d]" strokeWidth={1.5} />
+                    <h3 className="font-serif text-xl font-light tracking-tight text-[#171411] md:text-2xl">{String(title)}</h3>
+                    <p className="mt-3 max-w-md text-sm font-light leading-relaxed text-[#6d625b]">{String(description)}</p>
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="relative min-h-[420px] overflow-hidden rounded-3xl bg-[#171411]">
-              <Image src={about.imageUrl || info.assets.about} alt="The Hair Cut outside view" fill sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover" />
+            <div className="relative min-h-[440px] overflow-hidden bg-[#171411] lg:min-h-full">
+              <Image
+                src={about.imageUrl || info.assets.about}
+                alt="The Hair Cut outside view"
+                fill
+                sizes="(min-width: 1024px) 42vw, 100vw"
+                className="object-cover opacity-80"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/15 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 bg-[#0d0b0a]/80 px-6 py-5 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">The experience</p>
+                <p className="mt-2 max-w-sm font-serif text-lg font-light leading-snug text-white/85">
+                  A calm space built for consistent grooming, every visit.
+                </p>
+              </div>
             </div>
           </div>
         </Section>
 
-        {about.isVisible ? <Section eyebrow={about.subtitle || 'About'} title={about.title} description={about.description}>
-          <div className="grid gap-5 md:grid-cols-2">
-            {aboutImages.map((image: string, index: number) => (
-              <div key={image} className="relative min-h-[260px] overflow-hidden rounded-3xl border border-[#e7ded2] bg-white shadow-sm">
-                <Image src={image} alt={index === 0 ? 'The Hair Cut banner' : 'The Hair Cut details'} fill sizes="(min-width: 768px) 50vw, 100vw" className="object-cover" />
-              </div>
-            ))}
-          </div>
-        </Section> : null}
+        {about.isVisible ? (
+          <Section
+            theme="dark"
+            eyebrow={about.subtitle || 'About'}
+            title={about.title}
+            description={about.description}
+          >
+            <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
+              {aboutImages.map((image: string, index: number) => (
+                <div
+                  key={image}
+                  className={`relative overflow-hidden bg-[#0d0b0a] ${
+                    index === 0
+                      ? 'min-h-[360px] lg:col-span-7 lg:min-h-[520px]'
+                      : 'min-h-[280px] lg:col-span-5 lg:min-h-[520px]'
+                  }`}
+                >
+                  <Image
+                    src={image}
+                    alt={index === 0 ? 'The Hair Cut banner' : 'The Hair Cut details'}
+                    fill
+                    sizes={index === 0 ? '(min-width: 1024px) 55vw, 100vw' : '(min-width: 1024px) 40vw, 100vw'}
+                    className="object-cover opacity-80"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a]/80 via-transparent to-transparent" />
+                  {index === 0 ? (
+                    <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 px-6 py-5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{info.name}</p>
+                      <p className="mt-2 max-w-lg font-serif text-lg font-light leading-snug text-white/85">{info.tagline}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Link
+                href="/gallery"
+                className="inline-flex items-center justify-center bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#c39e2e]"
+              >
+                View gallery
+              </Link>
+              <Link
+                href="/contact"
+                className="inline-flex items-center justify-center border border-white/20 bg-white/5 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-colors duration-300 hover:border-white/45 hover:bg-white/10"
+              >
+                Get in touch
+              </Link>
+            </div>
+          </Section>
+        ) : null}
 
-        <section className="px-4 py-16">
-          <div className="mx-auto grid max-w-7xl gap-6 rounded-3xl bg-white p-6 shadow-sm md:grid-cols-[1fr_1fr] md:p-8">
+        <Section
+          theme="dark"
+          eyebrow={contact.subtitle || 'Visit us'}
+          title={contact.title || 'Find us in Birendranagar'}
+          description={contact.description}
+          className="!border-b-0"
+        >
+          <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-[#8a6a52]">{contact.subtitle || 'Visit us'}</p>
-              <h2 className="mt-3 text-3xl font-semibold text-[#211d1a]">{contact.title}</h2>
-              <p className="mt-4 text-[#6d625b]">{info.address}</p>
-              <p className="mt-2 text-[#6d625b]">{info.openingHours}</p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <Link href="/contact" className="inline-flex rounded-full border border-[#d7b56d] px-5 py-3 font-semibold">Contact details</Link>
-                <Link href="/book-appointment" className="inline-flex rounded-full bg-[#171411] px-5 py-3 font-semibold text-white">Book now</Link>
+              <div className="divide-y divide-white/10 border-t border-white/10">
+                <div className="py-7">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Address</p>
+                  <p className="mt-3 font-serif text-xl font-light leading-relaxed text-white/85 md:text-2xl">{info.address}</p>
+                </div>
+                <div className="py-7">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Opening hours</p>
+                  <p className="mt-3 font-serif text-xl font-light leading-relaxed text-white/85 md:text-2xl">{info.openingHours}</p>
+                </div>
+                <div className="py-7">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Phone</p>
+                  <p className="mt-3 font-serif text-xl font-light text-white/85 md:text-2xl">{info.phone}</p>
+                </div>
+              </div>
+              <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center justify-center bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#c39e2e]"
+                >
+                  Contact details
+                </Link>
+                <Link
+                  href="/book-appointment"
+                  className="inline-flex items-center justify-center border border-white/20 bg-white/5 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-colors duration-300 hover:border-white/45 hover:bg-white/10"
+                >
+                  Book now
+                </Link>
+                <a
+                  href={createWhatsAppLink(undefined, info.whatsappNumber)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 border border-white/20 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-300 hover:border-[#d7b56d]/60 hover:text-[#d7b56d]"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </a>
               </div>
             </div>
-            <div className="overflow-hidden rounded-2xl bg-[#f8f3ed]">
+            <div className="border border-white/10 bg-[#0d0b0a]">
               <iframe
                 src={info.mapEmbedUrl}
                 title={`${info.name} map`}
-                className="h-[300px] w-full"
+                className="h-[320px] w-full md:h-[400px]"
                 style={{ border: 0 }}
                 allowFullScreen
                 loading="lazy"
@@ -142,7 +343,7 @@ export default async function HomePage() {
               />
             </div>
           </div>
-        </section>
+        </Section>
       </main>
     </PublicLayout>
   );

@@ -56,63 +56,71 @@ export function BookingForm({
 
   return (
     <PublicLayout info={info}>
-      <main className="px-4 py-14">
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#8a6a52]">WhatsApp booking</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#211d1a]">Book an appointment</h1>
-            <p className="mt-4 leading-7 text-[#6d625b]">
-              Send a WhatsApp appointment request to {info.name} with your preferred service, staff, date, and time.
-            </p>
-            <div className="relative mt-8 min-h-[360px] overflow-hidden rounded-3xl bg-[#171411] shadow-sm">
-              <Image src={info.assets.booking} alt={`Booking an appointment at ${info.name}`} fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <p className="absolute bottom-5 left-5 right-5 text-lg font-semibold text-white">{info.tagline}</p>
+      <main className="relative min-h-screen bg-[#12100e]">
+        {/* Full background image */}
+        <div className="absolute inset-0 w-full h-full">
+          <Image 
+            src={info.assets.booking} 
+            alt={`Booking an appointment at ${info.name}`} 
+            fill 
+            sizes="100vw" 
+            className="object-cover opacity-60" 
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0d0b0a] via-[#0d0b0a]/80 to-[#0d0b0a]/60" />
+        </div>
+
+        {/* Content overlay */}
+        <div className="relative z-10 px-4 py-14 md:py-20">
+          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.8fr_1fr] items-start">
+            <div className="lg:pt-8">
+              <span className="text-xs font-semibold uppercase tracking-widest text-[#d7b56d]">WhatsApp booking</span>
+              <h1 className="mt-4 text-4xl md:text-5xl font-light tracking-tight text-white leading-[1.15] font-serif">Book an appointment</h1>
             </div>
-          </div>
-          <form onSubmit={submit} className="rounded-2xl border border-[#e7ded2] bg-white p-6 shadow-sm">
+            <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-[#0d0b0a]/80 backdrop-blur-sm p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Full Name *</span>
-                <input value={form.name} onChange={(event) => update('name', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
+                <span className="mb-2 block text-sm font-semibold text-white/90">Full Name *</span>
+                <input value={form.name} onChange={(event) => update('name', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent placeholder:text-white/40" />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Phone number *</span>
-                <input value={form.phone} onChange={(event) => update('phone', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
+                <span className="mb-2 block text-sm font-semibold text-white/90">Phone number *</span>
+                <input value={form.phone} onChange={(event) => update('phone', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent placeholder:text-white/40" />
               </label>
               <label className="block md:col-span-2">
-                <span className="mb-2 block text-sm font-semibold">Service *</span>
-                <select value={form.service} onChange={(event) => update('service', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]">
-                  <option value="">Select service or package</option>
-                  {serviceOptions.map((service) => <option key={service} value={service}>{service}</option>)}
+                <span className="mb-2 block text-sm font-semibold text-white/90">Service *</span>
+                <select value={form.service} onChange={(event) => update('service', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent">
+                  <option value="" className="bg-[#0d0b0a]">Select service or package</option>
+                  {serviceOptions.map((service) => <option key={service} value={service} className="bg-[#0d0b0a]">{service}</option>)}
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred staff</span>
-                <select value={form.preferredStaff} onChange={(event) => update('preferredStaff', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]">
-                  <option value="">Any available staff</option>
-                  {staff.map((member) => <option key={member.name} value={member.name}>{member.name} - {member.role}</option>)}
+                <span className="mb-2 block text-sm font-semibold text-white/90">Preferred staff</span>
+                <select value={form.preferredStaff} onChange={(event) => update('preferredStaff', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent">
+                  <option value="" className="bg-[#0d0b0a]">Any available staff</option>
+                  {staff.map((member) => <option key={member.name} value={member.name} className="bg-[#0d0b0a]">{member.name} - {member.role}</option>)}
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred date *</span>
-                <input type="date" value={form.date} onChange={(event) => update('date', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
+                <span className="mb-2 block text-sm font-semibold text-white/90">Preferred date *</span>
+                <input type="date" value={form.date} onChange={(event) => update('date', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent [color-scheme:dark]" />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Preferred time *</span>
-                <input type="time" value={form.time} onChange={(event) => update('time', event.target.value)} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
+                <span className="mb-2 block text-sm font-semibold text-white/90">Preferred time *</span>
+                <input type="time" value={form.time} onChange={(event) => update('time', event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent [color-scheme:dark]" />
               </label>
               <label className="block md:col-span-2">
-                <span className="mb-2 block text-sm font-semibold">Message</span>
-                <textarea value={form.message} onChange={(event) => update('message', event.target.value)} rows={4} className="w-full rounded-xl border border-[#d9cabc] px-4 py-3 outline-none focus:ring-2 focus:ring-[#211d1a]" />
+                <span className="mb-2 block text-sm font-semibold text-white/90">Message</span>
+                <textarea value={form.message} onChange={(event) => update('message', event.target.value)} rows={4} className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-[#d7b56d] focus:border-transparent placeholder:text-white/40" />
               </label>
             </div>
-            {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
-            <button type="submit" className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700">
-              <MessageCircle className="h-5 w-5" />
+            {error ? <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">{error}</div> : null}
+            <button type="submit" className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] hover:bg-[#c39e2e] transition-all duration-300">
+              <MessageCircle className="h-4 w-4" />
               Send WhatsApp Booking Request
             </button>
           </form>
+          </div>
         </div>
       </main>
     </PublicLayout>
