@@ -3,10 +3,11 @@ import Image from 'next/image';
 import { MessageCircle, Sparkles, Star, Users } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
-import { PackageCard, ServiceCard, StaffCard } from '@/modules/public-site/components/cards';
+import { PackageCard, ServiceCard } from '@/modules/public-site/components/cards';
+import { StaffCarousel } from '@/modules/public-site/components/staff-carousel';
 import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
 import { createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
-import type { PublicPackage, PublicService, PublicStaffMember } from '@/modules/public-site/types';
+import type { PublicPackage, PublicService } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,11 +175,7 @@ export default async function HomePage() {
             title={staffSection.title}
             description={staffSection.description}
           >
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {cms.staff.map((member: PublicStaffMember) => (
-                <StaffCard key={member.name} member={member} variant="profile" tone="dark" />
-              ))}
-            </div>
+            <StaffCarousel staff={cms.staff} tone="dark" />
             <div className="mt-10">
               <Link
                 href="/staff"

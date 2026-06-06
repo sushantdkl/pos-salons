@@ -152,22 +152,27 @@ export function StaffCard({
   member,
   variant = 'card',
   tone = 'light',
+  layout = 'grid',
 }: {
   member: PublicStaffMember;
   variant?: 'card' | 'profile';
   tone?: 'light' | 'dark';
+  layout?: 'grid' | 'scroll';
 }) {
   if (variant === 'profile') {
+    const imageAspect = layout === 'scroll' ? 'aspect-[3/2]' : 'aspect-[5/6]';
+    const imageSizes = layout === 'scroll' ? '420px' : '(min-width: 1024px) 25vw, 50vw';
+
     if (tone === 'dark') {
       return (
         <article className="group flex h-full flex-col border border-white/10 bg-[#0d0b0a]">
-          <div className="relative aspect-[3/4] overflow-hidden bg-[#171411]">
+          <div className={`relative ${imageAspect} overflow-hidden bg-[#171411]`}>
             {member.image ? (
               <Image
                 src={member.image}
                 alt={`${member.name} at The Hair Cut`}
                 fill
-                sizes="(min-width: 1024px) 25vw, 50vw"
+                sizes={imageSizes}
                 className="object-cover opacity-85 transition-opacity duration-500 group-hover:opacity-100"
               />
             ) : (
@@ -200,13 +205,13 @@ export function StaffCard({
 
     return (
       <article className="group flex h-full flex-col overflow-hidden border border-[#e7ded2] bg-white transition-shadow duration-300 hover:shadow-md">
-        <div className="relative aspect-[4/5] overflow-hidden bg-[#f8f3ed]">
+        <div className={`relative ${imageAspect} overflow-hidden bg-[#f8f3ed]`}>
           {member.image ? (
             <Image
               src={member.image}
               alt={`${member.name} at The Hair Cut`}
               fill
-              sizes="(min-width: 1024px) 25vw, 50vw"
+              sizes={imageSizes}
               className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             />
           ) : (
