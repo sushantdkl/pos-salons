@@ -3,10 +3,13 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/layout/dashboard-layout';
-import { CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, Wallet } from 'lucide-react';
+import {
+  CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
+} from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 const draftKey = 'salon_pos_bill_draft';
+const walkInCustomer = { id: '', name: 'Walk-in Customer', phone: '' };
 
 function BillingContent() {
   const searchParams = useSearchParams();
@@ -15,9 +18,10 @@ function BillingContent() {
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [catalogTab, setCatalogTab] = useState('services');
   const [cartServices, setCartServices] = useState([]);
   const [cartProducts, setCartProducts] = useState([]);
-  const [customer, setCustomer] = useState({ id: '', name: 'Walk-in Customer', phone: '' });
+  const [customer, setCustomer] = useState(walkInCustomer);
   const [discountType, setDiscountType] = useState('amount');
   const [discountValue, setDiscountValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -29,6 +33,7 @@ function BillingContent() {
   const [selectedToken, setSelectedToken] = useState(null);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
+  const isWalkIn = !customer.id;
 
   const fetchData = async () => {
     const [serviceResponse, productResponse, customerResponse, staffResponse, tokenResponse] = await Promise.all([
@@ -36,7 +41,7 @@ function BillingContent() {
       fetch('/api/admin/salon-products', { headers: headers() }),
       fetch('/api/admin/customers', { headers: headers() }),
       fetch('/api/admin/employees', { headers: headers() }),
-      fetch('/api/admin/tokens', { headers: headers() })
+      fetch('/api/admin/tokens', { headers: headers() }),
     ]);
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services?.filter((item) => item.is_active) || []);
     if (productResponse.ok) setProducts((await productResponse.json()).products?.filter((item) => item.status === 'active') || []);
@@ -59,7 +64,7 @@ function BillingContent() {
         const parsed = JSON.parse(draft);
         setCartServices(parsed.cartServices || []);
         setCartProducts(parsed.cartProducts || []);
-        setCustomer(parsed.customer || { id: '', name: 'Walk-in Customer', phone: '' });
+        setCustomer(parsed.customer || walkInCustomer);
         setDiscountType(parsed.discountType || 'amount');
         setDiscountValue(parsed.discountValue || '');
         setPaymentMethod(parsed.paymentMethod || 'cash');
@@ -75,6 +80,7 @@ function BillingContent() {
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     service.category.toLowerCase().includes(searchTerm.toLowerCase())
   ), [services, searchTerm]);
+
   const filteredProducts = useMemo(() => products.filter((product) =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -87,9 +93,41 @@ function BillingContent() {
   const tax = (subtotal - safeDiscount) * (Number(taxPercent || 0) / 100);
   const total = subtotal - safeDiscount + tax;
   const change = Number(amountPaid || total) - total;
+  const cartCount = cartServices.length + cartProducts.length;
+
+  const setWalkInCustomer = () => {
+    setCustomer(walkInCustomer);
+    setSelectedToken(null);
+    setError('');
+  };
+
+  const selectCustomer = (id) => {
+    if (!id) {
+      setWalkInCustomer();
+      return;
+    }
+    const selected = customers.find((item) => String(item.id) === String(id));
+    if (selected) {
+      setCustomer({
+        id: selected.id,
+        name: selected.name,
+        phone: selected.phone || '',
+        preferred_barber_id: selected.preferred_barber_id || '',
+        preferred_stylist_id: selected.preferred_stylist_id || '',
+        preferred_beautician_id: selected.preferred_beautician_id || '',
+      });
+      setSelectedToken(null);
+      setError('');
+    }
+  };
 
   const addService = (service) => {
-    setCartServices((items) => [...items, { ...service, cart_id: crypto.randomUUID(), staff_id: customer.preferred_stylist_id || customer.preferred_barber_id || customer.preferred_beautician_id || '' }]);
+    setCartServices((items) => [...items, {
+      ...service,
+      cart_id: crypto.randomUUID(),
+      staff_id: customer.preferred_stylist_id || customer.preferred_barber_id || customer.preferred_beautician_id || '',
+    }]);
+    setError('');
   };
 
   function loadToken(token) {
@@ -102,15 +140,22 @@ function BillingContent() {
     setCustomer({
       id: token.customer_id || '',
       name: token.customer_name || 'Walk-in Customer',
-      phone: token.customer_phone || ''
+      phone: token.customer_phone || '',
     });
     setCartServices([{
       ...service,
       cart_id: `token-${token.id}`,
       staff_id: token.assigned_staff_id || '',
     }]);
+    setCartProducts([]);
     setSearchTerm('');
+    setError('');
   }
+
+  const clearToken = () => {
+    setSelectedToken(null);
+    setCartServices((items) => items.filter((item) => !String(item.cart_id).startsWith('token-')));
+  };
 
   useEffect(() => {
     const tokenId = searchParams.get('tokenId');
@@ -137,9 +182,14 @@ function BillingContent() {
   const addProduct = (product) => {
     setCartProducts((items) => {
       const existing = items.find((item) => item.id === product.id);
-      if (existing) return items.map((item) => item.id === product.id ? { ...item, quantity: Math.min(item.quantity + 1, product.current_stock) } : item);
+      if (existing) {
+        return items.map((item) => item.id === product.id
+          ? { ...item, quantity: Math.min(item.quantity + 1, product.current_stock) }
+          : item);
+      }
       return [...items, { ...product, quantity: 1 }];
     });
+    setError('');
   };
 
   const updateProductQty = (id, changeBy) => {
@@ -150,18 +200,12 @@ function BillingContent() {
     }));
   };
 
-  const selectCustomer = (id) => {
-    const selected = customers.find((item) => String(item.id) === String(id));
-    if (selected) {
-      setCustomer({
-        id: selected.id,
-        name: selected.name,
-        phone: selected.phone || '',
-        preferred_barber_id: selected.preferred_barber_id || '',
-        preferred_stylist_id: selected.preferred_stylist_id || '',
-        preferred_beautician_id: selected.preferred_beautician_id || ''
-      });
-    }
+  const clearCart = () => {
+    setCartServices([]);
+    setCartProducts([]);
+    setDiscountValue('');
+    setAmountPaid('');
+    setError('');
   };
 
   const completeBill = async (shouldPrint = false) => {
@@ -198,8 +242,8 @@ function BillingContent() {
         tax_percent: Number(taxPercent || 0),
         payment_method: paymentMethod,
         amount_paid: Number(amountPaid || total),
-        should_print: shouldPrint
-      })
+        should_print: shouldPrint,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -209,19 +253,15 @@ function BillingContent() {
     }
     setLastBill(data);
     if (shouldPrint) printReceipt(data, receiptWindow);
-    setCartServices([]);
-    setCartProducts([]);
-    setDiscountValue('');
-    setAmountPaid('');
-    setCustomer({ id: '', name: 'Walk-in Customer', phone: '' });
+    clearCart();
+    setCustomer(walkInCustomer);
     setSelectedToken(null);
     localStorage.removeItem(draftKey);
     fetchData();
   };
 
   const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=340,height=700')) => {
-    if (!billData?.bill) return;
-    if (!printWindow) return;
+    if (!billData?.bill || !printWindow) return;
     const rows = billData.items.map((item) => `<tr><td>${item.name} x${item.quantity}</td><td style="text-align:right">${formatCurrency(item.subtotal)}</td></tr>`).join('');
     printWindow.document.write(`
       <html><head><title>${billData.bill.bill_number}</title><style>
@@ -256,161 +296,408 @@ function BillingContent() {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
+  const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-950 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200';
+
   return (
     <AdminLayout>
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+      <header className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5">
-              <h1 className="text-3xl font-semibold text-gray-950">Salon Billing</h1>
-              <p className="mt-1 text-sm text-gray-600">Select customer, add services/products, assign stylist, and complete payment.</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-                <select value={selectedToken?.id || ''} onChange={(event) => {
-                  const token = tokens.find((item) => String(item.id) === event.target.value);
-                  if (token) loadToken(token);
-                  else setSelectedToken(null);
-                }} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-gray-950">
-                  <option value="">Select waiting token for billing optional</option>
-                  {tokens.map((token) => <option key={token.id} value={token.id}>{token.token_number} - {token.customer_name || 'Walk-in'} - {token.service_name}</option>)}
-                </select>
-                {selectedToken ? <div className="rounded-lg bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">Token {selectedToken.token_number} loaded</div> : null}
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <select value={customer.id} onChange={(event) => selectCustomer(event.target.value)} className="rounded-lg border border-gray-300 px-4 py-3 text-gray-950">
-                  <option value="">Walk-in customer</option>
-                  {customers.map((item) => <option key={item.id} value={item.id}>{item.name} {item.phone ? `(${item.phone})` : ''}</option>)}
-                </select>
-                <input value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Customer name" className="rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
-                <input value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} placeholder="Phone for receipt/reminder" className="rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
-              </div>
-            </div>
+            <h1 className="text-2xl font-semibold text-gray-950">Salon Billing</h1>
+            <p className="text-sm text-gray-600">Add items, assign staff, and complete payment.</p>
+          </div>
+          {cartCount > 0 ? (
+            <span className="inline-flex w-fit items-center rounded-full bg-gray-900 px-3 py-1 text-sm font-semibold text-white">
+              {cartCount} item{cartCount === 1 ? '' : 's'} in cart
+            </span>
+          ) : null}
+        </div>
+      </header>
 
-            <div className="mb-5 rounded-lg border border-gray-200 bg-white p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search services and products" className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+      <div className="bg-gray-50 p-4 sm:p-6">
+        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[1fr_400px]">
+          <div className="space-y-5">
+            {/* Customer */}
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-gray-950">Customer</h2>
+                {!isWalkIn ? (
+                  <button
+                    type="button"
+                    onClick={setWalkInCustomer}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 transition hover:text-gray-900"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Switch to walk-in
+                  </button>
+                ) : null}
               </div>
-            </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
-              <section className="rounded-lg border border-gray-200 bg-white p-4">
-                <h2 className="mb-4 font-semibold text-gray-950">Services</h2>
-                <div className="grid gap-3">
-                  {filteredServices.map((service) => (
-                    <button key={service.id} onClick={() => addService(service)} className="rounded-lg border border-gray-200 p-4 text-left hover:border-gray-900 hover:bg-gray-50">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-gray-950">{service.name}</p>
-                          <p className="text-sm text-gray-500">{service.category} - {service.duration_minutes} min{service.is_package ? ' - Package' : ''}</p>
-                          {service.is_package ? <p className="mt-1 text-xs text-gray-500">{service.package_items}</p> : null}
-                        </div>
-                        <span className="font-semibold text-gray-950">{formatCurrency(service.price)}</span>
-                      </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={setWalkInCustomer}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                    isWalkIn
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <User className="h-4 w-4" />
+                  Walk-in
+                </button>
+                <select
+                  value={customer.id || ''}
+                  onChange={(event) => selectCustomer(event.target.value)}
+                  className={`min-w-[200px] flex-1 rounded-lg border px-3 py-2.5 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-gray-200 ${
+                    !isWalkIn ? 'border-gray-900 bg-gray-50' : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  <option value="">Select saved customer…</option>
+                  {customers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}{item.phone ? ` · ${item.phone}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  value={customer.name}
+                  onChange={(event) => setCustomer({ ...customer, name: event.target.value, id: customer.id })}
+                  placeholder="Customer name"
+                  className={inputClass}
+                />
+                <input
+                  value={customer.phone}
+                  onChange={(event) => setCustomer({ ...customer, phone: event.target.value })}
+                  placeholder="Phone (optional)"
+                  className={inputClass}
+                />
+              </div>
+
+              {tokens.length > 0 ? (
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <Ticket className="h-4 w-4 text-amber-600" />
+                    Load from waiting token
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select
+                      value={selectedToken?.id || ''}
+                      onChange={(event) => {
+                        const token = tokens.find((item) => String(item.id) === event.target.value);
+                        if (token) loadToken(token);
+                        else clearToken();
+                      }}
+                      className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-gray-950"
+                    >
+                      <option value="">No token — manual billing</option>
+                      {tokens.map((token) => (
+                        <option key={token.id} value={token.id}>
+                          {token.token_number} · {token.customer_name || 'Walk-in'} · {token.service_name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedToken ? (
+                      <button
+                        type="button"
+                        onClick={clearToken}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <X className="h-4 w-4" />
+                        Clear token
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            {/* Catalog */}
+            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-100 p-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Search services or products…"
+                    className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  {[
+                    ['services', `Services (${filteredServices.length})`],
+                    ['products', `Products (${filteredProducts.length})`],
+                  ].map(([tab, label]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setCatalogTab(tab)}
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                        catalogTab === tab
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {label}
                     </button>
                   ))}
                 </div>
-              </section>
+              </div>
 
-              <section className="rounded-lg border border-gray-200 bg-white p-4">
-                <h2 className="mb-4 font-semibold text-gray-950">Products</h2>
-                <div className="grid gap-3">
-                  {filteredProducts.map((product) => (
-                    <button key={product.id} disabled={product.current_stock <= 0} onClick={() => addProduct(product)} className="rounded-lg border border-gray-200 p-4 text-left hover:border-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-gray-950">{product.name}</p>
-                          <p className="text-sm text-gray-500">{product.category} - Stock {product.current_stock}</p>
+              <div className="max-h-[52vh] overflow-y-auto p-4">
+                {catalogTab === 'services' ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {filteredServices.map((service) => (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() => addService(service)}
+                        className="rounded-lg border border-gray-200 p-3 text-left transition hover:border-gray-900 hover:bg-gray-50"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-950">{service.name}</p>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                              {service.category} · {service.duration_minutes} min
+                              {service.is_package ? ' · Package' : ''}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-sm font-semibold text-gray-950">{formatCurrency(service.price)}</span>
                         </div>
-                        <span className="font-semibold text-gray-950">{formatCurrency(product.selling_price)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </div>
+                      </button>
+                    ))}
+                    {filteredServices.length === 0 ? (
+                      <p className="col-span-full py-8 text-center text-sm text-gray-500">No services match your search.</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {filteredProducts.map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        disabled={product.current_stock <= 0}
+                        onClick={() => addProduct(product)}
+                        className="rounded-lg border border-gray-200 p-3 text-left transition hover:border-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-950">{product.name}</p>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                              {product.category} · Stock {product.current_stock}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-sm font-semibold text-gray-950">{formatCurrency(product.selling_price)}</span>
+                        </div>
+                      </button>
+                    ))}
+                    {filteredProducts.length === 0 ? (
+                      <p className="col-span-full py-8 text-center text-sm text-gray-500">No products match your search.</p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
 
-          <aside className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-xl font-semibold text-gray-950"><Receipt className="h-5 w-5" /> Current Bill</h2>
-              <button onClick={() => { setCartServices([]); setCartProducts([]); }} className="text-sm font-medium text-red-600 hover:text-red-700">Clear</button>
-            </div>
-            {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
-            <div className="max-h-[42vh] space-y-3 overflow-y-auto pr-1">
-              {cartServices.map((service) => (
-                <div key={service.cart_id} className="rounded-lg border border-gray-200 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-gray-950">{service.name}</p>
-                      <p className="text-sm text-gray-500">{formatCurrency(service.price)}</p>
-                    </div>
-                    <button onClick={() => setCartServices((items) => items.filter((item) => item.cart_id !== service.cart_id))} className="p-1 text-red-600"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                  <select value={service.staff_id || ''} onChange={(event) => setCartServices((items) => items.map((item) => item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item))} className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-950">
-                    <option value="">Assign staff member</option>
-                    {staffForService(service).map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.salon_role})</option>)}
-                  </select>
-                </div>
-              ))}
-              {cartProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                  <div>
-                    <p className="font-medium text-gray-950">{product.name}</p>
-                    <p className="text-sm text-gray-500">{formatCurrency(product.selling_price)} each</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => updateProductQty(product.id, -1)} className="rounded-md border border-gray-300 p-1"><Minus className="h-4 w-4" /></button>
-                    <span className="w-6 text-center font-medium text-gray-950">{product.quantity}</span>
-                    <button onClick={() => updateProductQty(product.id, 1)} className="rounded-md border border-gray-300 p-1"><Plus className="h-4 w-4" /></button>
-                    <button onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                </div>
-              ))}
-              {cartServices.length === 0 && cartProducts.length === 0 && <div className="rounded-lg bg-gray-50 p-6 text-center text-gray-500">No items added yet.</div>}
-            </div>
-
-            <div className="mt-5 space-y-3 border-t border-gray-200 pt-4">
-              <div className="grid grid-cols-[130px_1fr] gap-2">
-                <select value={discountType} onChange={(event) => setDiscountType(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-950">
-                  <option value="amount">Discount Rs</option>
-                  <option value="percentage">Discount %</option>
-                </select>
-                <input type="number" min="0" value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-950" />
-              </div>
-              <input type="number" min="0" max="100" value={taxPercent} onChange={(event) => setTaxPercent(event.target.value)} placeholder="Tax percent" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-950" />
-              <div className="space-y-2 rounded-lg bg-gray-50 p-4 text-sm">
-                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                <div className="flex justify-between text-green-700"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div>
-                <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
-                <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-semibold text-gray-950"><span>Total</span><span>{formatCurrency(total)}</span></div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  ['cash', Wallet, 'Cash'],
-                  ['card', CreditCard, 'Card'],
-                  ['online', MessageCircle, 'Online'],
-                  ['split', Receipt, 'Split']
-                ].map(([method, Icon, label]) => (
-                  <button key={method} onClick={() => setPaymentMethod(method)} className={`rounded-lg border px-3 py-3 font-medium ${paymentMethod === method ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                    <Icon className="mx-auto mb-1 h-5 w-5" />{label}
+          {/* Cart */}
+          <aside className="h-fit xl:sticky xl:top-4">
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-950">
+                  <Receipt className="h-5 w-5" />
+                  Bill
+                </h2>
+                {cartCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearCart}
+                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                  >
+                    Clear all
                   </button>
-                ))}
+                ) : null}
               </div>
-              {paymentMethod === 'cash' && (
-                <div>
-                  <input type="number" min="0" value={amountPaid} onChange={(event) => setAmountPaid(event.target.value)} placeholder="Cash received" className="w-full rounded-lg border border-gray-300 px-3 py-3 text-gray-950" />
-                  {amountPaid && change >= 0 && <p className="mt-2 text-sm font-medium text-green-700">Change: {formatCurrency(change)}</p>}
+
+              <div className="p-5">
+                {error ? (
+                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+
+                <div className="max-h-[36vh] space-y-2 overflow-y-auto">
+                  {cartServices.map((service) => (
+                    <div key={service.cart_id} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-950">{service.name}</p>
+                          <p className="text-sm text-gray-600">{formatCurrency(service.price)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCartServices((items) => items.filter((item) => item.cart_id !== service.cart_id))}
+                          className="shrink-0 p-1 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <select
+                        value={service.staff_id || ''}
+                        onChange={(event) => setCartServices((items) => items.map((item) => (
+                          item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item
+                        )))}
+                        className={`mt-2 w-full rounded-lg border px-2.5 py-2 text-sm text-gray-950 ${
+                          service.staff_id ? 'border-gray-300' : 'border-amber-300 bg-amber-50'
+                        }`}
+                      >
+                        <option value="">Assign staff *</option>
+                        {staffForService(service).map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.full_name} ({employee.salon_role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+
+                  {cartProducts.map((product) => (
+                    <div key={product.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-950">{product.name}</p>
+                        <p className="text-sm text-gray-600">{formatCurrency(product.selling_price)} each</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => updateProductQty(product.id, -1)} className="rounded-md border border-gray-300 p-1 hover:bg-gray-50">
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="w-5 text-center text-sm font-semibold">{product.quantity}</span>
+                        <button type="button" onClick={() => updateProductQty(product.id, 1)} className="rounded-md border border-gray-300 p-1 hover:bg-gray-50">
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {cartCount === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
+                      Tap a service or product to add it here.
+                    </div>
+                  ) : null}
                 </div>
-              )}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button onClick={() => completeBill(false)} className="rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">Bill</button>
-                <button onClick={() => completeBill(true)} className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700">Bill & Print</button>
+
+                <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={discountType} onChange={(event) => setDiscountType(event.target.value)} className={inputClass}>
+                      <option value="amount">Discount Rs</option>
+                      <option value="percentage">Discount %</option>
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      value={discountValue}
+                      onChange={(event) => setDiscountValue(event.target.value)}
+                      placeholder="0"
+                      className={inputClass}
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={taxPercent}
+                    onChange={(event) => setTaxPercent(event.target.value)}
+                    placeholder="Tax %"
+                    className={inputClass}
+                  />
+
+                  <div className="space-y-1.5 rounded-lg bg-gray-50 p-3 text-sm">
+                    <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                    <div className="flex justify-between text-green-700"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div>
+                    <div className="flex justify-between text-gray-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
+                    <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold text-gray-950">
+                      <span>Total</span>
+                      <span>{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ['cash', Wallet, 'Cash'],
+                      ['card', CreditCard, 'Card'],
+                      ['online', MessageCircle, 'Online'],
+                      ['split', Receipt, 'Split'],
+                    ].map(([method, Icon, label]) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => setPaymentMethod(method)}
+                        className={`rounded-lg border px-2 py-2.5 text-xs font-semibold transition ${
+                          paymentMethod === method
+                            ? 'border-gray-900 bg-gray-900 text-white'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="mx-auto mb-1 h-4 w-4" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {paymentMethod === 'cash' ? (
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={amountPaid}
+                        onChange={(event) => setAmountPaid(event.target.value)}
+                        placeholder={`Cash received (${formatCurrency(total)})`}
+                        className={inputClass}
+                      />
+                      {amountPaid && change >= 0 ? (
+                        <p className="mt-1.5 text-sm font-semibold text-green-700">Change: {formatCurrency(change)}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => completeBill(false)}
+                      disabled={cartCount === 0}
+                      className="rounded-lg bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Complete bill
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => completeBill(true)}
+                      disabled={cartCount === 0}
+                      className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Bill &amp; print receipt
+                    </button>
+                  </div>
+
+                  {lastBill ? (
+                    <button
+                      type="button"
+                      onClick={sendDigitalReceipt}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <MessageCircle className="mr-2 inline h-4 w-4" />
+                      Send digital receipt
+                    </button>
+                  ) : null}
+                </div>
               </div>
-              {lastBill && (
-                <div className="grid gap-2">
-                  <button onClick={sendDigitalReceipt} className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"><MessageCircle className="mr-2 inline h-4 w-4" />Send Digital Receipt</button>
-                </div>
-              )}
             </div>
           </aside>
         </div>
@@ -421,7 +708,7 @@ function BillingContent() {
 
 export default function AdminBilling() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading billing...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading billing…</div>}>
       <BillingContent />
     </Suspense>
   );
