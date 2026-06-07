@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import AdminLayout from '@/components/layout/dashboard-layout';
 import {
-  Users, Package, DollarSign, ShoppingCart, TrendingUp, TrendingDown, PieChart, BarChart3, Activity, Zap, AlertCircle
+  Users, Package, DollarSign, ShoppingCart, TrendingUp, TrendingDown, PieChart, BarChart3, AlertCircle, Zap, Ticket, ArrowRight
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { getNepaliDateString } from '@/lib/time-utils';
@@ -59,6 +60,7 @@ export default function AdminDashboard() {
   };
 
   const profitMargin = stats?.todaySales ? ((calculateProfit() / stats.todaySales) * 100) : 0;
+  const tokenStats = stats?.tokenStats || {};
 
   return (
     <AdminLayout>
@@ -132,23 +134,72 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-          {[
-            ['Tokens Generated', stats?.tokenStats?.generated || 0],
-            ['Digital Tokens', stats?.tokenStats?.digitalTokens || 0],
-            ['Printed Tokens', stats?.tokenStats?.printedTokens || 0],
-            ['Bills Done', stats?.tokenStats?.billsDone || 0],
-            ['Digital Bills', stats?.tokenStats?.digitalBills || 0],
-            ['Printed Bills', stats?.tokenStats?.printedBills || 0],
-            ['Tokens Still Waiting', stats?.tokenStats?.waiting || 0],
-            ['Cancelled / No-show', Number(stats?.tokenStats?.cancelled || 0) + Number(stats?.tokenStats?.noShow || 0)],
-            ['Bills Without Token', stats?.tokenStats?.billsWithoutToken || 0],
-          ].map(([label, value]) => (
-            <div key={label} className={`rounded-xl border p-5 shadow-sm ${label.includes('Waiting') || label.includes('Without') ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-950">{value}</p>
+        {/* Walk-in queue summary — replaces 9 scattered token cards */}
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-amber-50 p-2.5">
+                <Ticket className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Walk-in Queue</h2>
+                <p className="text-sm text-gray-500">Today&apos;s token and billing activity</p>
+              </div>
             </div>
-          ))}
+            <Link
+              href="/dashboard/admin/tokens"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 transition-colors hover:text-amber-800"
+            >
+              Manage tokens
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              {
+                label: 'Waiting now',
+                value: tokenStats.waiting || 0,
+                tone: Number(tokenStats.waiting || 0) > 0 ? 'amber' : 'default',
+              },
+              { label: 'Tokens generated', value: tokenStats.generated || 0, tone: 'default' },
+              { label: 'Converted to bills', value: tokenStats.billsDone || 0, tone: 'default' },
+              {
+                label: 'Cancelled / no-show',
+                value: Number(tokenStats.cancelled || 0) + Number(tokenStats.noShow || 0),
+                tone: 'muted',
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className={`rounded-lg border p-4 ${
+                  item.tone === 'amber'
+                    ? 'border-amber-200 bg-amber-50'
+                    : item.tone === 'muted'
+                      ? 'border-gray-200 bg-gray-50'
+                      : 'border-gray-200 bg-white'
+                }`}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{item.label}</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-950">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-gray-100 pt-4 text-sm md:grid-cols-5">
+            {[
+              ['Digital tokens', tokenStats.digitalTokens || 0],
+              ['Printed tokens', tokenStats.printedTokens || 0],
+              ['Digital bills', tokenStats.digitalBills || 0],
+              ['Printed bills', tokenStats.printedBills || 0],
+              ['Direct bills', tokenStats.billsWithoutToken || 0],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-2 md:flex-col md:items-start">
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="font-semibold text-gray-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
         {/* Charts Row */}
@@ -267,54 +318,29 @@ export default function AdminDashboard() {
 
           {/* Quick Stats */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center space-x-3 mb-6">
+            <div className="flex items-center space-x-3 mb-5">
               <div className="p-2 bg-gray-100 rounded-lg">
                 <Package className="w-5 h-5 text-gray-700" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">Quick Stats</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Business Overview</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Services</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats?.totalProducts || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Available now</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Avg Bill Value</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.avgOrder || 0)}</p>
-                <p className="text-xs text-gray-500 mt-1">Per customer</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Weekly Revenue</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.weeklyRevenue || 0)}</p>
-                <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Monthly Revenue</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.monthlySales || 0)}</p>
-                <p className="text-xs text-gray-500 mt-1">This month</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Customer Retention</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats?.repeatCustomerRate || 0}%</p>
-                <p className="text-xs text-gray-500 mt-1">Repeat customer rate</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Commission Summary</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats?.commissionSummary || 0)}</p>
-                <p className="text-xs text-gray-500 mt-1">Service commission</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Today&apos;s Customers</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats?.todayCustomers || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Served today</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                <p className="text-sm font-medium text-gray-600 mb-1">Today&apos;s Services</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats?.todayServices || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Sold today</p>
-              </div>
-            </div>
+            <dl className="divide-y divide-gray-100">
+              {[
+                ['Weekly revenue', formatCurrency(stats?.weeklyRevenue || 0)],
+                ['Monthly revenue', formatCurrency(stats?.monthlySales || 0)],
+                ['Average bill value', formatCurrency(stats?.avgOrder || 0)],
+                ['Customers served today', stats?.todayCustomers || 0],
+                ['Services sold today', stats?.todayServices || 0],
+                ['Active services', stats?.totalProducts || 0],
+                ['Customer retention', `${stats?.repeatCustomerRate || 0}%`],
+                ['Commission earned', formatCurrency(stats?.commissionSummary || 0)],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <dt className="text-sm text-gray-600">{label}</dt>
+                  <dd className="text-sm font-semibold text-gray-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       </div>
