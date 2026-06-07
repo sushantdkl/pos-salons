@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import DashboardLayout from '@/components/layout/dashboard-layout';
 import { Eye, Plus, Save, Trash2 } from 'lucide-react';
 
 const tabs = ['Hero', 'About', 'Services', 'Packages', 'Staff', 'Gallery', 'Contact', 'SEO'];
@@ -124,15 +123,14 @@ export default function WebsiteCmsPage() {
   const activeSection = useMemo(() => cms?.sections?.[sectionMap[activeTab]], [activeTab, cms]);
 
   if (loading) {
-    return <DashboardLayout><div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading Website CMS...</div></DashboardLayout>;
+    return <div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading Website CMS...</div>;
   }
 
   if (!cms) {
-    return <DashboardLayout><div className="min-h-screen bg-gray-50 p-6 text-red-700">{error || 'Website CMS unavailable.'}</div></DashboardLayout>;
+    return <div className="min-h-screen bg-gray-50 p-6 text-red-700">{error || 'Website CMS unavailable.'}</div>;
   }
 
   return (
-    <DashboardLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -218,7 +216,6 @@ export default function WebsiteCmsPage() {
         {activeTab === 'Staff' ? <StaffEditor cms={cms} updateList={updateList} /> : null}
         {activeTab === 'Gallery' ? <GalleryEditor cms={cms} setCms={setCms} /> : null}
       </div>
-    </DashboardLayout>
   );
 }
 

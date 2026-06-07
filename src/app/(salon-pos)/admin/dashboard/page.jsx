@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import {
   Users, Package, DollarSign, ShoppingCart, TrendingUp, TrendingDown, PieChart, BarChart3, AlertCircle, Zap, Ticket, ArrowRight
 } from 'lucide-react';
@@ -63,7 +62,7 @@ export default function AdminDashboard() {
   const tokenStats = stats?.tokenStats || {};
 
   return (
-    <AdminLayout>
+    <>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-8 py-6">
         <div className="flex items-center justify-between">
@@ -344,6 +343,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 }

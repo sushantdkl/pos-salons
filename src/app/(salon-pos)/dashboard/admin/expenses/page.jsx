@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import DashboardLayout from '@/components/layout/dashboard-layout';
 import { DollarSign, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -174,11 +173,10 @@ export default function AdminExpensesPage() {
   };
 
   if (loading && !data) {
-    return <DashboardLayout><div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading expenses...</div></DashboardLayout>;
+    return <div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading expenses...</div>;
   }
 
   return (
-    <DashboardLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -218,7 +216,6 @@ export default function AdminExpensesPage() {
           <Reports filters={filters} setFilters={setFilters} categories={data?.categories || []} paymentMethods={data?.paymentMethods || []} paymentStatuses={data?.paymentStatuses || []} staff={data?.staff || []} expenses={data?.expenses || []} salaries={data?.salaries || []} />
         ) : null}
       </div>
-    </DashboardLayout>
   );
 }
 

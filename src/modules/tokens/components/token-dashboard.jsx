@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { Clock, Printer, RefreshCw, Ticket, UserCheck, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -238,7 +237,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   const inputClass = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-950 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200';
 
   return (
-    <AdminLayout>
+    <>
       <header className="border-b border-gray-200 bg-white px-6 py-5 sm:px-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -488,6 +487,6 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
           </div>
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 }

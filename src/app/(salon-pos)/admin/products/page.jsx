@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { Clock, Edit, Plus, Search, Scissors, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -126,7 +125,7 @@ export default function ServicesPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -247,6 +246,6 @@ export default function ServicesPage() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

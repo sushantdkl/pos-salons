@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { CreditCard, Loader2, Receipt, Save, Settings, Store } from 'lucide-react';
 
 const emptySalon = {
@@ -83,16 +82,13 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <AdminLayout>
         <div className="flex min-h-screen items-center justify-center bg-gray-50">
           <Loader2 className="h-8 w-8 animate-spin text-gray-900" />
         </div>
-      </AdminLayout>
     );
   }
 
   return (
-    <AdminLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-6">
@@ -184,6 +180,5 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   );
 }

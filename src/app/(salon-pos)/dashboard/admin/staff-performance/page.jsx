@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import DashboardLayout from '@/components/layout/dashboard-layout';
 import { Award, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -33,7 +32,6 @@ export default function AdminStaffPerformancePage() {
   const leaderboard = data?.month || [];
 
   return (
-    <DashboardLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6">
@@ -94,6 +92,5 @@ export default function AdminStaffPerformancePage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
 }

@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import {
   CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
@@ -299,7 +298,7 @@ function BillingContent() {
   const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-950 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200';
 
   return (
-    <AdminLayout>
+    <>
       <header className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -702,7 +701,7 @@ function BillingContent() {
           </aside>
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 }
 

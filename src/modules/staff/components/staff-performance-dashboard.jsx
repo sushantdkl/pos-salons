@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import DashboardLayout from '@/components/layout/dashboard-layout';
 import { Award, CalendarDays, Scissors, TrendingUp, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -36,7 +35,6 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
   const summary = data?.summary || {};
 
   return (
-    <DashboardLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6">
@@ -111,6 +109,5 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
           </section>
         </div>
       </div>
-    </DashboardLayout>
   );
 }

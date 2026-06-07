@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { AlertTriangle, Edit, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
@@ -108,7 +107,7 @@ export default function SalonInventoryPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -246,6 +245,6 @@ export default function SalonInventoryPage() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

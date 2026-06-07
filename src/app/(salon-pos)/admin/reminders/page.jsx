@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { MessageCircle, Search, Send } from 'lucide-react';
 
 export default function RemindersPage() {
@@ -47,7 +46,6 @@ export default function RemindersPage() {
   };
 
   return (
-    <AdminLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-6">
@@ -95,6 +93,5 @@ export default function RemindersPage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   );
 }

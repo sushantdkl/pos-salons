@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { Calendar, Download, TrendingUp, DollarSign, ShoppingCart, Users, Award, Zap, Target, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -49,7 +48,6 @@ export default function ReportsPage() {
   };
 
   return (
-    <AdminLayout>
       <div className="p-8 bg-gray-50 min-h-screen">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
@@ -308,6 +306,5 @@ export default function ReportsPage() {
         )}
         </div>
       </div>
-    </AdminLayout>
   );
 }

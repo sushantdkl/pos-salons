@@ -1,6 +1,5 @@
 'use client';
 
-import AdminLayout from '@/components/layout/dashboard-layout';
 import { CreditCard, MessageCircle, Scissors, Users, Warehouse } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -16,7 +15,6 @@ export default function CashierDashboard() {
   const router = useRouter();
 
   return (
-    <AdminLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-6">
@@ -34,6 +32,5 @@ export default function CashierDashboard() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   );
 }
