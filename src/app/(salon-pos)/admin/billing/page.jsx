@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
   CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
@@ -30,6 +31,8 @@ function BillingContent() {
   const [lastBill, setLastBill] = useState(null);
   const [tokens, setTokens] = useState([]);
   const [selectedToken, setSelectedToken] = useState(null);
+  const [paymentQr, setPaymentQr] = useState(null);
+  const [qrModal, setQrModal] = useState(null);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
   const isWalkIn = !customer.id;
@@ -55,8 +58,14 @@ function BillingContent() {
     }
   };
 
+  const fetchPaymentQr = async () => {
+    const response = await fetch('/api/admin/settings?mode=payment-qr', { headers: headers() });
+    if (response.ok) setPaymentQr((await response.json()).settings || {});
+  };
+
   useEffect(() => {
     fetchData();
+    fetchPaymentQr();
     const draft = localStorage.getItem(draftKey);
     if (draft) {
       try {
@@ -607,6 +616,41 @@ function BillingContent() {
                       className={inputClass}
                     />
                   </div>
+
+                  {paymentMethod === 'online' ? (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                      <p className="mb-2 text-sm font-semibold text-blue-950">Show QR to customer</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {paymentQr?.show_esewa_phonepay_qr !== false ? (
+                          <QrButton
+                            label={paymentQr?.esewa_phonepay_label || 'Esewa / PhonePay QR'}
+                            imageUrl={paymentQr?.esewa_phonepay_qr_url}
+                            onClick={() => setQrModal({
+                              label: paymentQr?.esewa_phonepay_label || 'Esewa / PhonePay QR',
+                              imageUrl: paymentQr?.esewa_phonepay_qr_url,
+                            })}
+                          />
+                        ) : null}
+                        {paymentQr?.show_bank_qr !== false ? (
+                          <QrButton
+                            label={paymentQr?.bank_label || 'Bank QR'}
+                            imageUrl={paymentQr?.bank_qr_url}
+                            detail={[paymentQr?.bank_name, paymentQr?.bank_account_name].filter(Boolean).join(' · ')}
+                            onClick={() => setQrModal({
+                              label: paymentQr?.bank_label || 'Bank QR',
+                              imageUrl: paymentQr?.bank_qr_url,
+                              bankName: paymentQr?.bank_name,
+                              accountName: paymentQr?.bank_account_name,
+                              accountNumber: paymentQr?.bank_account_number,
+                            })}
+                          />
+                        ) : null}
+                      </div>
+                      {!paymentQr?.esewa_phonepay_qr_url && !paymentQr?.bank_qr_url ? (
+                        <p className="mt-2 text-xs font-medium text-blue-800">QR images are not configured yet. Admin can add them in Settings.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <input
                     type="number"
                     min="0"
@@ -701,7 +745,71 @@ function BillingContent() {
           </aside>
         </div>
       </div>
+      {qrModal ? (
+        <PaymentQrModal
+          qr={qrModal}
+          amount={total}
+          onClose={() => setQrModal(null)}
+          onReceived={() => {
+            setAmountPaid(total.toFixed(2));
+            setQrModal(null);
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+function QrButton({ label, imageUrl, detail, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!imageUrl}
+      className="rounded-lg border border-blue-200 bg-white p-3 text-left transition hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <p className="text-sm font-semibold text-gray-950">{label}</p>
+      {detail ? <p className="mt-1 text-xs text-gray-500">{detail}</p> : null}
+      <p className="mt-2 text-xs font-medium text-blue-700">{imageUrl ? 'Open QR' : 'Not configured'}</p>
+    </button>
+  );
+}
+
+function PaymentQrModal({ qr, amount, onClose, onReceived }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-950">{qr.label}</h2>
+            <p className="text-sm text-gray-600">Amount to pay: <strong>{formatCurrency(amount)}</strong></p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex justify-center rounded-lg bg-gray-50 p-4">
+          <div className="relative h-72 w-72">
+            <Image src={qr.imageUrl} alt={qr.label} fill sizes="288px" className="object-contain" unoptimized />
+          </div>
+        </div>
+        {qr.bankName || qr.accountName || qr.accountNumber ? (
+          <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+            {qr.bankName ? <p><strong>Bank:</strong> {qr.bankName}</p> : null}
+            {qr.accountName ? <p><strong>Account:</strong> {qr.accountName}</p> : null}
+            {qr.accountNumber ? <p><strong>Number:</strong> {qr.accountNumber}</p> : null}
+          </div>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+            Close
+          </button>
+          <button type="button" onClick={onReceived} className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700">
+            Payment Received
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

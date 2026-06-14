@@ -117,6 +117,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastToken, setLastToken] = useState(null);
+  const [customerLookup, setCustomerLookup] = useState({ status: '', message: '', customer: null });
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -126,6 +127,40 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   });
 
   const waitingTokens = useMemo(() => tokens.filter((token) => token.status === 'WAITING'), [tokens]);
+
+  const lookupCustomerByPhone = async (phoneValue = form.customer_phone) => {
+    const digits = String(phoneValue || '').replace(/\D/g, '');
+    if (digits.length < 6) {
+      setCustomerLookup({ status: '', message: '', customer: null });
+      return;
+    }
+    setCustomerLookup({ status: 'loading', message: 'Checking customer...', customer: null });
+    const params = new URLSearchParams({ mode: 'customer_lookup', phone: phoneValue });
+    const response = await fetch(`/api/admin/tokens?${params.toString()}`, { headers: headers() });
+    const data = await response.json();
+    if (!response.ok) {
+      setCustomerLookup({ status: 'error', message: data.error || 'Could not check customer', customer: null });
+      return;
+    }
+    if (data.customer) {
+      const lastVisit = data.customer.lastVisit ? new Date(data.customer.lastVisit).toLocaleDateString() : 'No completed bills yet';
+      setForm((current) => ({
+        ...current,
+        customer_name: current.customer_name || data.customer.name || '',
+      }));
+      setCustomerLookup({
+        status: 'found',
+        message: `Customer found: ${data.customer.name}. Total visits: ${data.customer.totalVisits || 0}. Last visit: ${lastVisit}.`,
+        customer: data.customer,
+      });
+    } else {
+      setCustomerLookup({
+        status: 'new',
+        message: 'New customer will be saved automatically after token is generated.',
+        customer: null,
+      });
+    }
+  };
 
   const fetchTokens = async () => {
     setLoading(true);
@@ -165,6 +200,16 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     fetchAnalytics();
   }, [date, status]);
 
+  useEffect(() => {
+    const digits = String(form.customer_phone || '').replace(/\D/g, '');
+    if (digits.length < 6) {
+      setCustomerLookup({ status: '', message: '', customer: null });
+      return undefined;
+    }
+    const timer = setTimeout(() => lookupCustomerByPhone(form.customer_phone), 500);
+    return () => clearTimeout(timer);
+  }, [form.customer_phone]);
+
   const createToken = async (shouldPrint = false) => {
     setError('');
     if (!form.service_id) {
@@ -185,6 +230,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     }
     setLastToken(data.token);
     setForm({ customer_name: '', customer_phone: '', service_id: '', assigned_staff_id: '', notes: '' });
+    setCustomerLookup({ status: '', message: '', customer: null });
     if (shouldPrint) printToken(data.token, printWindow);
     fetchTokens();
     fetchAnalytics();
@@ -290,9 +336,23 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                   <input
                     value={form.customer_phone}
                     onChange={(event) => setForm({ ...form, customer_phone: event.target.value })}
+                    onBlur={() => lookupCustomerByPhone(form.customer_phone)}
                     placeholder="Phone (optional)"
                     className={inputClass}
                   />
+                  {customerLookup.message ? (
+                    <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                      customerLookup.status === 'found'
+                        ? 'border-green-200 bg-green-50 text-green-800'
+                        : customerLookup.status === 'new'
+                          ? 'border-amber-200 bg-amber-50 text-amber-800'
+                          : customerLookup.status === 'error'
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`}>
+                      {customerLookup.message}
+                    </div>
+                  ) : null}
                   <select
                     value={form.service_id}
                     onChange={(event) => setForm({ ...form, service_id: event.target.value })}

@@ -77,6 +77,37 @@ function mapToken(token) {
   };
 }
 
+function normalizePhone(value) {
+  return cleanText(value, '').replace(/\s+/g, ' ').trim();
+}
+
+async function customerLookup(db, phone) {
+  const customerPhone = normalizePhone(phone);
+  if (!customerPhone || customerPhone.replace(/\D/g, '').length < 6) return null;
+  return db.get(`
+    SELECT c.*,
+           MAX(COALESCE(b.transaction_time, b.created_at)) as last_visit
+    FROM customers c
+    LEFT JOIN salon_bills b ON b.customer_id = c.id AND b.status = 'paid'
+    WHERE c.phone = ?
+    GROUP BY c.id
+  `, [customerPhone]);
+}
+
+async function findOrCreateCustomerForToken(tx, { name, phone }) {
+  const customerPhone = normalizePhone(phone);
+  const customerName = cleanText(name, '');
+  if (!customerPhone) return null;
+  const existing = await tx.get('SELECT * FROM customers WHERE phone = ?', [customerPhone]);
+  if (existing) return existing;
+  const fallbackName = customerName || `Customer ${customerPhone}`;
+  const result = await tx.run(
+    'INSERT INTO customers (name, phone, notes) VALUES (?, ?, ?)',
+    [fallbackName, customerPhone, 'Created from walk-in token']
+  );
+  return tx.get('SELECT * FROM customers WHERE id = ?', [result.lastInsertRowid]);
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
@@ -87,6 +118,21 @@ export async function GET(request) {
     const mode = searchParams.get('mode') || 'queue';
     const status = searchParams.get('status') || '';
     const staffId = Number(searchParams.get('staffId') || 0);
+
+    if (mode === 'customer_lookup') {
+      await requireRole(request, db, ['admin', 'cashier']);
+      const customer = await customerLookup(db, searchParams.get('phone'));
+      return NextResponse.json({
+        customer: customer ? {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          totalVisits: Number(customer.total_visits || 0),
+          totalSpending: Number(customer.total_spent || 0),
+          lastVisit: customer.last_visit || null,
+        } : null,
+      });
+    }
 
     if (mode === 'analytics') {
       await requireRole(request, db, 'admin');
@@ -197,12 +243,16 @@ export async function POST(request) {
       }
 
       let customerId = Number(data.customer_id || 0) || null;
-      const customerName = cleanText(data.customer_name, null);
-      const customerPhone = cleanText(data.customer_phone, null);
-      if (!customerId && customerPhone) {
-        const existing = await tx.get('SELECT id FROM customers WHERE phone = ?', [customerPhone]);
-        if (existing) customerId = existing.id;
+      const enteredCustomerName = cleanText(data.customer_name, '');
+      const customerPhone = normalizePhone(data.customer_phone) || null;
+      let tokenCustomer = null;
+      if (!customerId) {
+        tokenCustomer = await findOrCreateCustomerForToken(tx, { name: enteredCustomerName, phone: customerPhone });
+        customerId = tokenCustomer?.id || null;
+      } else {
+        tokenCustomer = await tx.get('SELECT * FROM customers WHERE id = ?', [customerId]);
       }
+      const customerName = enteredCustomerName || tokenCustomer?.name || null;
 
       const queue = await calculateQueue(tx, staffId);
       const tokenNumber = await nextTokenNumber(tx);

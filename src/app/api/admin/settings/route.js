@@ -15,6 +15,15 @@ const DEFAULT_KEYS = [
   'currency_symbol',
   'bank_qr_image',
   'esewa_qr_image',
+  'esewa_phonepay_qr_url',
+  'bank_qr_url',
+  'esewa_phonepay_label',
+  'bank_label',
+  'bank_name',
+  'bank_account_name',
+  'bank_account_number',
+  'show_esewa_phonepay_qr',
+  'show_bank_qr',
 ];
 
 async function seedDefaultsIfEmpty(db) {
@@ -54,6 +63,15 @@ async function seedDefaultsIfEmpty(db) {
     { key: 'currency_symbol', value: 'Rs' },
     { key: 'bank_qr_image', value: '' },
     { key: 'esewa_qr_image', value: '' },
+    { key: 'esewa_phonepay_qr_url', value: '' },
+    { key: 'bank_qr_url', value: '' },
+    { key: 'esewa_phonepay_label', value: 'Esewa / PhonePay QR' },
+    { key: 'bank_label', value: 'Bank QR' },
+    { key: 'bank_name', value: '' },
+    { key: 'bank_account_name', value: '' },
+    { key: 'bank_account_number', value: '' },
+    { key: 'show_esewa_phonepay_qr', value: 'true' },
+    { key: 'show_bank_qr', value: 'true' },
   ];
 
   for (const setting of defaults) {
@@ -67,7 +85,9 @@ async function seedDefaultsIfEmpty(db) {
 export async function GET(request) {
   try {
     const db = Database.getInstance();
-    await requireRole(request, db, 'admin');
+    const { searchParams } = new URL(request.url);
+    const mode = searchParams.get('mode') || '';
+    await requireRole(request, db, mode === 'payment-qr' ? ['admin', 'cashier'] : 'admin');
     await seedDefaultsIfEmpty(db);
 
     const settingsArray = await db.all('SELECT setting_key, setting_value FROM system_settings');
@@ -80,6 +100,22 @@ export async function GET(request) {
       }
       settings[key] = value;
     });
+
+    if (mode === 'payment-qr') {
+      return NextResponse.json({
+        settings: {
+          esewa_phonepay_qr_url: settings.esewa_phonepay_qr_url || settings.esewa_qr_image || '',
+          bank_qr_url: settings.bank_qr_url || settings.bank_qr_image || '',
+          esewa_phonepay_label: settings.esewa_phonepay_label || 'Esewa / PhonePay QR',
+          bank_label: settings.bank_label || 'Bank QR',
+          bank_name: settings.bank_name || '',
+          bank_account_name: settings.bank_account_name || '',
+          bank_account_number: settings.bank_account_number || '',
+          show_esewa_phonepay_qr: settings.show_esewa_phonepay_qr !== 'false',
+          show_bank_qr: settings.show_bank_qr !== 'false',
+        },
+      });
+    }
 
     return NextResponse.json({ settings });
   } catch (error) {

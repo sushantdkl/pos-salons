@@ -8,7 +8,7 @@ const ALLOWED_TYPES = new Map([
   ['image/webp', '.webp'],
 ]);
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_FOLDERS = new Set(['gallery', 'services', 'staff', 'packages', 'banners', 'seo']);
+const ALLOWED_FOLDERS = new Set(['gallery', 'services', 'staff', 'packages', 'banners', 'seo', 'payment-qr']);
 
 function uploadRoot() {
   return process.env.UPLOAD_DIR || path.join('/tmp', 'website-assets');
