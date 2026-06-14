@@ -12,6 +12,35 @@ function money(value) {
   return numberValue(value).toFixed(2);
 }
 
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename, rows) {
+  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  const dataBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
@@ -47,13 +76,44 @@ export default function ReportsPage() {
   }, [period]);
 
   const exportReport = () => {
-    const dataStr = JSON.stringify(reports, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `report-${period}-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
+    const transactions = reports?.transactions || [];
+    const paymentRows = Object.entries(reports?.paymentMethods || {});
+    const topItems = reports?.topItems || [];
+    const rows = [
+      ['Report Period', period],
+      ['Exported At', new Date().toLocaleString()],
+      [],
+      ['Summary'],
+      ['Total Sales', money(reports?.totalSales)],
+      ['Total Bills', reports?.totalBills || 0],
+      ['Average Bill Value', money(reports?.avgBillValue)],
+      ['Unique Customers', reports?.uniqueCustomers || 0],
+      [],
+      ['Payment Methods'],
+      ['Payment Method', 'Transaction Count', 'Amount'],
+      ...paymentRows.map(([method, data]) => [method, data.count || 0, money(data.amount)]),
+      [],
+      ['Top Services'],
+      ['Service', 'Quantity', 'Revenue'],
+      ...topItems.map((item) => [item.name, item.quantity || 0, money(item.revenue)]),
+      [],
+      ['Transactions'],
+      ['Date', 'Invoice', 'Customer', 'Phone', 'Payment Method', 'Subtotal', 'Discount', 'Tax', 'Service Charge', 'Grand Total', 'Amount Paid'],
+      ...transactions.map((transaction) => [
+        formatDateTime(transaction.transactionDate),
+        transaction.billNumber,
+        transaction.customerName,
+        transaction.customerPhone,
+        transaction.paymentMethod,
+        money(transaction.subtotal),
+        money(transaction.discountAmount),
+        money(transaction.tax),
+        money(transaction.serviceCharge),
+        money(transaction.grandTotal),
+        money(transaction.amountPaid),
+      ]),
+    ];
+    downloadCsv(`report-${period}-${new Date().toISOString().split('T')[0]}.csv`, rows);
   };
 
   return (
@@ -69,7 +129,7 @@ export default function ReportsPage() {
               className="flex items-center space-x-2 px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
             >
               <Download className="w-4 h-4" />
-              <span>Export</span>
+              <span>Export CSV</span>
             </button>
           </div>
 
@@ -213,6 +273,54 @@ export default function ReportsPage() {
                     <p className="text-sm mt-1">Payments will appear here once transactions are recorded</p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Transaction Details */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="p-2 bg-gray-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-gray-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Transactions</h2>
+                  <p className="text-sm text-gray-500">Invoices included in the selected report period with actual transaction dates.</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Invoice</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Payment</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(reports.transactions || []).length ? (
+                      reports.transactions.map((transaction) => (
+                        <tr key={transaction.id || transaction.billNumber} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDateTime(transaction.transactionDate)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{transaction.billNumber || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            <div className="font-medium text-gray-900">{transaction.customerName || 'Walk-in Customer'}</div>
+                            {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
+                          </td>
+                          <td className="px-4 py-3 text-sm capitalize text-gray-700">{transaction.paymentMethod || '-'}</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Rs {money(transaction.grandTotal)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                          No transactions found for this period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 

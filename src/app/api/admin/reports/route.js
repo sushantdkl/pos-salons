@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { BILL_DATE_EXPR_B, periodDateFilter, reportsBillDateFilter } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, periodDateFilter, reportsBillDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 function numeric(value) {
@@ -78,6 +78,25 @@ export async function GET(request) {
       LIMIT 10
     `, params);
 
+    const transactions = await db.all(`
+      SELECT id,
+             bill_number,
+             customer_name,
+             customer_phone,
+             payment_method,
+             subtotal,
+             discount_amount,
+             tax,
+             service_charge,
+             grand_total,
+             amount_paid,
+             ${BILL_DATE_EXPR} as transaction_date
+      FROM salon_bills
+      WHERE ${clause} AND status = 'paid'
+      ORDER BY ${BILL_DATE_EXPR} DESC, id DESC
+      LIMIT 500
+    `, params);
+
     const lowStockProducts = await db.all(`
       SELECT name, current_stock, low_stock_threshold
       FROM salon_products
@@ -119,6 +138,20 @@ export async function GET(request) {
       topServices: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
       topItems: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
       productSales: productSales.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
+      transactions: transactions.map((transaction) => ({
+        id: transaction.id,
+        billNumber: transaction.bill_number,
+        customerName: transaction.customer_name || 'Walk-in Customer',
+        customerPhone: transaction.customer_phone || '',
+        paymentMethod: transaction.payment_method || '',
+        subtotal: numeric(transaction.subtotal),
+        discountAmount: numeric(transaction.discount_amount),
+        tax: numeric(transaction.tax),
+        serviceCharge: numeric(transaction.service_charge),
+        grandTotal: numeric(transaction.grand_total),
+        amountPaid: numeric(transaction.amount_paid),
+        transactionDate: transaction.transaction_date,
+      })),
       bestStaff: bestStaff.map((staff) => ({
         ...staff,
         services: Number(staff.services || 0),
