@@ -11,7 +11,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_FOLDERS = new Set(['gallery', 'services', 'staff', 'packages', 'banners', 'seo', 'payment-qr']);
 
 function uploadRoot() {
-  return process.env.UPLOAD_DIR || path.join('/tmp', 'website-assets');
+  return process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads', 'website-assets');
 }
 
 function uploadBaseUrl() {
@@ -26,6 +26,27 @@ function safeFolder(value) {
     throw error;
   }
   return folder;
+}
+
+export function isAllowedUploadFolder(value) {
+  return ALLOWED_FOLDERS.has(String(value || '').toLowerCase().trim());
+}
+
+export function resolveUploadDirectory(folder = '') {
+  const root = uploadRoot();
+  if (!folder) return root;
+  const safeUploadFolder = safeFolder(folder);
+  const targetDirectory = path.join(root, safeUploadFolder);
+  const relativeTarget = path.relative(root, targetDirectory);
+  if (relativeTarget.startsWith('..') || path.isAbsolute(relativeTarget)) fail('Invalid upload path');
+  return targetDirectory;
+}
+
+async function ensureUploadFolders(root) {
+  await mkdir(root, { recursive: true });
+  await Promise.all(
+    Array.from(ALLOWED_FOLDERS).map((folder) => mkdir(path.join(root, folder), { recursive: true }))
+  );
 }
 
 function safeBaseName(name) {
@@ -54,17 +75,25 @@ export async function uploadWebsiteImage({ file, folder }) {
   const extension = ALLOWED_TYPES.get(mimeType);
   const filename = `${Date.now()}-${randomUUID()}-${safeBaseName(file.name)}${extension}`;
   const root = uploadRoot();
-  const targetDirectory = path.join(root, safeUploadFolder);
-  const relativeTarget = path.relative(root, targetDirectory);
-  if (relativeTarget.startsWith('..') || path.isAbsolute(relativeTarget)) fail('Invalid upload path');
+  await ensureUploadFolders(root);
+  const targetDirectory = resolveUploadDirectory(safeUploadFolder);
 
-  await mkdir(targetDirectory, { recursive: true });
   const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(targetDirectory, filename), bytes, { flag: 'wx' });
+  const filePath = path.join(targetDirectory, filename);
+  await writeFile(filePath, bytes, { flag: 'wx' });
+  const imageUrl = `${uploadBaseUrl()}/${safeUploadFolder}/${filename}`;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('UPLOAD_DIR:', root);
+    console.log('TARGET_DIR:', targetDirectory);
+    console.log('FILE_PATH:', filePath);
+    console.log('IMAGE_URL:', imageUrl);
+  }
 
   return {
-    url: `${uploadBaseUrl()}/${safeUploadFolder}/${filename}`,
+    url: imageUrl,
     filename,
+    filePath,
     folder: safeUploadFolder,
     mimeType,
     size: file.size,
