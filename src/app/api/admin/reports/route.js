@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { reportsBillDateFilter } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR_B, periodDateFilter, reportsBillDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 function numeric(value) {
@@ -40,7 +40,12 @@ export async function GET(request) {
       paymentRows.map((row) => [row.payment_method, { count: Number(row.count || 0), amount: numeric(row.amount) }])
     );
 
-    const itemClause = clause.replaceAll('created_at', 'b.created_at');
+    const itemClause = periodDateFilter(
+      period,
+      searchParams.get('startDate'),
+      searchParams.get('endDate'),
+      BILL_DATE_EXPR_B
+    ).clause;
     const topServices = await db.all(`
       SELECT i.name, COUNT(*)::int as quantity, COALESCE(SUM(i.subtotal), 0) as revenue
       FROM salon_bill_items i

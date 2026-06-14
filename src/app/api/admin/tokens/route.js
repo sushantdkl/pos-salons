@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
+import { BILL_DATE_EXPR } from '@/lib/db/postgres-dates';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 export const runtime = 'nodejs';
@@ -108,8 +109,8 @@ export async function GET(request) {
                SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END)::int as directBills,
                SUM(CASE WHEN token_id IS NOT NULL THEN 1 ELSE 0 END)::int as tokenBills
         FROM salon_bills
-        WHERE created_at::date = ?::date AND status = 'paid'
-      `, [date]);
+        WHERE (${BILL_DATE_EXPR}) >= ?::date AND (${BILL_DATE_EXPR}) < (?::date + INTERVAL '1 day') AND status = 'paid'
+      `, [date, date]);
       const statusRows = await db.all(`
         SELECT status, COUNT(*)::int as count
         FROM walk_in_tokens

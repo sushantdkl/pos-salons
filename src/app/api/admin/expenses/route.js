@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
+import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, currentWeekStartSql } from '@/lib/db/postgres-dates';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 export const runtime = 'nodejs';
@@ -118,7 +119,7 @@ async function getStaffMonthMetrics(db, staffId, month) {
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
-      AND b.created_at::date >= ?::date AND b.created_at::date < ?::date
+      AND (${BILL_DATE_EXPR_B}) >= ?::date AND (${BILL_DATE_EXPR_B}) < ?::date
   `, [staffId, monthStart(month), nextMonthStart(month)]);
 }
 
@@ -217,17 +218,19 @@ async function getSummary(db) {
   const expenseRow = await db.get(`
     SELECT
       COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE THEN amount ELSE 0 END), 0) as today,
-      COALESCE(SUM(CASE WHEN expense_date >= CURRENT_DATE - INTERVAL '6 days' THEN amount ELSE 0 END), 0) as week,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date THEN amount ELSE 0 END), 0) as month,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') THEN amount ELSE 0 END), 0) as otherExpenses
+      COALESCE(SUM(CASE WHEN expense_date >= ${currentWeekStartSql()} AND expense_date < ${currentWeekStartSql()} + INTERVAL '7 days' THEN amount ELSE 0 END), 0) as week,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date THEN amount ELSE 0 END), 0) as month,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') THEN amount ELSE 0 END), 0) as otherExpenses
     FROM expenses WHERE deleted_at IS NULL
   `);
   const revenueRow = await db.get(`
     SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills
-    WHERE status = 'paid' AND created_at::date >= date_trunc('month', CURRENT_DATE)::date
+    WHERE status = 'paid'
+      AND (${BILL_DATE_EXPR}) >= date_trunc('month', CURRENT_DATE)
+      AND (${BILL_DATE_EXPR}) < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
   `);
   const pendingRow = await db.get(`
     SELECT COALESCE(SUM(remaining_balance), 0) as total FROM salary_payments

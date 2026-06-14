@@ -1,4 +1,4 @@
-import { STAFF_PERF_PERIODS } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR_B, STAFF_PERF_PERIODS } from '@/lib/db/postgres-dates';
 
 function emptyMetric() {
   return {
@@ -31,7 +31,7 @@ export async function getStaffPerformance(db, staffId) {
     SELECT b.customer_name as customerName,
            i.name as serviceName,
            b.bill_number as invoice,
-           b.created_at as date,
+           ${BILL_DATE_EXPR_B} as date,
            i.subtotal as revenue,
            i.commission_amount as commission
     FROM salon_bill_items i
@@ -39,12 +39,12 @@ export async function getStaffPerformance(db, staffId) {
     WHERE i.item_type = 'service'
       AND i.staff_id = ?
       AND b.status = 'paid'
-    ORDER BY b.created_at DESC
+    ORDER BY ${BILL_DATE_EXPR_B} DESC
     LIMIT 12
   `, [staffId]);
 
   const daysRow = await db.get(`
-    SELECT COUNT(DISTINCT b.created_at::date)::int as count
+    SELECT COUNT(DISTINCT (${BILL_DATE_EXPR_B})::date)::int as count
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
@@ -67,10 +67,10 @@ export async function getStaffLeaderboard(db, period = 'month') {
     SELECT u.id,
            COALESCE(NULLIF(sp.display_name, ''), u.full_name) as name,
            sp.salon_role as role,
-           COUNT(i.id)::int as servicesCompleted,
+           COUNT(b.id)::int as servicesCompleted,
            COUNT(DISTINCT b.customer_id)::int as customersServed,
-           COALESCE(SUM(i.subtotal), 0) as revenue,
-           COALESCE(SUM(i.commission_amount), 0) as commission
+           COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN i.subtotal ELSE 0 END), 0) as revenue,
+           COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN i.commission_amount ELSE 0 END), 0) as commission
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
     LEFT JOIN salon_bill_items i ON i.staff_id = u.id AND i.item_type = 'service'

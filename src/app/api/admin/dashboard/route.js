@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { billDateDaysAgo } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+
+function localDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export async function GET(request) {
   try {
@@ -9,29 +16,48 @@ export async function GET(request) {
     await ensureSalonSchema();
     await requireRole(request, db, 'admin');
 
+    const todayFilter = periodDateFilter('today');
+    const weekFilter = periodDateFilter('week');
+    const monthFilter = periodDateFilter('month');
+    const itemTodayFilter = periodDateFilter('today', null, null, BILL_DATE_EXPR_B);
+    const itemMonthFilter = periodDateFilter('month', null, null, BILL_DATE_EXPR_B);
     const todaySales = await db.get(
-      "SELECT COALESCE(SUM(grand_total), 0) as total, COUNT(*)::int as count FROM salon_bills WHERE created_at::date = CURRENT_DATE AND status = 'paid'"
+      `SELECT COALESCE(SUM(grand_total), 0) as total, COUNT(*)::int as count FROM salon_bills WHERE ${todayFilter.clause} AND status = 'paid'`,
+      todayFilter.params
     );
     const yesterdaySales = await db.get(
-      "SELECT COALESCE(SUM(grand_total), 0) as total, COUNT(*)::int as count FROM salon_bills WHERE created_at::date = CURRENT_DATE - INTERVAL '1 day' AND status = 'paid'"
+      `SELECT COALESCE(SUM(grand_total), 0) as total, COUNT(*)::int as count FROM salon_bills WHERE (${BILL_DATE_EXPR}) >= CURRENT_DATE - INTERVAL '1 day' AND (${BILL_DATE_EXPR}) < CURRENT_DATE AND status = 'paid'`
     );
     const monthlySales = await db.get(
-      "SELECT COALESCE(SUM(grand_total), 0) as total, COALESCE(AVG(grand_total), 0) as avg FROM salon_bills WHERE created_at::date >= CURRENT_DATE - INTERVAL '29 days' AND status = 'paid'"
+      `SELECT COALESCE(SUM(grand_total), 0) as total, COALESCE(AVG(grand_total), 0) as avg FROM salon_bills WHERE ${monthFilter.clause} AND status = 'paid'`,
+      monthFilter.params
     );
     const lastMonthSales = await db.get(
-      "SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE created_at::date >= CURRENT_DATE - INTERVAL '59 days' AND created_at::date < CURRENT_DATE - INTERVAL '30 days' AND status = 'paid'"
+      `SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills
+       WHERE (${BILL_DATE_EXPR}) >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+         AND (${BILL_DATE_EXPR}) < date_trunc('month', CURRENT_DATE)
+         AND status = 'paid'`
     );
     const growthPercent = lastMonthSales.total > 0
       ? Math.round(((monthlySales.total - lastMonthSales.total) / lastMonthSales.total) * 100)
       : 0;
 
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    weekStart.setHours(0, 0, 0, 0);
     const weeklySales = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      const dateString = localDateString(date);
       const row = await db.get(
-        `SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE ${billDateDaysAgo(i)} AND status = 'paid'`
+        `SELECT COALESCE(SUM(grand_total), 0) as total
+         FROM salon_bills
+         WHERE (${BILL_DATE_EXPR}) >= ?::date
+           AND (${BILL_DATE_EXPR}) < (?::date + INTERVAL '1 day')
+           AND status = 'paid'`,
+        [dateString, dateString]
       );
-      const date = new Date();
-      date.setDate(date.getDate() - i);
       weeklySales.push({
         day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()],
         sales: Number(row.total || 0),
@@ -39,11 +65,12 @@ export async function GET(request) {
     }
 
     const revenueSources = await db.all(`
-      SELECT item_type as type, COALESCE(SUM(subtotal), 0) as amount
-      FROM salon_bill_items
-      WHERE created_at::date >= CURRENT_DATE - INTERVAL '29 days'
+      SELECT i.item_type as type, COALESCE(SUM(i.subtotal), 0) as amount
+      FROM salon_bill_items i
+      JOIN salon_bills b ON b.id = i.bill_id
+      WHERE ${itemMonthFilter.clause} AND b.status = 'paid'
       GROUP BY item_type
-    `);
+    `, itemMonthFilter.params);
     const totalRevenue = revenueSources.reduce((sum, row) => sum + Number(row.amount), 0);
 
     const lowStockItems = await db.all(`
@@ -58,13 +85,19 @@ export async function GET(request) {
     const totalStaffRow = await db.get('SELECT COUNT(*)::int as count FROM users WHERE is_active = TRUE');
     const totalCustomersRow = await db.get('SELECT COUNT(*)::int as count FROM customers');
     const todayCustomersRow = await db.get(
-      "SELECT COUNT(DISTINCT customer_id)::int as count FROM salon_bills WHERE created_at::date = CURRENT_DATE AND status = 'paid' AND customer_id IS NOT NULL"
+      `SELECT COUNT(DISTINCT customer_id)::int as count FROM salon_bills WHERE ${todayFilter.clause} AND status = 'paid' AND customer_id IS NOT NULL`,
+      todayFilter.params
     );
     const todayServicesRow = await db.get(
-      "SELECT COUNT(*)::int as count FROM salon_bill_items WHERE item_type = 'service' AND created_at::date = CURRENT_DATE"
+      `SELECT COUNT(*)::int as count
+       FROM salon_bill_items i
+       JOIN salon_bills b ON b.id = i.bill_id
+       WHERE i.item_type = 'service' AND b.status = 'paid' AND ${itemTodayFilter.clause}`,
+      itemTodayFilter.params
     );
     const weeklyRevenueRow = await db.get(
-      "SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE created_at::date >= CURRENT_DATE - INTERVAL '6 days' AND status = 'paid'"
+      `SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE ${weekFilter.clause} AND status = 'paid'`,
+      weekFilter.params
     );
     const topCustomers = await db.all(`
       SELECT customer_name as name, COALESCE(SUM(grand_total), 0) as total_spent, COUNT(*)::int as visits
@@ -75,25 +108,31 @@ export async function GET(request) {
       LIMIT 5
     `);
     const topServices = await db.all(`
-      SELECT name, COUNT(*)::int as count, COALESCE(SUM(subtotal), 0) as revenue
-      FROM salon_bill_items
-      WHERE item_type = 'service'
+      SELECT i.name, COUNT(*)::int as count, COALESCE(SUM(i.subtotal), 0) as revenue
+      FROM salon_bill_items i
+      JOIN salon_bills b ON b.id = i.bill_id
+      WHERE i.item_type = 'service' AND b.status = 'paid' AND ${itemMonthFilter.clause}
       GROUP BY name
       ORDER BY revenue DESC
       LIMIT 5
-    `);
+    `, itemMonthFilter.params);
     const topStaff = await db.all(`
       SELECT COALESCE(sp.display_name, u.full_name) as name, sp.salon_role, COUNT(sbi.id)::int as services, COALESCE(SUM(sbi.subtotal), 0) as revenue
       FROM salon_bill_items sbi
+      JOIN salon_bills b ON b.id = sbi.bill_id
       JOIN users u ON u.id = sbi.staff_id
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE sbi.item_type = 'service'
+      WHERE sbi.item_type = 'service' AND b.status = 'paid' AND ${itemMonthFilter.clause}
       GROUP BY u.id, sp.display_name, u.full_name, sp.salon_role
       ORDER BY revenue DESC
       LIMIT 5
-    `);
+    `, itemMonthFilter.params);
     const commissionRow = await db.get(
-      "SELECT COALESCE(SUM(commission_amount), 0) as total FROM salon_bill_items WHERE item_type = 'service'"
+      `SELECT COALESCE(SUM(commission_amount), 0) as total
+       FROM salon_bill_items i
+       JOIN salon_bills b ON b.id = i.bill_id
+       WHERE i.item_type = 'service' AND b.status = 'paid' AND ${itemMonthFilter.clause}`,
+      itemMonthFilter.params
     );
     const repeatCustomersRow = await db.get(
       'SELECT COUNT(*)::int as count FROM customers WHERE COALESCE(total_visits, 0) >= 2'
@@ -121,8 +160,8 @@ export async function GET(request) {
         SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedBills,
         SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END)::int as billsWithoutToken
       FROM salon_bills
-      WHERE created_at::date = CURRENT_DATE AND status = 'paid'
-    `);
+      WHERE ${todayFilter.clause} AND status = 'paid'
+    `, todayFilter.params);
 
     return NextResponse.json({
       stats: {
