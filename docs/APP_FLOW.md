@@ -197,16 +197,22 @@ Salary controls:
 
 1. Admin opens `/dashboard/admin/website`.
 2. Admin edits Hero, About, Services, Packages, Staff, Gallery, Contact, and SEO tabs.
-3. Admin saves CMS changes through the admin-only website CMS API.
-4. Server validates/sanitizes input, stores CMS rows, and writes an audit log.
-5. Public website routes read CMS data on request and merge it with safe fallback content.
-6. Public pages stay accessible even if CMS data is empty.
+3. Admin uploads images from device where needed.
+4. Upload API validates image type/size/folder, stores the file in runtime cPanel upload storage, and returns a public image URL.
+5. Admin adds, edits, hides, or deletes website services, packages, staff cards, and gallery items.
+6. New repeatable CMS forms appear at the top of their section.
+7. Admin saves CMS changes through the admin-only website CMS API.
+8. Server validates/sanitizes input, stores CMS rows, and writes an audit log.
+9. Public website routes read CMS data on request and merge it with safe fallback content.
+10. Public pages stay accessible even if CMS data is empty.
 
 Security rules:
 
 - Only Admin can access Website CMS routes and APIs.
 - Cashier, Barber, Stylist, and Beautician receive access denied for CMS APIs.
 - Public staff cards never expose PINs, salary, commission, phone, or performance data.
+- Website-only services, packages, and staff are separated from POS billing data.
+- Runtime uploaded images are served from `NEXT_PUBLIC_UPLOAD_BASE_URL`; server paths from `UPLOAD_DIR` are never exposed.
 - Google Map embed data accepts Google Maps embed URLs only.
 
 ## Navigation Flow

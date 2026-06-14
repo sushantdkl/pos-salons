@@ -11,7 +11,7 @@ export async function GET(request) {
     const db = Database.getInstance();
     await ensureSalonSchema();
     await requireRole(request, db, 'admin');
-    return NextResponse.json(await getPublicWebsiteData());
+    return NextResponse.json(await getPublicWebsiteData({ includeHidden: true }));
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to load website CMS' }, { status: error.status || 500 });
   }

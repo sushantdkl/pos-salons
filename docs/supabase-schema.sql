@@ -131,6 +131,40 @@ CREATE TABLE IF NOT EXISTS website_gallery_images (
   updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS website_services (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT DEFAULT 'Other',
+  price NUMERIC DEFAULT 0 CHECK (price >= 0),
+  price_label TEXT,
+  duration_minutes INTEGER DEFAULT 30 CHECK (duration_minutes > 0),
+  description TEXT,
+  image_url TEXT,
+  is_package BOOLEAN DEFAULT FALSE,
+  package_items TEXT,
+  show_on_website BOOLEAN DEFAULT TRUE,
+  featured_on_website BOOLEAN DEFAULT FALSE,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS website_staff_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  role_title TEXT,
+  bio TEXT,
+  specialties TEXT,
+  image_url TEXT,
+  show_on_website BOOLEAN DEFAULT TRUE,
+  featured_on_website BOOLEAN DEFAULT FALSE,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS salon_products (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -317,6 +351,8 @@ ALTER TABLE salary_payments
 
 CREATE INDEX IF NOT EXISTS idx_website_content_section ON website_content(section_key);
 CREATE INDEX IF NOT EXISTS idx_website_gallery_visible_order ON website_gallery_images(is_visible, sort_order);
+CREATE INDEX IF NOT EXISTS idx_website_services_visible_order ON website_services(show_on_website, display_order);
+CREATE INDEX IF NOT EXISTS idx_website_staff_visible_order ON website_staff_profiles(show_on_website, display_order);
 CREATE INDEX IF NOT EXISTS idx_tokens_date ON walk_in_tokens(token_date);
 CREATE INDEX IF NOT EXISTS idx_tokens_number ON walk_in_tokens(token_number);
 CREATE INDEX IF NOT EXISTS idx_tokens_status ON walk_in_tokens(status);

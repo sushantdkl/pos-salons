@@ -579,3 +579,81 @@ Additional public website fields:
 - `staff_profiles.website_photo`
 
 These fields control public website presentation only. Private staff PINs, salary, commission, phone, and performance data are not exposed publicly.
+
+## WebsiteService
+
+Physical table: `website_services`.
+
+Purpose:
+
+- Stores public website service and package cards managed from Website CMS.
+- Keeps marketing website content separate from POS billing service records.
+
+Fields:
+
+- `id`: integer primary key.
+- `name`: required public service or package name.
+- `category`: public category.
+- `price`: numeric public price.
+- `price_label`: optional display label such as "Starting 500+".
+- `duration_minutes`: optional display duration.
+- `description`: public description.
+- `image_url`: public CMS uploaded image URL.
+- `is_package`: boolean.
+- `package_items`: comma-separated package includes.
+- `show_on_website`: boolean visibility flag.
+- `featured_on_website`: boolean featured flag.
+- `display_order`: integer ordering.
+- `created_at`, `updated_at`: audit timestamps.
+- `updated_by`: admin user ID.
+
+Validation:
+
+- Admin-only create/update/delete through Website CMS.
+- Image URL must be a safe public URL or upload URL.
+- Hidden records must not render on public pages.
+
+## WebsiteStaffProfile
+
+Physical table: `website_staff_profiles`.
+
+Purpose:
+
+- Stores public staff cards managed from Website CMS.
+- Avoids exposing private POS user credentials, PINs, salary, commission, phone, or performance data.
+
+Fields:
+
+- `id`: integer primary key.
+- `name`: required public display name.
+- `role_title`: public role/title.
+- `bio`: public short biography.
+- `specialties`: comma-separated public specialties.
+- `image_url`: public CMS uploaded image URL.
+- `show_on_website`: boolean visibility flag.
+- `featured_on_website`: boolean featured flag.
+- `display_order`: integer ordering.
+- `created_at`, `updated_at`: audit timestamps.
+- `updated_by`: admin user ID.
+
+Validation:
+
+- Admin-only create/update/delete through Website CMS.
+- Public pages only read visible records.
+- No internal staff profile fields are returned from this table.
+
+## WebsiteUpload
+
+Runtime upload storage configured by environment variables:
+
+- `UPLOAD_DIR`: absolute server path, for example `/home/YOUR_CPANEL_USERNAME/public_html/uploads/website-assets`.
+- `NEXT_PUBLIC_UPLOAD_BASE_URL`: public URL prefix, for example `https://yourdomain.com/uploads/website-assets`.
+
+Rules:
+
+- Admin role is required.
+- Allowed folders: `gallery`, `services`, `staff`, `packages`, `banners`, `seo`.
+- Allowed MIME types: `image/jpeg`, `image/png`, `image/webp`.
+- Maximum size: 5MB.
+- Filenames are sanitized and prefixed with timestamp plus UUID.
+- Server filesystem paths are never returned to the browser.

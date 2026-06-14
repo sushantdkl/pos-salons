@@ -121,6 +121,8 @@ Protected routes are enforced by middleware/proxy checks and API-level `requireR
 - `/api/admin/reports`: business reports and insights.
 - `/api/admin/staff-performance`: staff dashboards and admin leaderboard data.
 - `/api/admin/settings`: salon settings.
+- `/api/admin/website-cms`: admin-only public website content, services, packages, staff, and gallery management.
+- `/api/admin/website-cms/upload`: admin-only Website CMS image upload for cPanel runtime storage.
 - `/api/license/*`: isolated future license operations.
 
 ## Security Requirements
@@ -134,6 +136,8 @@ Protected routes are enforced by middleware/proxy checks and API-level `requireR
 - Reject negative stock, invalid discounts, and missing staff assignments.
 - Restrict service assignment to staff whose assigned service list matches the selected service or package component.
 - Keep environment variables server-side unless explicitly public.
+- Validate Website CMS image uploads by MIME type, size, folder, and generated filename.
+- Store uploaded CMS images in `UPLOAD_DIR` and expose only the public `NEXT_PUBLIC_UPLOAD_BASE_URL`.
 - Keep license enforcement behind `NEXT_PUBLIC_LICENSE_ENABLED`.
 - Use transactions for bill completion.
 - Return clear error messages without exposing sensitive internals.
@@ -151,6 +155,7 @@ Core persisted entities:
 - Salon products and inventory movements.
 - Action logs.
 - Settings/license metadata where enabled.
+- Website CMS content, gallery images, website-only services/packages, and website-only staff profiles.
 
 Billing is the central write workflow. It creates the bill, bill items, inventory movements, customer updates, and audit logs in one transaction.
 
@@ -175,6 +180,15 @@ Future commercial hosting can set:
 ```env
 NEXT_PUBLIC_LICENSE_ENABLED=true
 ```
+
+cPanel Website CMS uploads require:
+
+```env
+UPLOAD_DIR=/home/YOUR_CPANEL_USERNAME/public_html/uploads/website-assets
+NEXT_PUBLIC_UPLOAD_BASE_URL=https://yourdomain.com/uploads/website-assets
+```
+
+The upload API creates allowed subfolders as needed: `gallery`, `services`, `staff`, `packages`, `banners`, and `seo`. Runtime uploads must not be stored under `src`, `app`, `components`, or source-controlled `public/assets`.
 
 ## Scalability Considerations
 

@@ -33,7 +33,7 @@ function text(value, fallback = '') {
 function imageUrl(value, fallback = '') {
   const cleaned = text(value, fallback);
   if (!cleaned) return fallback;
-  if (cleaned.startsWith('/assets/') || cleaned.startsWith('https://') || cleaned.startsWith('http://')) return cleaned;
+  if (cleaned.startsWith('/assets/') || cleaned.startsWith('/uploads/') || cleaned.startsWith('https://') || cleaned.startsWith('http://')) return cleaned;
   return fallback;
 }
 
@@ -231,6 +231,7 @@ function fallbackData() {
 function mapService(row) {
   return {
     id: row.id,
+    source: row.source || 'salon_service',
     name: row.name,
     priceLabel: row.price_label || (row.price > 0 ? `Rs. ${row.price}` : 'Consultation'),
     price: Number(row.price || 0),
@@ -242,8 +243,81 @@ function mapService(row) {
     featured: bool(row.featured_on_website),
     showOnWebsite: bool(row.show_on_website),
     isPackage: bool(row.is_package),
-    includes: String(row.package_items || '').split(',').map((item) => item.trim()).filter(Boolean)
+    includes: String(row.package_items || '').split(',').map((item) => item.trim()).filter(Boolean),
+    sortOrder: number(row.display_order, 0)
   };
+}
+
+function mapWebsiteService(row) {
+  return mapService({
+    ...row,
+    source: 'website_service',
+    price_label: row.price_label,
+    duration_minutes: row.duration_minutes,
+    website_image: row.image_url,
+    website_description: row.description,
+    featured_on_website: row.featured_on_website,
+    show_on_website: row.show_on_website,
+    package_items: row.package_items,
+    is_package: row.is_package,
+    display_order: row.display_order
+  });
+}
+
+function mapWebsiteStaff(row) {
+  return {
+    id: row.id,
+    source: 'website_staff',
+    name: row.name,
+    role: row.role_title || '',
+    bio: row.bio || '',
+    specialties: String(row.specialties || '').split(',').map((item) => item.trim()).filter(Boolean),
+    image: row.image_url || undefined,
+    featured: bool(row.featured_on_website),
+    showOnWebsite: bool(row.show_on_website),
+    sortOrder: number(row.display_order, 0)
+  };
+}
+
+async function ensureWebsiteCmsRuntimeSchema(db) {
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS website_services (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT DEFAULT 'Other',
+      price NUMERIC DEFAULT 0,
+      price_label TEXT,
+      duration_minutes INTEGER DEFAULT 30,
+      description TEXT,
+      image_url TEXT,
+      is_package BOOLEAN DEFAULT FALSE,
+      package_items TEXT,
+      show_on_website BOOLEAN DEFAULT TRUE,
+      featured_on_website BOOLEAN DEFAULT FALSE,
+      display_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS website_staff_profiles (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      role_title TEXT,
+      bio TEXT,
+      specialties TEXT,
+      image_url TEXT,
+      show_on_website BOOLEAN DEFAULT TRUE,
+      featured_on_website BOOLEAN DEFAULT FALSE,
+      display_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+  await db.run('CREATE INDEX IF NOT EXISTS idx_website_services_visible_order ON website_services(show_on_website, display_order)');
+  await db.run('CREATE INDEX IF NOT EXISTS idx_website_staff_visible_order ON website_staff_profiles(show_on_website, display_order)');
 }
 
 function mapCategory(category) {
@@ -278,11 +352,13 @@ function buildInfo(sections) {
   };
 }
 
-export async function getPublicWebsiteData() {
+export async function getPublicWebsiteData(options = {}) {
+  const includeHidden = Boolean(options.includeHidden);
   const fallback = fallbackData();
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
+    await ensureWebsiteCmsRuntimeSchema(db);
     const defaults = sectionFallback();
     const rows = await db.all('SELECT * FROM website_content ORDER BY sort_order ASC, id ASC');
     const sections = { ...defaults };
@@ -291,41 +367,84 @@ export async function getPublicWebsiteData() {
         sections[row.section_key] = mapSection(row, defaults[row.section_key]);
       }
     });
-    const serviceRows = await db.all(`
+    const websiteServiceRows = await db.all(`
+      SELECT *
+      FROM website_services
+      ORDER BY display_order ASC, id ASC
+    `);
+    let services = [];
+    let packages = [];
+    if (websiteServiceRows.length) {
+      const visibleWebsiteRows = includeHidden ? websiteServiceRows : websiteServiceRows.filter((row) => bool(row.show_on_website));
+      services = visibleWebsiteRows.filter((row) => !bool(row.is_package)).map(mapWebsiteService);
+      packages = visibleWebsiteRows.filter((row) => bool(row.is_package)).map((row) => {
+        const mapped = mapWebsiteService(row);
+        return {
+          id: mapped.id,
+          source: mapped.source,
+          name: mapped.name,
+          price: mapped.price,
+          duration: mapped.duration,
+          category: 'Other',
+          isPackage: true,
+          includes: mapped.includes,
+          description: mapped.description,
+          image: mapped.image,
+          featured: mapped.featured,
+          showOnWebsite: mapped.showOnWebsite,
+          sortOrder: mapped.sortOrder
+        };
+      });
+    } else {
+      const serviceRows = await db.all(`
       SELECT *
       FROM salon_services
-      WHERE is_active = TRUE AND COALESCE(show_on_website, TRUE) = TRUE
+      WHERE is_active = TRUE ${includeHidden ? '' : 'AND COALESCE(show_on_website, TRUE) = TRUE'}
       ORDER BY COALESCE(featured_on_website, FALSE) DESC, is_package ASC, name ASC
     `);
-    const services = serviceRows.filter((row) => !row.is_package).map(mapService);
-    const packages = serviceRows.filter((row) => row.is_package).map((row) => {
-      const mapped = mapService(row);
-      return {
-        id: mapped.id,
-        name: mapped.name,
-        price: mapped.price,
-        duration: mapped.duration,
-        category: 'Other',
-        isPackage: true,
-        includes: mapped.includes,
-        description: mapped.description,
-        image: mapped.image,
-        featured: mapped.featured,
-        showOnWebsite: mapped.showOnWebsite
-      };
-    });
-    const staffRows = await db.all(`
+      services = serviceRows.filter((row) => !row.is_package).map(mapService);
+      packages = serviceRows.filter((row) => row.is_package).map((row) => {
+        const mapped = mapService(row);
+        return {
+          id: mapped.id,
+          source: mapped.source,
+          name: mapped.name,
+          price: mapped.price,
+          duration: mapped.duration,
+          category: 'Other',
+          isPackage: true,
+          includes: mapped.includes,
+          description: mapped.description,
+          image: mapped.image,
+          featured: mapped.featured,
+          showOnWebsite: mapped.showOnWebsite,
+          sortOrder: mapped.sortOrder
+        };
+      });
+    }
+
+    const websiteStaffRows = await db.all(`
+      SELECT *
+      FROM website_staff_profiles
+      ORDER BY display_order ASC, id ASC
+    `);
+    let staff = [];
+    if (websiteStaffRows.length) {
+      staff = (includeHidden ? websiteStaffRows : websiteStaffRows.filter((row) => bool(row.show_on_website))).map(mapWebsiteStaff);
+    } else {
+      const staffRows = await db.all(`
       SELECT u.id, u.full_name, sp.display_name, sp.salon_role, sp.assigned_services,
              sp.website_title, sp.website_bio, sp.website_photo, sp.show_on_website, sp.featured_on_website
       FROM users u
       JOIN staff_profiles sp ON sp.user_id = u.id
       WHERE u.is_active = TRUE
         AND sp.salon_role IN ('barber', 'stylist', 'beautician')
-        AND COALESCE(sp.show_on_website, TRUE) = TRUE
+        ${includeHidden ? '' : 'AND COALESCE(sp.show_on_website, TRUE) = TRUE'}
       ORDER BY COALESCE(sp.featured_on_website, FALSE) DESC, u.full_name ASC
     `);
-    const staff = staffRows.map((row) => ({
+      staff = staffRows.map((row) => ({
       id: row.id,
+      source: 'staff_profile',
       name: row.display_name || row.full_name,
       role: row.website_title || row.salon_role,
       bio: row.website_bio || '',
@@ -334,10 +453,11 @@ export async function getPublicWebsiteData() {
       featured: bool(row.featured_on_website),
       showOnWebsite: bool(row.show_on_website)
     }));
+    }
     const galleryRows = await db.all(`
       SELECT *
       FROM website_gallery_images
-      WHERE COALESCE(is_visible, TRUE) = TRUE
+      ${includeHidden ? '' : 'WHERE COALESCE(is_visible, TRUE) = TRUE'}
       ORDER BY sort_order ASC, id ASC
     `);
     const gallery = galleryRows.map((row) => ({
@@ -353,11 +473,11 @@ export async function getPublicWebsiteData() {
     return {
       sections,
       info: buildInfo(sections),
-      services: services.length ? services : fallback.services,
+      services: services.length || websiteServiceRows.length ? services : fallback.services,
       popularServices: (services.filter((service) => service.featured).length ? services.filter((service) => service.featured) : services.slice(0, 4)).slice(0, 4),
-      packages: packages.length ? packages : fallback.packages,
-      staff: staff.length ? staff : fallback.staff,
-      gallery: gallery.length ? gallery : fallback.gallery,
+      packages: packages.length || websiteServiceRows.length ? packages : fallback.packages,
+      staff: staff.length || websiteStaffRows.length ? staff : fallback.staff,
+      gallery: gallery.length || galleryRows.length ? gallery : fallback.gallery,
       seo: {
         title: sections.seo.title,
         description: sections.seo.description,
@@ -398,6 +518,7 @@ function normalizeSection(input, fallback) {
 
 export async function saveWebsiteCms(db, data, userId) {
   await ensureSalonSchema();
+  await ensureWebsiteCmsRuntimeSchema(db);
   const defaults = sectionFallback();
   const sections = data.sections || {};
   for (const key of SECTION_KEYS) {
@@ -429,44 +550,53 @@ export async function saveWebsiteCms(db, data, userId) {
     ]);
   }
 
-  for (const item of [...(data.services || []), ...(data.packages || [])]) {
-    if (!item.id) continue;
+  await db.run('DELETE FROM website_services');
+  for (const [index, item] of [...(data.services || []), ...(data.packages || [])].entries()) {
+    const isPackage = Boolean(item.isPackage);
+    const name = text(item.name, isPackage ? 'Website Package' : 'Website Service');
+    if (!name) continue;
     await db.run(`
-      UPDATE salon_services
-      SET name = ?, category = ?, price = ?, duration_minutes = ?,
-          description = ?, package_items = ?, show_on_website = ?, featured_on_website = ?,
-          website_image = ?, website_description = ?, updated_at = NOW()
-      WHERE id = ?
+      INSERT INTO website_services (
+        name, category, price, price_label, duration_minutes, description,
+        image_url, is_package, package_items, show_on_website, featured_on_website,
+        display_order, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `, [
-      text(item.name, 'Service'),
-      text(item.serviceCategory || item.category, item.isPackage ? 'Other' : 'Haircut'),
+      name,
+      text(item.serviceCategory || item.category, isPackage ? 'Other' : 'Haircut'),
       Math.max(0, number(item.price, 0)),
+      text(item.priceLabel, ''),
       Math.max(1, number(item.duration, item.duration_minutes || 30)),
-      text(item.description, ''),
+      text(item.websiteDescription || item.description, ''),
+      imageUrl(item.image || item.websiteImage, ''),
+      isPackage,
       Array.isArray(item.includes) ? item.includes.map((value) => text(value, '')).filter(Boolean).join(',') : null,
       item.showOnWebsite !== false,
       Boolean(item.featured),
-      imageUrl(item.image || item.websiteImage, ''),
-      text(item.websiteDescription || item.description, ''),
-      Number(item.id),
+      number(item.sortOrder, index + 1),
+      userId,
     ]);
   }
 
-  for (const member of data.staff || []) {
-    if (!member.id) continue;
+  await db.run('DELETE FROM website_staff_profiles');
+  for (const [index, member] of (data.staff || []).entries()) {
+    const name = text(member.name, 'Staff');
+    if (!name) continue;
     await db.run(`
-      UPDATE staff_profiles
-      SET display_name = ?, website_title = ?, website_bio = ?, website_photo = ?,
-          show_on_website = ?, featured_on_website = ?, updated_at = NOW()
-      WHERE user_id = ?
+      INSERT INTO website_staff_profiles (
+        name, role_title, bio, specialties, image_url, show_on_website,
+        featured_on_website, display_order, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `, [
-      text(member.name, 'Staff'),
+      name,
       text(member.role, ''),
       text(member.bio, ''),
+      Array.isArray(member.specialties) ? member.specialties.map((value) => text(value, '')).filter(Boolean).join(',') : '',
       imageUrl(member.image, ''),
       member.showOnWebsite !== false,
       Boolean(member.featured),
-      Number(member.id),
+      number(member.sortOrder, index + 1),
+      userId,
     ]);
   }
 
@@ -516,5 +646,5 @@ export async function saveWebsiteCms(db, data, userId) {
     'INSERT INTO action_logs (user_id, action, entity_type, details) VALUES (?, ?, ?, ?)',
     [userId, 'update', 'website_cms', 'Website CMS updated']
   );
-  return getPublicWebsiteData();
+  return getPublicWebsiteData({ includeHidden: true });
 }
