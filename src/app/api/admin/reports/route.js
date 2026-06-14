@@ -3,6 +3,11 @@ import Database from '@/lib/db/index';
 import { reportsBillDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
+function numeric(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
@@ -32,7 +37,7 @@ export async function GET(request) {
       GROUP BY payment_method
     `, params);
     const paymentMethods = Object.fromEntries(
-      paymentRows.map((row) => [row.payment_method, { count: row.count, amount: row.amount }])
+      paymentRows.map((row) => [row.payment_method, { count: Number(row.count || 0), amount: numeric(row.amount) }])
     );
 
     const itemClause = clause.replaceAll('created_at', 'b.created_at');
@@ -91,27 +96,32 @@ export async function GET(request) {
     `);
     const insights = [
       topService ? `${topService.name} generated the highest service revenue for this period.` : null,
-      topStaff ? `${topStaff.name} generated ${topStaff.revenue} in service revenue for this period.` : null,
+      topStaff ? `${topStaff.name} generated ${numeric(topStaff.revenue)} in service revenue for this period.` : null,
       mostActiveCustomer ? `${mostActiveCustomer.name} has visited ${mostActiveCustomer.total_visits || 0} times.` : null,
       commissionSummary > 0 ? `Total staff commission for this period is ${commissionSummary}.` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
-      totalSales: summary.totalSales,
-      totalBills: summary.totalBills,
-      totalOrders: summary.totalBills,
-      avgBillValue: summary.avgBillValue,
-      avgOrderValue: summary.avgBillValue,
-      uniqueCustomers: summary.uniqueCustomers,
+      totalSales: numeric(summary.totalSales),
+      totalBills: Number(summary.totalBills || 0),
+      totalOrders: Number(summary.totalBills || 0),
+      avgBillValue: numeric(summary.avgBillValue),
+      avgOrderValue: numeric(summary.avgBillValue),
+      uniqueCustomers: Number(summary.uniqueCustomers || 0),
       totalCustomers: totalCustomersRow?.count || 0,
       repeatCustomers: repeatCustomersRow?.count || 0,
       paymentMethods,
-      topServices,
-      topItems: topServices,
-      productSales,
-      bestStaff,
+      topServices: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
+      topItems: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
+      productSales: productSales.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
+      bestStaff: bestStaff.map((staff) => ({
+        ...staff,
+        services: Number(staff.services || 0),
+        revenue: numeric(staff.revenue),
+        commission: numeric(staff.commission),
+      })),
       lowStockProducts,
-      commissionSummary,
+      commissionSummary: numeric(commissionSummary),
       mostActiveCustomer,
       insights,
     });

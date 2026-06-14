@@ -3,6 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Download, TrendingUp, DollarSign, ShoppingCart, Users, Award, Zap, Target, ArrowUp, ArrowDown } from 'lucide-react';
 
+function numberValue(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function money(value) {
+  return numberValue(value).toFixed(2);
+}
+
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
@@ -128,7 +137,7 @@ export default function ReportsPage() {
                     <DollarSign className="w-5 h-5 text-green-600" />
                   </div>
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900">Rs {reports.totalSales?.toFixed(2) || '0.00'}</h3>
+                <h3 className="text-2xl font-semibold text-gray-900">Rs {money(reports.totalSales)}</h3>
                 <p className="text-gray-500 text-sm mt-1.5">Total Sales Revenue</p>
               </div>
 
@@ -148,7 +157,7 @@ export default function ReportsPage() {
                     <Target className="w-5 h-5 text-purple-600" />
                   </div>
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900">Rs {reports.avgBillValue?.toFixed(2) || '0.00'}</h3>
+                <h3 className="text-2xl font-semibold text-gray-900">Rs {money(reports.avgBillValue)}</h3>
                 <p className="text-gray-500 text-sm mt-1.5">Avg Bill Value</p>
               </div>
 
@@ -174,7 +183,8 @@ export default function ReportsPage() {
               <div className="space-y-4">
                 {reports.paymentMethods && Object.keys(reports.paymentMethods).length > 0 ? (
                   Object.entries(reports.paymentMethods).map(([method, data], index) => {
-                    const percentage = (data.amount / reports.totalSales * 100) || 0;
+                    const amount = numberValue(data.amount);
+                    const percentage = (amount / numberValue(reports.totalSales) * 100) || 0;
                     return (
                       <div key={method} className="group">
                         <div className="flex justify-between mb-2">
@@ -182,7 +192,7 @@ export default function ReportsPage() {
                             <div className="w-2.5 h-2.5 rounded-full bg-gray-700"></div>
                             <span className="font-medium text-gray-900 text-sm capitalize">{method}</span>
                           </div>
-                          <span className="font-semibold text-gray-900 text-sm">Rs {data.amount?.toFixed(2)} ({data.count} txns)</span>
+                          <span className="font-semibold text-gray-900 text-sm">Rs {money(amount)} ({data.count} txns)</span>
                         </div>
                         <div className="relative w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                           <div
@@ -227,8 +237,9 @@ export default function ReportsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {reports.topItems?.slice(0, 10).map((item, index) => {
-                      const maxRevenue = reports.topItems[0]?.revenue || 1;
-                      const percentage = (item.revenue / maxRevenue * 100);
+                      const maxRevenue = numberValue(reports.topItems[0]?.revenue) || 1;
+                      const itemRevenue = numberValue(item.revenue);
+                      const percentage = (itemRevenue / maxRevenue * 100);
                       const medals = ['🥇', '🥈', '🥉'];
                       return (
                         <tr key={index} className="hover:bg-gray-50 transition-colors group">
@@ -252,7 +263,7 @@ export default function ReportsPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="font-semibold text-gray-900 text-sm">Rs {item.revenue?.toFixed(2)}</span>
+                            <span className="font-semibold text-gray-900 text-sm">Rs {money(itemRevenue)}</span>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end space-x-2">
@@ -288,7 +299,7 @@ export default function ReportsPage() {
                     <TrendingUp className="w-4 h-4 text-gray-700" />
                     <span className="text-sm font-medium text-gray-700">Top Revenue</span>
                   </div>
-                  <p className="text-base font-semibold text-gray-900">Rs {reports.topItems?.[0]?.revenue?.toFixed(2) || '0.00'}</p>
+                  <p className="text-base font-semibold text-gray-900">Rs {money(reports.topItems?.[0]?.revenue)}</p>
                   <p className="text-xs text-gray-500 mt-1">From best seller</p>
                 </div>
                 
