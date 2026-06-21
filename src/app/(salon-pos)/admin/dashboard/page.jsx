@@ -60,6 +60,7 @@ export default function AdminDashboard() {
 
   const profitMargin = stats?.todaySales ? ((calculateProfit() / stats.todaySales) * 100) : 0;
   const tokenStats = stats?.tokenStats || {};
+  const paymentSummary = stats?.paymentSummary || {};
 
   return (
     <>
@@ -130,6 +131,32 @@ export default function AdminDashboard() {
             </div>
             <h3 className="text-2xl font-semibold text-gray-900">{stats?.totalEmployees || 0}</h3>
             <p className="text-gray-500 text-sm mt-1.5">Total Staff</p>
+          </div>
+        </div>
+
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="rounded-lg bg-gray-100 p-2.5">
+              <DollarSign className="h-5 w-5 text-gray-700" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Payment Summary</h2>
+              <p className="text-sm text-gray-500">Cash and QR totals include split-payment breakdowns.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {[
+              ['Cash Sales', paymentSummary.cashSales],
+              ['QR Sales', paymentSummary.qrSales],
+              ['Esewa / PhonePay', paymentSummary.esewaPhonePaySales],
+              ['Bank QR', paymentSummary.bankQrSales],
+              ['Split Sales', paymentSummary.splitPaymentSales],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-gray-950">{formatCurrency(value || 0)}</p>
+              </div>
+            ))}
           </div>
         </div>
 

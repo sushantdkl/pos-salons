@@ -644,6 +644,11 @@ Validation:
 
 ## WebsiteUpload
 
+Database connection:
+
+- `DATABASE_URL`: cPanel PostgreSQL connection string, for example `postgresql://CPANEL_DB_USER:DB_PASSWORD@localhost:5432/CPANEL_DB_NAME`.
+- `PG_SSL`: set to `false` for cPanel localhost PostgreSQL unless the host requires SSL.
+
 Runtime upload storage configured by environment variables:
 
 - `UPLOAD_DIR`: absolute server path, for example `/home/YOUR_CPANEL_USERNAME/public_html/uploads/website-assets`.
@@ -652,7 +657,7 @@ Runtime upload storage configured by environment variables:
 Rules:
 
 - Admin role is required.
-- Allowed folders: `gallery`, `services`, `staff`, `packages`, `banners`, `seo`.
+- Allowed folders: `gallery`, `services`, `staff`, `packages`, `banners`, `payment-qr`, `seo`.
 - Allowed MIME types: `image/jpeg`, `image/png`, `image/webp`.
 - Maximum size: 5MB.
 - Filenames are sanitized and prefixed with timestamp plus UUID.

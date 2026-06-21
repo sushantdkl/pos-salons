@@ -1,4 +1,5 @@
--- Supabase schema for Salon POS (Postgres)
+-- PostgreSQL schema for Salon POS
+-- Compatible with cPanel PostgreSQL/phpPgAdmin and managed PostgreSQL providers.
 
 BEGIN;
 
@@ -223,6 +224,11 @@ CREATE TABLE IF NOT EXISTS salon_bills (
   grand_total NUMERIC NOT NULL CHECK (grand_total >= 0),
   payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'online', 'split')),
   amount_paid NUMERIC NOT NULL CHECK (amount_paid >= 0),
+  cash_amount NUMERIC DEFAULT 0 CHECK (cash_amount >= 0),
+  qr_amount NUMERIC DEFAULT 0 CHECK (qr_amount >= 0),
+  qr_type TEXT CHECK (qr_type IS NULL OR qr_type IN ('ESEWA_PHONEPAY', 'BANK')),
+  total_paid NUMERIC DEFAULT 0 CHECK (total_paid >= 0),
+  payment_status TEXT DEFAULT 'paid',
   cashier_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   token_id BIGINT REFERENCES walk_in_tokens(id) ON DELETE SET NULL,
   transaction_time TIMESTAMPTZ,

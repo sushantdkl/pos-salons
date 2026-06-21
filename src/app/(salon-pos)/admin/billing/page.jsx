@@ -11,6 +11,51 @@ import { formatCurrency } from '@/lib/currency';
 const draftKey = 'salon_pos_bill_draft';
 const walkInCustomer = { id: '', name: 'Walk-in Customer', phone: '' };
 
+function paymentLabel(method) {
+  return {
+    cash: 'Cash',
+    card: 'Card',
+    online: 'Online QR',
+    split: 'Split',
+  }[method] || method || '-';
+}
+
+function qrTypeLabel(type) {
+  return {
+    ESEWA_PHONEPAY: 'Esewa / PhonePay',
+    BANK: 'Bank QR',
+  }[type] || '';
+}
+
+function paymentBreakdownRows(bill) {
+  if (bill.payment_method !== 'split') return '';
+  return `
+    <tr><td>Cash Paid</td><td style="text-align:right">${formatCurrency(bill.cash_amount || 0)}</td></tr>
+    <tr><td>QR Paid</td><td style="text-align:right">${formatCurrency(bill.qr_amount || 0)}</td></tr>
+    <tr><td>QR Type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type)}</td></tr>
+    <tr><td>Total Paid</td><td style="text-align:right">${formatCurrency(bill.total_paid || bill.amount_paid || 0)}</td></tr>
+  `;
+}
+
+function qrConfigForType(type, paymentQr) {
+  if (type === 'ESEWA_PHONEPAY') {
+    return paymentQr?.show_esewa_phonepay_qr === false ? null : {
+      label: paymentQr?.esewa_phonepay_label || 'Esewa / PhonePay QR',
+      imageUrl: paymentQr?.esewa_phonepay_qr_url,
+    };
+  }
+  if (type === 'BANK') {
+    return paymentQr?.show_bank_qr === false ? null : {
+      label: paymentQr?.bank_label || 'Bank QR',
+      imageUrl: paymentQr?.bank_qr_url,
+      bankName: paymentQr?.bank_name,
+      accountName: paymentQr?.bank_account_name,
+      accountNumber: paymentQr?.bank_account_number,
+    };
+  }
+  return null;
+}
+
 function BillingContent() {
   const searchParams = useSearchParams();
   const [services, setServices] = useState([]);
@@ -26,6 +71,10 @@ function BillingContent() {
   const [discountValue, setDiscountValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amountPaid, setAmountPaid] = useState('');
+  const [splitCashAmount, setSplitCashAmount] = useState('');
+  const [splitQrAmount, setSplitQrAmount] = useState('');
+  const [splitQrType, setSplitQrType] = useState('');
+  const [splitQrEdited, setSplitQrEdited] = useState(false);
   const [taxPercent, setTaxPercent] = useState(0);
   const [error, setError] = useState('');
   const [lastBill, setLastBill] = useState(null);
@@ -76,13 +125,26 @@ function BillingContent() {
         setDiscountType(parsed.discountType || 'amount');
         setDiscountValue(parsed.discountValue || '');
         setPaymentMethod(parsed.paymentMethod || 'cash');
+        setSplitCashAmount(parsed.splitCashAmount || '');
+        setSplitQrAmount(parsed.splitQrAmount || '');
+        setSplitQrType(parsed.splitQrType || '');
       } catch {}
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(draftKey, JSON.stringify({ cartServices, cartProducts, customer, discountType, discountValue, paymentMethod }));
-  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod]);
+    localStorage.setItem(draftKey, JSON.stringify({
+      cartServices,
+      cartProducts,
+      customer,
+      discountType,
+      discountValue,
+      paymentMethod,
+      splitCashAmount,
+      splitQrAmount,
+      splitQrType,
+    }));
+  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod, splitCashAmount, splitQrAmount, splitQrType]);
 
   const filteredServices = useMemo(() => services.filter((service) =>
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -102,6 +164,14 @@ function BillingContent() {
   const total = subtotal - safeDiscount + tax;
   const change = Number(amountPaid || total) - total;
   const cartCount = cartServices.length + cartProducts.length;
+  const splitTotal = Number(splitCashAmount || 0) + Number(splitQrAmount || 0);
+  const splitBalance = total - splitTotal;
+
+  useEffect(() => {
+    if (paymentMethod !== 'split' || splitQrEdited) return;
+    const cash = Math.max(0, Number(splitCashAmount || 0));
+    setSplitQrAmount(Math.max(0, total - cash).toFixed(2));
+  }, [paymentMethod, splitCashAmount, splitQrEdited, total]);
 
   const setWalkInCustomer = () => {
     setCustomer(walkInCustomer);
@@ -213,6 +283,10 @@ function BillingContent() {
     setCartProducts([]);
     setDiscountValue('');
     setAmountPaid('');
+    setSplitCashAmount('');
+    setSplitQrAmount('');
+    setSplitQrType('');
+    setSplitQrEdited(false);
     setError('');
   };
 
@@ -234,6 +308,26 @@ function BillingContent() {
       setError('Cash received is less than the bill total.');
       return;
     }
+    if (paymentMethod === 'split') {
+      const cash = Number(splitCashAmount || 0);
+      const qr = Number(splitQrAmount || 0);
+      if (cash < 0 || qr < 0) {
+        setError('Split payment amounts cannot be negative.');
+        return;
+      }
+      if (cash > total || qr > total) {
+        setError('Split payment amounts cannot exceed the bill total.');
+        return;
+      }
+      if (!splitQrType) {
+        setError('Select a QR type for split payment.');
+        return;
+      }
+      if (Math.abs((cash + qr) - total) > 0.01) {
+        setError('Cash amount and QR amount must equal the total payable.');
+        return;
+      }
+    }
 
     const receiptWindow = shouldPrint ? window.open('', '', 'width=340,height=700') : null;
     const response = await fetch('/api/admin/billing', {
@@ -250,6 +344,9 @@ function BillingContent() {
         tax_percent: Number(taxPercent || 0),
         payment_method: paymentMethod,
         amount_paid: Number(amountPaid || total),
+        cash_amount: paymentMethod === 'split' ? Number(splitCashAmount || 0) : undefined,
+        qr_amount: paymentMethod === 'split' ? Number(splitQrAmount || 0) : undefined,
+        qr_type: paymentMethod === 'split' ? splitQrType : undefined,
         should_print: shouldPrint,
       }),
     });
@@ -285,7 +382,8 @@ function BillingContent() {
           <tr><td>Discount</td><td style="text-align:right">-${formatCurrency(billData.bill.discount_amount)}</td></tr>
           <tr><td>Tax</td><td style="text-align:right">${formatCurrency(billData.bill.tax)}</td></tr>
           <tr class="total"><td>Total</td><td style="text-align:right">${formatCurrency(billData.bill.grand_total)}</td></tr>
-          <tr><td>Payment</td><td style="text-align:right">${billData.bill.payment_method}</td></tr>
+          <tr><td>Payment</td><td style="text-align:right">${paymentLabel(billData.bill.payment_method)}</td></tr>
+          ${paymentBreakdownRows(billData.bill)}
         </table><div class="center">Thank you. Please visit again.</div>
       </body></html>
     `);
@@ -651,6 +749,76 @@ function BillingContent() {
                       ) : null}
                     </div>
                   ) : null}
+                  {paymentMethod === 'split' ? (
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
+                      <p className="mb-2 text-sm font-semibold text-amber-950">Split payment: Cash + QR</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-gray-700">
+                          Cash Amount
+                          <input
+                            type="number"
+                            min="0"
+                            value={splitCashAmount}
+                            onChange={(event) => {
+                              setSplitCashAmount(event.target.value);
+                              if (!splitQrEdited) {
+                                const cash = Number(event.target.value || 0);
+                                setSplitQrAmount(Math.max(0, total - cash).toFixed(2));
+                              }
+                            }}
+                            placeholder="0.00"
+                            className={`${inputClass} mt-1`}
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-gray-700">
+                          QR Amount
+                          <input
+                            type="number"
+                            min="0"
+                            value={splitQrAmount}
+                            onChange={(event) => {
+                              setSplitQrEdited(true);
+                              setSplitQrAmount(event.target.value);
+                            }}
+                            placeholder={formatCurrency(total)}
+                            className={`${inputClass} mt-1`}
+                          />
+                        </label>
+                      </div>
+                      <label className="mt-2 block text-xs font-semibold text-gray-700">
+                        QR Type
+                        <select
+                          value={splitQrType}
+                          onChange={(event) => {
+                            setSplitQrType(event.target.value);
+                            const qr = qrConfigForType(event.target.value, paymentQr);
+                            if (qr) setQrModal({ ...qr, amount: Number(splitQrAmount || 0) });
+                          }}
+                          className={`${inputClass} mt-1`}
+                        >
+                          <option value="">Select QR type</option>
+                          <option value="ESEWA_PHONEPAY">Esewa / PhonePay QR</option>
+                          <option value="BANK">Bank QR</option>
+                        </select>
+                      </label>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          disabled={!splitQrType || !qrConfigForType(splitQrType, paymentQr)?.imageUrl}
+                          onClick={() => {
+                            const qr = qrConfigForType(splitQrType, paymentQr);
+                            if (qr) setQrModal({ ...qr, amount: Number(splitQrAmount || 0) });
+                          }}
+                          className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Show Selected QR
+                        </button>
+                        <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${Math.abs(splitBalance) <= 0.01 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
+                          Balance: {formatCurrency(splitBalance)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                   <input
                     type="number"
                     min="0"
@@ -748,10 +916,14 @@ function BillingContent() {
       {qrModal ? (
         <PaymentQrModal
           qr={qrModal}
-          amount={total}
+          amount={qrModal.amount ?? total}
           onClose={() => setQrModal(null)}
           onReceived={() => {
-            setAmountPaid(total.toFixed(2));
+            if (paymentMethod === 'split') {
+              setSplitQrAmount(String(qrModal.amount ?? splitQrAmount));
+            } else {
+              setAmountPaid(total.toFixed(2));
+            }
             setQrModal(null);
           }}
         />

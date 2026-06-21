@@ -69,6 +69,29 @@ Source code lives under `src/`:
 
 See the `/docs` folder for product, technical, app flow, UI/UX, backend schema, and implementation planning documents.
 
+## Database And Hosting
+
+The app uses PostgreSQL through `DATABASE_URL`. For cPanel/SastoHost, create the PostgreSQL database and user in cPanel, assign all privileges, then configure:
+
+```env
+DATABASE_URL=postgresql://CPANEL_DB_USER:DB_PASSWORD@localhost:5432/CPANEL_DB_NAME
+PG_SSL=false
+```
+
+Apply the schema and seed scripts to the cPanel PostgreSQL database before starting the app:
+
+```bash
+psql "$DATABASE_URL" -f docs/postgresql-schema.sql
+psql "$DATABASE_URL" -f docs/postgresql-seed.sql
+```
+
+Runtime CMS uploads should use:
+
+```env
+UPLOAD_DIR=/home/CPANEL_USERNAME/public_html/uploads/website-assets
+NEXT_PUBLIC_UPLOAD_BASE_URL=https://thehaircut.com.np/uploads/website-assets
+```
+
 ## Documentation
 
 - `docs/PRD.md` - product requirements and acceptance criteria
@@ -77,6 +100,7 @@ See the `/docs` folder for product, technical, app flow, UI/UX, backend schema, 
 - `docs/UI_UX_BRIEF.md` - design system and experience standards
 - `docs/BACKEND_SCHEMA.md` - backend entities, relationships, validation, and indexes
 - `docs/IMPLEMENTATION_PLAN.md` - phased roadmap and delivery criteria
+- `docs/CPANEL_POSTGRESQL_DEPLOYMENT.md` - cPanel PostgreSQL setup, env vars, uploads, and hosting checklist
 
 ## Development
 

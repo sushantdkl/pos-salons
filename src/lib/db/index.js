@@ -75,16 +75,25 @@ class PostgresAdapter {
 
 function resolvePoolConfig(databaseUrl) {
   const isServerless = !!process.env.VERCEL;
+  const parsedUrl = new URL(databaseUrl);
+  const host = parsedUrl.hostname;
+  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(host);
+  const ssl =
+    process.env.PG_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : process.env.PG_SSL === 'false' || isLocalHost
+        ? false
+        : { rejectUnauthorized: false };
   const config = {
     connectionString: databaseUrl,
     max: isServerless ? 1 : Number(process.env.PG_POOL_MAX || 5),
     idleTimeoutMillis: isServerless ? 5000 : 30000,
     connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10000),
-    ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false },
+    ssl,
   };
 
-  // Supabase transaction pooler (port 6543) needs this for prepared statements.
-  if (/pooler\.supabase\.com:6543/i.test(databaseUrl) && !/[?&]pgbouncer=/i.test(databaseUrl)) {
+  // PgBouncer transaction poolers, when used, need this for prepared statements.
+  if (/pooler|pgbouncer/i.test(host) && !/[?&]pgbouncer=/i.test(databaseUrl)) {
     const separator = databaseUrl.includes('?') ? '&' : '?';
     config.connectionString = `${databaseUrl}${separator}pgbouncer=true`;
   }
@@ -125,10 +134,10 @@ class Database {
 
   static getInstance() {
     if (!Database.instance) {
-      const databaseUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || '';
+      const databaseUrl = process.env.DATABASE_URL || '';
       if (!/^(postgres|postgresql):\/\//i.test(databaseUrl)) {
         throw new Error(
-          'SUPABASE_DB_URL or DATABASE_URL must be a postgres:// connection string. Apply docs/supabase-schema.sql and docs/supabase-seed.sql in Supabase first.'
+          'DATABASE_URL must be a postgresql:// connection string. Apply docs/postgresql-schema.sql and docs/postgresql-seed.sql to the cPanel PostgreSQL database first.'
         );
       }
       Database.instance = new PostgresDatabase(databaseUrl);

@@ -18,7 +18,12 @@ const BILL_COLUMNS = [
   ['transaction_time', 'DATETIME'],
   ['is_printed', 'INTEGER DEFAULT 0'],
   ['printed_at', 'DATETIME'],
-  ['printed_by', 'INTEGER']
+  ['printed_by', 'INTEGER'],
+  ['cash_amount', 'REAL DEFAULT 0'],
+  ['qr_amount', 'REAL DEFAULT 0'],
+  ['qr_type', 'TEXT'],
+  ['total_paid', 'REAL DEFAULT 0'],
+  ['payment_status', "TEXT DEFAULT 'paid'"]
 ];
 
 const TOKEN_COLUMNS = [
@@ -589,6 +594,11 @@ function repairUserForeignKeyReferences(db) {
           grand_total REAL NOT NULL CHECK(grand_total >= 0),
           payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'online', 'split')),
           amount_paid REAL NOT NULL CHECK(amount_paid >= 0),
+          cash_amount REAL DEFAULT 0 CHECK(cash_amount >= 0),
+          qr_amount REAL DEFAULT 0 CHECK(qr_amount >= 0),
+          qr_type TEXT,
+          total_paid REAL DEFAULT 0 CHECK(total_paid >= 0),
+          payment_status TEXT DEFAULT 'paid',
           cashier_id INTEGER,
           token_id INTEGER,
           transaction_time DATETIME,
@@ -702,7 +712,7 @@ function cleanLegacyStaffIdentity(db) {
 }
 
 export async function ensureSalonSchema() {
-  // Postgres schema is applied via docs/supabase-schema.sql in Supabase.
+  // PostgreSQL schema is applied via docs/postgresql-schema.sql before deployment.
   return;
 }
 
@@ -937,6 +947,11 @@ async function ensureSalonSchemaLegacySqlite(db) {
       grand_total REAL NOT NULL CHECK(grand_total >= 0),
       payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'online', 'split')),
       amount_paid REAL NOT NULL CHECK(amount_paid >= 0),
+      cash_amount REAL DEFAULT 0 CHECK(cash_amount >= 0),
+      qr_amount REAL DEFAULT 0 CHECK(qr_amount >= 0),
+      qr_type TEXT,
+      total_paid REAL DEFAULT 0 CHECK(total_paid >= 0),
+      payment_status TEXT DEFAULT 'paid',
       cashier_id INTEGER,
       token_id INTEGER,
       transaction_time DATETIME,

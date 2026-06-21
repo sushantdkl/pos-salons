@@ -10,10 +10,19 @@ function localDateString(date) {
   return `${year}-${month}-${day}`;
 }
 
+async function ensureBillingPaymentColumns(db) {
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS cash_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_type TEXT");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS total_paid NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'");
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
+    await ensureBillingPaymentColumns(db);
     await requireRole(request, db, 'admin');
 
     const todayFilter = periodDateFilter('today');
@@ -99,6 +108,16 @@ export async function GET(request) {
       `SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills WHERE ${weekFilter.clause} AND status = 'paid'`,
       weekFilter.params
     );
+    const paymentSummary = await db.get(`
+      SELECT
+        COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN grand_total WHEN payment_method = 'split' THEN cash_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN payment_method = 'online' THEN grand_total WHEN payment_method = 'split' THEN qr_amount ELSE 0 END), 0) as qr_sales,
+        COALESCE(SUM(CASE WHEN payment_method = 'split' THEN grand_total ELSE 0 END), 0) as split_sales,
+        COALESCE(SUM(CASE WHEN qr_type = 'ESEWA_PHONEPAY' THEN qr_amount WHEN payment_method = 'online' AND qr_type IS NULL THEN grand_total ELSE 0 END), 0) as esewa_phonepay_sales,
+        COALESCE(SUM(CASE WHEN qr_type = 'BANK' THEN qr_amount ELSE 0 END), 0) as bank_qr_sales
+      FROM salon_bills
+      WHERE ${todayFilter.clause} AND status = 'paid'
+    `, todayFilter.params);
     const topCustomers = await db.all(`
       SELECT customer_name as name, COALESCE(SUM(grand_total), 0) as total_spent, COUNT(*)::int as visits
       FROM salon_bills
@@ -180,6 +199,13 @@ export async function GET(request) {
         avgOrder: Number(monthlySales.avg || 0),
         repeatCustomerRate,
         commissionSummary: Number(commissionRow?.total || 0),
+        paymentSummary: {
+          cashSales: Number(paymentSummary?.cash_sales || 0),
+          qrSales: Number(paymentSummary?.qr_sales || 0),
+          splitPaymentSales: Number(paymentSummary?.split_sales || 0),
+          esewaPhonePaySales: Number(paymentSummary?.esewa_phonepay_sales || 0),
+          bankQrSales: Number(paymentSummary?.bank_qr_sales || 0),
+        },
         tokenStats: {
           generated: Number(tokenStats?.generated || 0),
           digitalTokens: Number(tokenStats?.digitalTokens || 0),

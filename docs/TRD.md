@@ -163,10 +163,21 @@ Billing is the central write workflow. It creates the bill, bill items, inventor
 
 ```mermaid
 flowchart TD
-  GitHub["GitHub main"] --> Vercel["Vercel Build"]
-  Vercel --> App["Next.js Deployment"]
-  App --> TmpDB["Writable SQLite Copy on Vercel Runtime"]
-  Local["Local Dev"] --> LocalDB["Local SQLite Database"]
+  GitHub["GitHub main"] --> Build["Next.js Build"]
+  Build --> CPanel["cPanel Node.js App"]
+  CPanel --> Pg["cPanel PostgreSQL DATABASE_URL"]
+  CPanel --> Uploads["public_html/uploads/website-assets"]
+  Local["Local Dev"] --> LocalPg["Local or staging PostgreSQL DATABASE_URL"]
+```
+
+The primary database connection is `DATABASE_URL`.
+
+```env
+DATABASE_URL=postgresql://CPANEL_DB_USER:DB_PASSWORD@localhost:5432/CPANEL_DB_NAME
+PG_SSL=false
+NEXTAUTH_SECRET=secure-random-secret
+NEXTAUTH_URL=https://thehaircut.com.np
+NEXT_PUBLIC_SITE_URL=https://thehaircut.com.np
 ```
 
 Current testing deployments must not require activation. Set:
@@ -188,7 +199,7 @@ UPLOAD_DIR=/home/YOUR_CPANEL_USERNAME/public_html/uploads/website-assets
 NEXT_PUBLIC_UPLOAD_BASE_URL=https://yourdomain.com/uploads/website-assets
 ```
 
-The upload API creates allowed subfolders as needed: `gallery`, `services`, `staff`, `packages`, `banners`, and `seo`. Runtime uploads must not be stored under `src`, `app`, `components`, or source-controlled `public/assets`.
+The upload API creates allowed subfolders as needed: `gallery`, `services`, `staff`, `packages`, `banners`, `payment-qr`, and `seo`. Runtime uploads must not be stored under `src`, `app`, `components`, or source-controlled `public/assets`.
 
 ## Scalability Considerations
 

@@ -1,5 +1,5 @@
--- Seed data for Salon POS (Supabase Postgres)
--- Run once on a fresh database after applying supabase-schema.sql.
+-- Seed data for Salon POS (PostgreSQL)
+-- Run once on a fresh database after applying postgresql-schema.sql.
 
 BEGIN;
 

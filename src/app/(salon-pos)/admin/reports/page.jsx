@@ -25,6 +25,13 @@ function formatDateTime(value) {
   });
 }
 
+function qrTypeLabel(type) {
+  return {
+    ESEWA_PHONEPAY: 'Esewa / PhonePay',
+    BANK: 'Bank QR',
+  }[type] || '-';
+}
+
 function csvCell(value) {
   const text = String(value ?? '');
   return `"${text.replaceAll('"', '""')}"`;
@@ -90,27 +97,38 @@ export default function ReportsPage() {
       ['Unique Customers', reports?.uniqueCustomers || 0],
       [],
       ['Payment Methods'],
-      ['Payment Method', 'Transaction Count', 'Amount'],
-      ...paymentRows.map(([method, data]) => [method, data.count || 0, money(data.amount)]),
+      ['Payment Method', 'Transaction Count', 'Amount', 'Cash Amount', 'QR Amount'],
+      ...paymentRows.map(([method, data]) => [method, data.count || 0, money(data.amount), money(data.cashAmount), money(data.qrAmount)]),
+      [],
+      ['Payment Summary'],
+      ['Cash Sales', money(reports?.paymentSummary?.cashSales)],
+      ['QR Sales', money(reports?.paymentSummary?.qrSales)],
+      ['Esewa / PhonePay Sales', money(reports?.paymentSummary?.esewaPhonePaySales)],
+      ['Bank QR Sales', money(reports?.paymentSummary?.bankQrSales)],
+      ['Split Payment Sales', money(reports?.paymentSummary?.splitPaymentSales)],
       [],
       ['Top Services'],
       ['Service', 'Quantity', 'Revenue'],
       ...topItems.map((item) => [item.name, item.quantity || 0, money(item.revenue)]),
       [],
       ['Transactions'],
-      ['Date', 'Invoice', 'Customer', 'Phone', 'Payment Method', 'Subtotal', 'Discount', 'Tax', 'Service Charge', 'Grand Total', 'Amount Paid'],
+      ['Date', 'Invoice', 'Customer', 'Phone', 'Payment Method', 'Cash Amount', 'QR Amount', 'QR Type', 'Subtotal', 'Discount', 'Tax', 'Service Charge', 'Grand Total', 'Total Paid', 'Payment Status'],
       ...transactions.map((transaction) => [
         formatDateTime(transaction.transactionDate),
         transaction.billNumber,
         transaction.customerName,
         transaction.customerPhone,
         transaction.paymentMethod,
+        money(transaction.cashAmount),
+        money(transaction.qrAmount),
+        qrTypeLabel(transaction.qrType),
         money(transaction.subtotal),
         money(transaction.discountAmount),
         money(transaction.tax),
         money(transaction.serviceCharge),
         money(transaction.grandTotal),
-        money(transaction.amountPaid),
+        money(transaction.totalPaid ?? transaction.amountPaid),
+        transaction.paymentStatus || 'paid',
       ]),
     ];
     downloadCsv(`report-${period}-${new Date().toISOString().split('T')[0]}.csv`, rows);
@@ -240,6 +258,22 @@ export default function ReportsPage() {
                 </div>
                 <h2 className="text-lg font-semibold text-gray-900">Payment Methods Breakdown</h2>
               </div>
+              {reports.paymentSummary ? (
+                <div className="mb-5 grid gap-3 md:grid-cols-5">
+                  {[
+                    ['Cash Sales', reports.paymentSummary.cashSales],
+                    ['QR Sales', reports.paymentSummary.qrSales],
+                    ['Esewa / PhonePay', reports.paymentSummary.esewaPhonePaySales],
+                    ['Bank QR', reports.paymentSummary.bankQrSales],
+                    ['Split Sales', reports.paymentSummary.splitPaymentSales],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                      <p className="mt-1 text-base font-bold text-gray-950">Rs {money(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="space-y-4">
                 {reports.paymentMethods && Object.keys(reports.paymentMethods).length > 0 ? (
                   Object.entries(reports.paymentMethods).map(([method, data], index) => {
@@ -253,6 +287,9 @@ export default function ReportsPage() {
                             <span className="font-medium text-gray-900 text-sm capitalize">{method}</span>
                           </div>
                           <span className="font-semibold text-gray-900 text-sm">Rs {money(amount)} ({data.count} txns)</span>
+                        </div>
+                        <div className="mb-2 text-xs text-gray-500">
+                          Cash Rs {money(data.cashAmount)} · QR Rs {money(data.qrAmount)}
                         </div>
                         <div className="relative w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                           <div
@@ -295,6 +332,9 @@ export default function ReportsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Invoice</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Payment</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Cash</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">QR</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">QR Type</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
                     </tr>
                   </thead>
@@ -309,12 +349,15 @@ export default function ReportsPage() {
                             {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
                           </td>
                           <td className="px-4 py-3 text-sm capitalize text-gray-700">{transaction.paymentMethod || '-'}</td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-700">Rs {money(transaction.cashAmount)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-700">Rs {money(transaction.qrAmount)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{qrTypeLabel(transaction.qrType)}</td>
                           <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Rs {money(transaction.grandTotal)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                           No transactions found for this period.
                         </td>
                       </tr>

@@ -14,10 +14,66 @@ function normalizeDiscount(type, value, subtotal) {
   return amount;
 }
 
+async function ensureBillingPaymentColumns(db) {
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS cash_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_type TEXT");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS total_paid NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'");
+}
+
+function money(value) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed)) throw new Error('Invalid payment amount');
+  return Math.round(parsed * 100) / 100;
+}
+
+function normalizePayment(data, grandTotal) {
+  const total = money(grandTotal);
+  const paymentMethod = ['cash', 'card', 'online', 'split'].includes(data.payment_method) ? data.payment_method : 'cash';
+  const qrType = ['ESEWA_PHONEPAY', 'BANK'].includes(data.qr_type) ? data.qr_type : null;
+  let cashAmount = 0;
+  let qrAmount = 0;
+  let totalPaid = total;
+
+  if (paymentMethod === 'cash') {
+    totalPaid = money(data.amount_paid || total);
+    if (totalPaid < total) throw new Error('Amount paid is less than total');
+    cashAmount = total;
+  } else if (paymentMethod === 'online') {
+    qrAmount = total;
+    totalPaid = total;
+  } else if (paymentMethod === 'card') {
+    totalPaid = total;
+  } else if (paymentMethod === 'split') {
+    cashAmount = money(data.cash_amount);
+    qrAmount = money(data.qr_amount);
+    if (!qrType) throw new Error('Select QR type for split payment');
+    if (cashAmount < 0) throw new Error('Cash amount cannot be negative');
+    if (qrAmount < 0) throw new Error('QR amount cannot be negative');
+    if (cashAmount > total) throw new Error('Cash amount cannot exceed total payable');
+    if (qrAmount > total) throw new Error('QR amount cannot exceed total payable');
+    if (Math.abs((cashAmount + qrAmount) - total) > 0.01) {
+      throw new Error('Cash amount and QR amount must equal total payable');
+    }
+    totalPaid = money(cashAmount + qrAmount);
+  }
+
+  return {
+    paymentMethod,
+    cashAmount,
+    qrAmount,
+    qrType: paymentMethod === 'split' ? qrType : null,
+    totalPaid,
+    paymentStatus: 'paid',
+  };
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
+    await ensureBillingPaymentColumns(db);
     await requireRole(request, db, ['admin', 'cashier']);
     const bills = await db.all(`
       SELECT b.*, COUNT(i.id)::int as item_count
@@ -37,6 +93,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
+    await ensureBillingPaymentColumns(db);
     const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const services = Array.isArray(data.services) ? data.services : [];
@@ -145,18 +202,17 @@ export async function POST(request) {
       const serviceCharge = Number(data.service_charge || 0);
       if (serviceCharge < 0) throw new Error('Service charge cannot be negative');
       const grandTotal = taxable + tax + serviceCharge;
-      const paymentMethod = ['cash', 'card', 'online', 'split'].includes(data.payment_method) ? data.payment_method : 'cash';
-      const amountPaid = Number(data.amount_paid || grandTotal);
-      if (amountPaid < grandTotal && paymentMethod !== 'split') throw new Error('Amount paid is less than total');
+      const payment = normalizePayment(data, grandTotal);
 
       const billNumber = `SALON-${Date.now()}`;
       const billResult = await tx.run(`
         INSERT INTO salon_bills (
           bill_number, customer_id, customer_name, customer_phone, subtotal,
           discount_amount, discount_type, tax, tax_percent, service_charge,
-          grand_total, payment_method, amount_paid, cashier_id, token_id,
+          grand_total, payment_method, amount_paid, cash_amount, qr_amount,
+          qr_type, total_paid, payment_status, cashier_id, token_id,
           transaction_time, is_printed, printed_at, printed_by, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
       `, [
         billNumber,
         customerId,
@@ -169,8 +225,13 @@ export async function POST(request) {
         taxPercent,
         serviceCharge,
         grandTotal,
-        paymentMethod,
-        amountPaid,
+        payment.paymentMethod,
+        payment.totalPaid,
+        payment.cashAmount,
+        payment.qrAmount,
+        payment.qrType,
+        payment.totalPaid,
+        payment.paymentStatus,
         user.id,
         tokenId,
         shouldPrint,
@@ -257,8 +318,13 @@ export async function POST(request) {
           tax_percent: taxPercent,
           service_charge: serviceCharge,
           grand_total: grandTotal,
-          payment_method: paymentMethod,
-          amount_paid: amountPaid,
+          payment_method: payment.paymentMethod,
+          amount_paid: payment.totalPaid,
+          cash_amount: payment.cashAmount,
+          qr_amount: payment.qrAmount,
+          qr_type: payment.qrType,
+          total_paid: payment.totalPaid,
+          payment_status: payment.paymentStatus,
           token_id: tokenId,
           token_number: linkedToken?.token_number || null,
           is_printed: shouldPrint,

@@ -29,6 +29,9 @@
 databases/
 POS_Distribution_*/
 *.zip
+public/uploads/website-assets/**
+!public/uploads/website-assets/**/
+!public/uploads/website-assets/**/.gitkeep
 
 # debug
 npm-debug.log*

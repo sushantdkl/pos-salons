@@ -8,10 +8,19 @@ function numeric(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+async function ensureBillingPaymentColumns(db) {
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS cash_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_amount NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_type TEXT");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS total_paid NUMERIC DEFAULT 0");
+  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'");
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
+    await ensureBillingPaymentColumns(db);
     await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'today';
@@ -31,14 +40,48 @@ export async function GET(request) {
     `, params);
 
     const paymentRows = await db.all(`
-      SELECT payment_method, COUNT(*)::int as count, COALESCE(SUM(grand_total), 0) as amount
+      SELECT payment_method,
+             qr_type,
+             COUNT(*)::int as count,
+             COALESCE(SUM(grand_total), 0) as amount,
+             COALESCE(SUM(CASE
+               WHEN payment_method = 'split' THEN cash_amount
+               WHEN payment_method = 'cash' THEN grand_total
+               ELSE 0
+             END), 0) as cash_amount,
+             COALESCE(SUM(CASE
+               WHEN payment_method = 'split' THEN qr_amount
+               WHEN payment_method = 'online' THEN grand_total
+               ELSE 0
+             END), 0) as qr_amount
       FROM salon_bills
       WHERE ${clause} AND status = 'paid'
-      GROUP BY payment_method
+      GROUP BY payment_method, qr_type
     `, params);
-    const paymentMethods = Object.fromEntries(
-      paymentRows.map((row) => [row.payment_method, { count: Number(row.count || 0), amount: numeric(row.amount) }])
-    );
+    const paymentMethods = {};
+    const paymentSummary = {
+      cashSales: 0,
+      qrSales: 0,
+      esewaPhonePaySales: 0,
+      bankQrSales: 0,
+      splitPaymentSales: 0,
+    };
+    paymentRows.forEach((row) => {
+      const key = row.payment_method || 'unknown';
+      const previous = paymentMethods[key] || { count: 0, amount: 0, cashAmount: 0, qrAmount: 0 };
+      paymentMethods[key] = {
+        count: previous.count + Number(row.count || 0),
+        amount: previous.amount + numeric(row.amount),
+        cashAmount: previous.cashAmount + numeric(row.cash_amount),
+        qrAmount: previous.qrAmount + numeric(row.qr_amount),
+      };
+      paymentSummary.cashSales += numeric(row.cash_amount);
+      paymentSummary.qrSales += numeric(row.qr_amount);
+      if (key === 'split') paymentSummary.splitPaymentSales += numeric(row.amount);
+      if (row.qr_type === 'ESEWA_PHONEPAY') paymentSummary.esewaPhonePaySales += numeric(row.qr_amount);
+      if (row.qr_type === 'BANK') paymentSummary.bankQrSales += numeric(row.qr_amount);
+      if (key === 'online' && !row.qr_type) paymentSummary.esewaPhonePaySales += numeric(row.qr_amount);
+    });
 
     const itemClause = periodDateFilter(
       period,
@@ -90,6 +133,11 @@ export async function GET(request) {
              service_charge,
              grand_total,
              amount_paid,
+             cash_amount,
+             qr_amount,
+             qr_type,
+             total_paid,
+             payment_status,
              ${BILL_DATE_EXPR} as transaction_date
       FROM salon_bills
       WHERE ${clause} AND status = 'paid'
@@ -135,6 +183,7 @@ export async function GET(request) {
       totalCustomers: totalCustomersRow?.count || 0,
       repeatCustomers: repeatCustomersRow?.count || 0,
       paymentMethods,
+      paymentSummary,
       topServices: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
       topItems: topServices.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
       productSales: productSales.map((item) => ({ ...item, quantity: Number(item.quantity || 0), revenue: numeric(item.revenue) })),
@@ -150,6 +199,11 @@ export async function GET(request) {
         serviceCharge: numeric(transaction.service_charge),
         grandTotal: numeric(transaction.grand_total),
         amountPaid: numeric(transaction.amount_paid),
+        cashAmount: numeric(transaction.cash_amount),
+        qrAmount: numeric(transaction.qr_amount),
+        qrType: transaction.qr_type || '',
+        totalPaid: numeric(transaction.total_paid || transaction.amount_paid),
+        paymentStatus: transaction.payment_status || 'paid',
         transactionDate: transaction.transaction_date,
       })),
       bestStaff: bestStaff.map((staff) => ({
