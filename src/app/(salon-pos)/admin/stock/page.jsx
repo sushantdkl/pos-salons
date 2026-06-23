@@ -197,7 +197,12 @@ export default function SalonInventoryPage() {
                 ))}
               </tbody>
             </table>
-            {filteredProducts.length === 0 && <div className="p-8 text-center text-gray-500">No products found.</div>}
+            {filteredProducts.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                <p className="font-medium text-gray-700">No inventory items added yet.</p>
+                <p className="mt-1 text-sm">Salon products and stock levels will appear here once inventory is added.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

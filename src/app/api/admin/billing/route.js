@@ -14,14 +14,6 @@ function normalizeDiscount(type, value, subtotal) {
   return amount;
 }
 
-async function ensureBillingPaymentColumns(db) {
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS cash_amount NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_amount NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_type TEXT");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS total_paid NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'");
-}
-
 function money(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) throw new Error('Invalid payment amount');
@@ -73,7 +65,6 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await ensureBillingPaymentColumns(db);
     await requireRole(request, db, ['admin', 'cashier']);
     const bills = await db.all(`
       SELECT b.*, COUNT(i.id)::int as item_count
@@ -93,7 +84,6 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await ensureBillingPaymentColumns(db);
     const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const services = Array.isArray(data.services) ? data.services : [];

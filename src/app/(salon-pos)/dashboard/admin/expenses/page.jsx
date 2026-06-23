@@ -300,7 +300,7 @@ function ExpenseTable({ expenses, onEdit, onDelete }) {
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Title</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Paid To</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
             {expenses.map((expense) => <tr key={expense.id}><td className="px-4 py-3 font-medium">{expense.title}</td><td className="px-4 py-3">{expense.category}</td><td className="px-4 py-3">{formatCurrency(expense.amount)}</td><td className="px-4 py-3">{expense.paymentMethod.replace('_', ' ')}</td><td className="px-4 py-3">{expense.expenseDate}</td><td className="px-4 py-3">{expense.paidTo || '-'}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(expense)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(expense.id)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
-            {!expenses.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No expenses found.</td></tr> : null}
+            {!expenses.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No expenses recorded yet.</td></tr> : null}
           </tbody>
         </table>
       </div>

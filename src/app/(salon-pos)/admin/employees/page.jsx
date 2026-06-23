@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Edit, Key, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Edit, Key, Plus, Power, PowerOff, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { APP_ROLES, ROLE_LABELS } from '@/constants/roles';
 
@@ -25,8 +25,10 @@ export default function StaffPage() {
   const [editingStaff, setEditingStaff] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [pageMessage, setPageMessage] = useState('');
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
+  const isDefaultAdmin = (employee) => employee?.username === 'admin' && String(employee?.role || '').toLowerCase() === 'admin';
 
   const fetchStaff = async () => {
     const response = await fetch('/api/admin/employees', { headers: headers() });
@@ -48,6 +50,7 @@ export default function StaffPage() {
 
   const openForm = (employee = null) => {
     setError('');
+    setPageMessage('');
     setEditingStaff(employee);
     setFormData(employee ? {
       username: employee.username,
@@ -67,6 +70,7 @@ export default function StaffPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setPageMessage('');
     const response = await fetch('/api/admin/employees', {
       method: editingStaff ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -80,14 +84,44 @@ export default function StaffPage() {
     setShowForm(false);
     setEditingStaff(null);
     setFormData(emptyForm);
+    setPageMessage(data.message || 'Staff member saved successfully.');
     fetchStaff();
   };
 
-  const deactivateStaff = async (id) => {
-    if (!confirm('Deactivate this staff member?')) return;
-    const response = await fetch(`/api/admin/employees?id=${id}`, { method: 'DELETE', headers: headers() });
-    if (response.ok) fetchStaff();
+  const toggleStaffStatus = async (employee) => {
+    if (isDefaultAdmin(employee)) return;
+    const nextActive = !employee.is_active;
+    if (!confirm(`${nextActive ? 'Activate' : 'Deactivate'} ${employee.full_name}?`)) return;
+    setPageMessage('');
+    const response = await fetch('/api/admin/employees', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...headers() },
+      body: JSON.stringify({ id: employee.id, is_active: nextActive })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setPageMessage(data.message || data.error || 'Could not update staff status.');
+      return;
+    }
+    setPageMessage(data.message || 'Staff status updated.');
+    fetchStaff();
   };
+
+  const deleteStaff = async (employee) => {
+    if (isDefaultAdmin(employee)) return;
+    if (!confirm(`Delete ${employee.full_name}? Staff with billing history must be marked inactive instead.`)) return;
+    setPageMessage('');
+    const response = await fetch(`/api/admin/employees?id=${employee.id}`, { method: 'DELETE', headers: headers() });
+    const data = await response.json();
+    if (!response.ok) {
+      setPageMessage(data.message || data.error || 'Could not delete staff member.');
+      return;
+    }
+    setPageMessage(data.message || 'Staff member deleted successfully.');
+    fetchStaff();
+  };
+
+  const editingDefaultAdmin = isDefaultAdmin(editingStaff);
 
   return (
     <>
@@ -110,6 +144,12 @@ export default function StaffPage() {
               <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search staff by name, username, or role" className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
           </div>
+
+          {pageMessage ? (
+            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              {pageMessage}
+            </div>
+          ) : null}
 
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
             <table className="w-full">
@@ -139,14 +179,36 @@ export default function StaffPage() {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => openForm(employee)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => deactivateStaff(employee.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                        {isDefaultAdmin(employee) ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
+                            <ShieldCheck className="h-4 w-4" />
+                            Protected
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => toggleStaffStatus(employee)}
+                              className={`rounded-lg p-2 ${employee.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
+                              title={employee.is_active ? 'Mark inactive' : 'Mark active'}
+                            >
+                              {employee.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                            </button>
+                            <button onClick={() => deleteStaff(employee)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-4 w-4" /></button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {filteredStaff.length === 0 && <div className="p-8 text-center text-gray-500"><Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />No staff found.</div>}
+            {filteredStaff.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="font-medium text-gray-700">No staff members found.</p>
+                <p className="mt-1 text-sm">Staff members will appear here after they are added.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -161,7 +223,7 @@ export default function StaffPage() {
               {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 md:col-span-2">{error}</div>}
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Username *</span>
-                <input required value={formData.username} onChange={(event) => setFormData({ ...formData, username: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+                <input required disabled={editingDefaultAdmin} value={formData.username} onChange={(event) => setFormData({ ...formData, username: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900 disabled:bg-gray-100 disabled:text-gray-500" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Staff name *</span>
@@ -169,7 +231,7 @@ export default function StaffPage() {
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Role *</span>
-                <select value={formData.salon_role} onChange={(event) => setFormData({ ...formData, salon_role: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900">
+                <select disabled={editingDefaultAdmin} value={formData.salon_role} onChange={(event) => setFormData({ ...formData, salon_role: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900 disabled:bg-gray-100 disabled:text-gray-500">
                   {APP_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
                 </select>
               </label>
@@ -193,7 +255,7 @@ export default function StaffPage() {
                 <input type="number" min="0" step="0.01" value={formData.base_salary} onChange={(event) => setFormData({ ...formData, base_salary: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex items-center gap-2 pt-8 text-sm font-medium text-gray-900">
-                <input type="checkbox" checked={formData.is_active} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
+                <input type="checkbox" disabled={editingDefaultAdmin} checked={editingDefaultAdmin ? true : formData.is_active} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
                 Active
               </label>
               <div className="flex gap-3 md:col-span-2">

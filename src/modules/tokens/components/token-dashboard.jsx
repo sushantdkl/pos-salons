@@ -186,9 +186,10 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       fetch('/api/admin/employees', { headers: headers() }),
     ]);
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services?.filter((service) => service.is_active) || []);
-    if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter((employee) =>
-      employee.is_active && ['barber', 'stylist', 'beautician'].includes(employee.salon_role)
-    ) || []);
+    if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter((employee) => {
+      const role = String(employee.salon_role || employee.role || '').toLowerCase();
+      return employee.is_active && ['barber', 'stylist', 'beautician'].includes(role);
+    }) || []);
   };
 
   useEffect(() => {
@@ -450,7 +451,10 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                   <div className="rounded-lg bg-gray-50 py-12 text-center text-sm text-gray-500">Loading queue…</div>
                 ) : null}
                 {!loading && tokens.length === 0 ? (
-                  <div className="rounded-lg bg-gray-50 py-12 text-center text-sm text-gray-500">No tokens for this date.</div>
+                  <div className="rounded-lg bg-gray-50 py-12 text-center text-sm text-gray-500">
+                    <p className="font-medium text-gray-700">No tokens generated yet.</p>
+                    <p className="mt-1">Walk-in tokens will appear here after they are created.</p>
+                  </div>
                 ) : null}
 
                 <div className="space-y-3">

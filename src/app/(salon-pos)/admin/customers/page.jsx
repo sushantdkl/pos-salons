@@ -171,7 +171,12 @@ export default function AdminCustomers() {
                 </div>
               </div>
             ))}
-            {filteredCustomers.length === 0 && <div className="col-span-full rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No customers found.</div>}
+            {filteredCustomers.length === 0 && (
+              <div className="col-span-full rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
+                <p className="font-medium text-gray-700">No customers found.</p>
+                <p className="mt-1 text-sm">Customer profiles will appear here after they are added or saved during billing.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

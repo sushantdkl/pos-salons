@@ -8,19 +8,10 @@ function numeric(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function ensureBillingPaymentColumns(db) {
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS cash_amount NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_amount NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS qr_type TEXT");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS total_paid NUMERIC DEFAULT 0");
-  await db.run("ALTER TABLE salon_bills ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'");
-}
-
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await ensureBillingPaymentColumns(db);
     await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'today';

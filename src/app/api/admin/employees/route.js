@@ -14,6 +14,15 @@ function validateStaff(data, editing = false) {
   return null;
 }
 
+function isDefaultAdmin(user) {
+  return user?.username === 'admin' && normalizeRole(user?.role) === 'admin';
+}
+
+function defaultAdminBlocked() {
+  const message = 'Default admin cannot be deleted or deactivated.';
+  return NextResponse.json({ success: false, message, error: message }, { status: 400 });
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
@@ -106,20 +115,31 @@ export async function PUT(request) {
     const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
+    const current = await db.get('SELECT id, username, role, is_active FROM users WHERE id = ?', [data.id]);
+    if (!current) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
+    const protectedAdmin = isDefaultAdmin(current);
+    if (
+      protectedAdmin &&
+      (data.is_active === false || normalizeRole(data.salon_role || data.role) !== 'admin')
+    ) {
+      return defaultAdminBlocked();
+    }
     const validationError = validateStaff(data, true);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
     const existing = await db.get('SELECT id FROM users WHERE username = ? AND id != ?', [cleanText(data.username), data.id]);
     if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
-    const role = normalizeRole(data.salon_role || data.role);
+    const role = protectedAdmin ? 'admin' : normalizeRole(data.salon_role || data.role);
+    const username = protectedAdmin ? current.username : cleanText(data.username);
+    const isActive = protectedAdmin ? true : data.is_active !== false;
 
     const params = [
-      cleanText(data.username),
+      username,
       cleanText(data.full_name),
       role,
       cleanText(data.email, null),
       cleanText(data.phone, null),
-      data.is_active !== false
+      isActive
     ];
     let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?, updated_at = NOW()';
     const newPassword = data.password;
@@ -161,6 +181,33 @@ export async function PUT(request) {
   }
 }
 
+export async function PATCH(request) {
+  try {
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    const user = await requireRole(request, db, 'admin');
+    const data = await request.json();
+    const id = Number(data.id);
+    if (!id) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
+
+    const target = await db.get('SELECT id, username, role, is_active, full_name FROM users WHERE id = ?', [id]);
+    if (!target) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
+    if (isDefaultAdmin(target) && data.is_active === false) return defaultAdminBlocked();
+
+    const nextActive = data.is_active !== false;
+    await db.run('UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?', [nextActive, id]);
+    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+      [user.id, nextActive ? 'activate' : 'deactivate', 'staff', id, nextActive ? 'Staff set active' : 'Staff set inactive']);
+
+    return NextResponse.json({
+      message: `Staff member ${nextActive ? 'activated' : 'deactivated'} successfully`,
+      employee: { ...target, is_active: nextActive },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error.message || 'Failed to update staff status' }, { status: error.status || 500 });
+  }
+}
+
 export async function DELETE(request) {
   try {
     const db = Database.getInstance();
@@ -169,11 +216,34 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
-    await db.run('UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?', [id]);
+
+    const target = await db.get('SELECT id, username, role, full_name FROM users WHERE id = ?', [id]);
+    if (!target) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
+    if (isDefaultAdmin(target)) return defaultAdminBlocked();
+
+    const references = await db.get(`
+      SELECT
+        (SELECT COUNT(*) FROM salon_bill_items WHERE staff_id = ?) +
+        (SELECT COUNT(*) FROM salon_bills WHERE cashier_id = ?) +
+        (SELECT COUNT(*) FROM walk_in_tokens WHERE assigned_staff_id = ? OR created_by = ? OR printed_by = ?) as count
+    `, [id, id, id, id, id]);
+
+    if (Number(references?.count || 0) > 0) {
+      return NextResponse.json({
+        success: false,
+        message: 'Staff member has billing or token history. Mark inactive instead of deleting.',
+        error: 'Staff member has billing or token history. Mark inactive instead of deleting.',
+      }, { status: 409 });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.run('DELETE FROM staff_profiles WHERE user_id = ?', [id]);
+      await tx.run('DELETE FROM users WHERE id = ?', [id]);
+    });
     await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-      [user.id, 'deactivate', 'staff', id, 'Staff set inactive']);
-    return NextResponse.json({ message: 'Staff member deactivated successfully' });
+      [user.id, 'delete', 'staff', id, target.full_name || target.username]);
+    return NextResponse.json({ message: 'Staff member deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to deactivate staff member' }, { status: error.status || 500 });
+    return NextResponse.json({ error: error.message || 'Failed to delete staff member' }, { status: error.status || 500 });
   }
 }

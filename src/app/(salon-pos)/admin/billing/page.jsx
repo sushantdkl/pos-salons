@@ -98,9 +98,10 @@ function BillingContent() {
     if (productResponse.ok) setProducts((await productResponse.json()).products?.filter((item) => item.status === 'active') || []);
     if (customerResponse.ok) setCustomers((await customerResponse.json()).customers || []);
     if (staffResponse.ok) {
-      setStaff((await staffResponse.json()).employees?.filter((employee) =>
-        employee.is_active && ['barber', 'stylist', 'beautician'].includes(employee.salon_role)
-      ) || []);
+      setStaff((await staffResponse.json()).employees?.filter((employee) => {
+        const role = String(employee.salon_role || employee.role || '').toLowerCase();
+        return employee.is_active && ['barber', 'stylist', 'beautician'].includes(role);
+      }) || []);
     }
     if (tokenResponse.ok) {
       setTokens(((await tokenResponse.json()).tokens || []).filter((token) => token.status === 'WAITING'));
@@ -243,18 +244,8 @@ function BillingContent() {
     }
   }, [tokens, services, searchParams]);
 
-  const staffForService = (service) => {
-    const serviceKeys = [service.name, ...String(service.package_items || '').split(',')]
-      .map((name) => name.trim().toLowerCase())
-      .filter(Boolean);
-
-    return staff.filter((employee) => {
-      const assigned = String(employee.assigned_services || '').split(',')
-        .map((name) => name.trim().toLowerCase())
-        .filter(Boolean);
-      if (!assigned.length) return true;
-      return serviceKeys.some((name) => assigned.includes(name) || (name.includes('facial') && assigned.some((item) => item.includes('facial'))));
-    });
+  const staffForService = () => {
+    return staff;
   };
 
   const addProduct = (product) => {
@@ -667,6 +658,9 @@ function BillingContent() {
                             {employee.full_name} ({employee.salon_role})
                           </option>
                         ))}
+                        {staffForService(service).length === 0 ? (
+                          <option value="" disabled>No active service staff available</option>
+                        ) : null}
                       </select>
                     </div>
                   ))}

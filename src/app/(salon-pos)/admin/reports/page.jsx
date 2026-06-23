@@ -306,8 +306,8 @@ export default function ReportsPage() {
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <DollarSign className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium">No payment data available</p>
-                    <p className="text-sm mt-1">Payments will appear here once transactions are recorded</p>
+                    <p className="font-medium">No revenue data available yet.</p>
+                    <p className="text-sm mt-1">Payment data will appear here once transactions are completed.</p>
                   </div>
                 )}
               </div>
@@ -358,7 +358,7 @@ export default function ReportsPage() {
                     ) : (
                       <tr>
                         <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                          No transactions found for this period.
+                          No sales records found. Sales data will appear here once transactions are completed.
                         </td>
                       </tr>
                     )}
@@ -387,7 +387,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {reports.topItems?.slice(0, 10).map((item, index) => {
+                    {(reports.topItems || []).length ? reports.topItems.slice(0, 10).map((item, index) => {
                       const maxRevenue = numberValue(reports.topItems[0]?.revenue) || 1;
                       const itemRevenue = numberValue(item.revenue);
                       const percentage = (itemRevenue / maxRevenue * 100);
@@ -429,7 +429,13 @@ export default function ReportsPage() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                          No revenue data available yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
