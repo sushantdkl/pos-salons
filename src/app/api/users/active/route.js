@@ -44,8 +44,11 @@ export async function GET() {
 
   } catch (error) {
     console.error('Fetch users error:', error);
+    const message = /DATABASE_URL must be a postgres/i.test(error?.message || '')
+      ? 'Database is not configured. Set DATABASE_URL to a postgresql:// connection string in .env.local, then restart npm run dev.'
+      : 'Failed to fetch users';
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch users' },
+      { success: false, error: message },
       { status: 500 }
     );
   }
