@@ -15,8 +15,8 @@ export default function TermsPage() {
           This page is reserved for final commercial terms. Before public launch, it should cover acceptable use, billing, support,
           data responsibilities, limitation of liability, and license activation terms when licensing is enabled.
         </p>
-        <Link href="/login" className="mt-8 inline-flex rounded-xl bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">
-          Back to POS Login
+        <Link href="/" className="mt-8 inline-flex rounded-xl bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">
+          Back to Website
         </Link>
       </div>
     </main>

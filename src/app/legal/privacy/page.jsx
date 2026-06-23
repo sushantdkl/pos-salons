@@ -15,8 +15,8 @@ export default function PrivacyPolicyPage() {
           This page is reserved for the final Salon POS privacy policy. Before public launch, it should document customer data, staff data,
           billing records, retention, access controls, and support contact details.
         </p>
-        <Link href="/login" className="mt-8 inline-flex rounded-xl bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">
-          Back to POS Login
+        <Link href="/" className="mt-8 inline-flex rounded-xl bg-gray-950 px-5 py-3 font-semibold text-white hover:bg-gray-800">
+          Back to Website
         </Link>
       </div>
     </main>

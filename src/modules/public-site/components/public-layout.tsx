@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ReactNode, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Facebook, MessageCircle, Music2 } from 'lucide-react';
+import { Facebook, Menu, MessageCircle, Music2, X } from 'lucide-react';
 import { salonInfo } from '../data/salon-info';
 import { createWhatsAppLink } from '../utils/whatsapp';
 
@@ -21,6 +21,7 @@ type PublicLayoutInfo = typeof salonInfo;
 export function PublicLayout({ children, info = salonInfo, isHome = false }: { children: ReactNode; info?: PublicLayoutInfo; isHome?: boolean }) {
   const whatsappUrl = createWhatsAppLink(undefined, info.whatsappNumber);
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!isHome) return;
@@ -35,7 +36,21 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHome]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   const isDarkTheme = isHome && !scrolled;
+  const mobileLinkClass = "flex items-center justify-between rounded-2xl border border-[#eadfce] bg-white px-4 py-3 text-sm font-semibold text-[#171411] transition hover:border-[#d4af37] hover:bg-[#fffaf5]";
 
   const headerClass = isHome
     ? (scrolled 
@@ -71,51 +86,81 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
           <div className="flex items-center gap-2">
             <Link 
               href="/book-appointment" 
-              className={isDarkTheme
+              className={`hidden sm:inline-flex ${isDarkTheme
                 ? "rounded-full bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#171411] hover:bg-[#fffaf5] transition-all"
                 : "rounded-full bg-[#171411] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#332920] transition-all"
-              }
+              }`}
             >
               Book Appointment
             </Link>
-            <Link 
-              href="/login" 
-              className={isDarkTheme
-                ? "rounded-full border border-white/20 bg-white/10 backdrop-blur-sm px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-white/20 transition-all"
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={`hidden md:inline-flex ${isDarkTheme
+                ? "rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-all hover:bg-white/20"
                 : "rounded-full bg-white border border-[#e8dcc4] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#171411] shadow-sm hover:bg-[#fffaf5] transition-all"
-              }
-            >
-              POS Login
-            </Link>
-          </div>
-        </div>
-        <div className={`mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 text-xs font-bold uppercase tracking-wider lg:hidden ${
-          isDarkTheme ? "border-t border-white/10 pt-2 bg-black/10" : ""
-        }`}>
-          {navLinks.map(([label, href]) => (
-            <Link 
-              key={href} 
-              href={href} 
-              className={`shrink-0 rounded-full px-4 py-2 transition-all ${
-                isDarkTheme 
-                  ? "bg-white/10 text-white backdrop-blur-sm hover:bg-white/20" 
-                  : "bg-white text-[#5f554e] border border-[#e8dcc4] hover:bg-[#fffaf5]"
               }`}
             >
-              {label}
-            </Link>
-          ))}
-          <Link 
-            href="/book-appointment" 
-            className={`shrink-0 rounded-full px-4 py-2 transition-all ${
-              isDarkTheme 
-                ? "bg-[#d4af37] text-[#171411] font-bold" 
-                : "bg-[#171411] text-white"
-            }`}
-          >
-            Book
-          </Link>
+              WhatsApp
+            </a>
+            <button
+              type="button"
+              onClick={() => setMobileOpen((open) => !open)}
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition lg:hidden ${
+                isDarkTheme
+                  ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+                  : 'border-[#e8dcc4] bg-white text-[#171411] hover:bg-[#fffaf5]'
+              }`}
+              aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
+
+        {mobileOpen ? (
+          <div className="lg:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation overlay"
+              className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px]"
+              onClick={() => setMobileOpen(false)}
+            />
+            <div className="absolute left-0 right-0 top-full z-40 border-t border-[#e8dcc4] bg-[#fbfaf7] px-4 py-4 shadow-2xl">
+              <div className="mx-auto grid max-w-7xl gap-2">
+                {navLinks.map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMobileOpen(false)}
+                    className={mobileLinkClass}
+                  >
+                    {label}
+                    <span className="text-[#d4af37]">/</span>
+                  </Link>
+                ))}
+                <Link
+                  href="/book-appointment"
+                  onClick={() => setMobileOpen(false)}
+                  className="mt-2 rounded-2xl bg-[#171411] px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-[#332920]"
+                >
+                  Book Appointment
+                </Link>
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setMobileOpen(false)}
+                  className="rounded-2xl bg-green-600 px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-green-700"
+                >
+                  WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       {children}
@@ -146,6 +191,7 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
             <div className="mt-3 grid gap-2 text-sm text-white/70">
               {navLinks.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
               <Link href="/book-appointment">Book Appointment</Link>
+              <a href={whatsappUrl} target="_blank" rel="noreferrer">WhatsApp</a>
             </div>
           </div>
           <div>
