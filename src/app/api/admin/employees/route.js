@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import Database from '@/lib/db/index';
-import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { cleanText, ensureSalonSchema, requireAuth, requireRole } from '@/lib/salon-schema';
 import { APP_ROLES, normalizeRole } from '@/constants/roles';
 
 function validateStaff(data, editing = false) {
@@ -27,7 +27,28 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireAuth(request, db);
+
+    if (!['admin', 'cashier', 'barber', 'stylist', 'beautician'].includes(user.role)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    if (!['admin', 'cashier'].includes(user.role)) {
+      const serviceStaff = await db.all(`
+        SELECT u.id,
+               COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name,
+               u.role,
+               u.is_active,
+               COALESCE(sp.salon_role, u.role) as salon_role,
+               COALESCE(sp.assigned_services, '') as assigned_services
+        FROM users u
+        LEFT JOIN staff_profiles sp ON sp.user_id = u.id
+        WHERE u.is_active = TRUE
+          AND COALESCE(sp.salon_role, u.role) IN ('barber', 'stylist', 'beautician')
+        ORDER BY u.full_name ASC
+      `);
+      return NextResponse.json({ employees: serviceStaff });
+    }
 
     const employees = await db.all(`
       SELECT u.id, u.username, COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name, u.role, u.email, u.phone, u.is_active, u.created_at,
