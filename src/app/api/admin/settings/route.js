@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
+import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
 
 const DEFAULT_KEYS = [
   'vat_percentage',
@@ -129,15 +130,19 @@ export async function PUT(request) {
     const data = await request.json();
     const db = Database.getInstance();
     await requireRole(request, db, 'admin');
+    if (String(data.salon_phone || '').trim() && !phoneOrNull(data.salon_phone)) {
+      return NextResponse.json({ error: PHONE_ERROR_MESSAGE, message: PHONE_ERROR_MESSAGE, field: 'salon_phone' }, { status: 400 });
+    }
 
     for (const [key, value] of Object.entries(data)) {
+      const settingValue = key === 'salon_phone' ? phoneOrNull(value) || '' : value;
       await db.run(`
         INSERT INTO system_settings (setting_key, setting_value, updated_at)
         VALUES (?, ?, NOW())
         ON CONFLICT (setting_key) DO UPDATE SET
           setting_value = EXCLUDED.setting_value,
           updated_at = NOW()
-      `, [key, String(value)]);
+      `, [key, String(settingValue)]);
     }
 
     return NextResponse.json({ message: 'Settings updated successfully' });

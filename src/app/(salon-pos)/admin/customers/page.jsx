@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 
 const emptyForm = {
   name: '',
@@ -26,6 +29,9 @@ export default function AdminCustomers() {
   const [selectedBills, setSelectedBills] = useState([]);
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
 
@@ -41,7 +47,7 @@ export default function AdminCustomers() {
     const response = await fetch('/api/admin/employees', { headers: headers() });
     if (response.ok) {
       const data = await response.json();
-      setStaff((data.employees || []).filter((employee) => employee.is_active));
+      setStaff((data.employees || []).filter(activeServiceStaffFilter));
     }
   };
 
@@ -57,6 +63,7 @@ export default function AdminCustomers() {
 
   const openForm = (customer = null) => {
     setError('');
+    setFieldErrors({});
     setEditingCustomer(customer);
     setFormData(customer ? {
       name: customer.name || '',
@@ -75,6 +82,11 @@ export default function AdminCustomers() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setFieldErrors({});
+    if (formData.phone && !isValidPhone(formData.phone)) {
+      setFieldErrors({ phone: PHONE_ERROR_MESSAGE });
+      return;
+    }
     const response = await fetch('/api/admin/customers', {
       method: editingCustomer ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -82,7 +94,11 @@ export default function AdminCustomers() {
     });
     const data = await response.json();
     if (!response.ok) {
-      setError(data.error || 'Could not save customer');
+      if (data.field === 'phone' || data.code === 'CUSTOMER_PHONE_EXISTS') {
+        setFieldErrors({ phone: data.message || 'This phone number is already registered.' });
+      } else {
+        setError(data.message || data.error || 'Could not save customer');
+      }
       return;
     }
     setShowModal(false);
@@ -92,9 +108,16 @@ export default function AdminCustomers() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this customer?')) return;
+    setActionLoading(true);
     const response = await fetch(`/api/admin/customers?id=${id}`, { method: 'DELETE', headers: headers() });
-    if (response.ok) fetchCustomers();
+    if (response.ok) {
+      setConfirmAction(null);
+      fetchCustomers();
+    } else {
+      const data = await response.json();
+      setError(data.message || data.error || 'Could not delete customer');
+    }
+    setActionLoading(false);
   };
 
   const viewHistory = async (customer) => {
@@ -109,7 +132,7 @@ export default function AdminCustomers() {
   const sendWhatsApp = (customer) => {
     const phone = (customer.phone || '').replace(/[^\d]/g, '');
     if (!phone) {
-      alert('Customer phone number is required for WhatsApp reminder.');
+      setError('Customer phone number is required for WhatsApp reminder.');
       return;
     }
     const message = `Namaste ${customer.name}, this is a reminder from The Hair Cut. We look forward to serving you again.`;
@@ -167,7 +190,7 @@ export default function AdminCustomers() {
                   <button onClick={() => sendWhatsApp(customer)} className="rounded-lg p-2 text-green-600 hover:bg-green-50" title="Send WhatsApp reminder"><MessageCircle className="h-4 w-4" /></button>
                   <button onClick={() => viewHistory(customer)} className="rounded-lg p-2 text-gray-700 hover:bg-gray-100" title="View visit history"><History className="h-4 w-4" /></button>
                   <button onClick={() => openForm(customer)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Edit customer"><Edit className="h-4 w-4" /></button>
-                  <button onClick={() => handleDelete(customer.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete customer"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => setConfirmAction({ type: 'deleteCustomer', customer })} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete customer"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
@@ -195,7 +218,11 @@ export default function AdminCustomers() {
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Phone</span>
-                <input value={formData.phone} onChange={(event) => setFormData({ ...formData, phone: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+                <input value={formData.phone} onChange={(event) => {
+                  setFieldErrors({ ...fieldErrors, phone: '' });
+                  setFormData({ ...formData, phone: sanitizePhoneInput(event.target.value) });
+                }} className={`w-full rounded-lg border px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900 ${fieldErrors.phone ? 'border-red-300' : 'border-gray-300'}`} />
+                {fieldErrors.phone ? <p className="mt-1 text-sm font-medium text-red-600">{fieldErrors.phone}</p> : null}
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Gender</span>
@@ -259,6 +286,16 @@ export default function AdminCustomers() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmAction?.type === 'deleteCustomer'}
+        title="Delete Customer"
+        description={`Delete ${confirmAction?.customer?.name || 'this customer'}? This cannot be undone if the record has no protected history.`}
+        confirmLabel="Delete"
+        destructive
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => handleDelete(confirmAction.customer.id)}
+      />
     </>
   );
 }

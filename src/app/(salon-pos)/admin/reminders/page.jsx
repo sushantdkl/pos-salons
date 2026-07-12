@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, Search, Send } from 'lucide-react';
+import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
 
 export default function RemindersPage() {
   const [customers, setCustomers] = useState([]);
@@ -10,6 +11,7 @@ export default function RemindersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [serviceName, setServiceName] = useState('');
   const [staffName, setStaffName] = useState('');
+  const [error, setError] = useState('');
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
 
@@ -21,7 +23,7 @@ export default function RemindersPage() {
     ]);
     if (customerResponse.ok) setCustomers((await customerResponse.json()).customers || []);
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services || []);
-    if (staffResponse.ok) setStaff((await staffResponse.json()).employees || []);
+    if (staffResponse.ok) setStaff(((await staffResponse.json()).employees || []).filter(activeServiceStaffFilter));
   };
 
   useEffect(() => {
@@ -36,9 +38,10 @@ export default function RemindersPage() {
   const sendReminder = (customer) => {
     const phone = (customer.phone || '').replace(/[^\d]/g, '');
     if (!phone) {
-      alert('Add a phone number before sending a reminder.');
+      setError('Add a phone number before sending a reminder.');
       return;
     }
+    setError('');
     const servicePart = serviceName ? ` for ${serviceName}` : '';
     const staffPart = staffName ? ` with ${staffName}` : '';
     const message = `Namaste ${customer.name}, this is a friendly reminder from The Hair Cut${servicePart}${staffPart}. We look forward to seeing you.`;
@@ -52,6 +55,7 @@ export default function RemindersPage() {
             <h1 className="text-3xl font-semibold text-gray-950">Reminders</h1>
             <p className="mt-1 text-sm text-gray-600">Send manual WhatsApp reminders using saved customer phone numbers.</p>
           </div>
+          {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
 
           <div className="mb-6 grid gap-4 rounded-lg border border-gray-200 bg-white p-4 lg:grid-cols-[1fr_220px_220px]">
             <div className="relative">

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, Edit, Plus, Search, Scissors, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
 
 const CATEGORIES = ['Haircut', 'Hair Color', 'Facial', 'Beard', 'Treatment', 'Makeup', 'Spa', 'Other'];
 const emptyForm = {
@@ -25,6 +27,8 @@ export default function ServicesPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const tokenHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
 
@@ -42,7 +46,7 @@ export default function ServicesPage() {
     const response = await fetch('/api/admin/employees', { headers: tokenHeaders() });
     if (response.ok) {
       const data = await response.json();
-      setStaff((data.employees || []).filter((employee) => employee.is_active));
+      setStaff((data.employees || []).filter(activeServiceStaffFilter));
     }
   };
 
@@ -107,12 +111,19 @@ export default function ServicesPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this service?')) return;
+    setActionLoading(true);
     const response = await fetch(`/api/admin/services?id=${id}`, {
       method: 'DELETE',
       headers: tokenHeaders()
     });
-    if (response.ok) fetchServices();
+    if (response.ok) {
+      setConfirmAction(null);
+      fetchServices();
+    } else {
+      const data = await response.json();
+      setError(data.message || data.error || 'Could not delete service');
+    }
+    setActionLoading(false);
   };
 
   const toggleStaff = (staffId) => {
@@ -180,7 +191,7 @@ export default function ServicesPage() {
                 <p className="mb-4 text-sm text-gray-600">Staff: {service.assigned_staff_names || 'Any available staff'}</p>
                 <div className="flex justify-end gap-2">
                   <button onClick={() => openForm(service)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Edit service"><Edit className="h-4 w-4" /></button>
-                  <button onClick={() => handleDelete(service.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete service"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => setConfirmAction({ type: 'deleteService', service })} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete service"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
@@ -246,6 +257,16 @@ export default function ServicesPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmAction?.type === 'deleteService'}
+        title="Delete Service"
+        description={`Delete ${confirmAction?.service?.name || 'this service'}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        destructive
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => handleDelete(confirmAction.service.id)}
+      />
     </>
   );
 }

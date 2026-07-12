@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { CreditCard, ImagePlus, Loader2, Receipt, Save, Settings, Store, X } from 'lucide-react';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 
 const emptySalon = {
   salon_name: '',
@@ -78,6 +79,11 @@ export default function SettingsPage() {
     if (!file) return;
     setSaving(true);
     setMessage('');
+    if (form.salon_phone && !isValidPhone(form.salon_phone)) {
+      setMessage(PHONE_ERROR_MESSAGE);
+      setSaving(false);
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append('folder', 'payment-qr');
@@ -162,7 +168,7 @@ export default function SettingsPage() {
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-900">Phone</span>
-                  <input value={form.salon_phone} onChange={(e) => setForm({ ...form, salon_phone: e.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
+                  <input value={form.salon_phone} onChange={(e) => setForm({ ...form, salon_phone: sanitizePhoneInput(e.target.value) })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-900">Email</span>

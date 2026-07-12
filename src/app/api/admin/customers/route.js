@@ -1,11 +1,41 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { isUniqueViolation } from '@/lib/api/errors';
+import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
+import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
 
 function validateCustomer(data) {
   if (!cleanText(data.name)) return 'Customer name is required';
-  if (data.phone && !/^[0-9+\-\s()]{6,20}$/.test(String(data.phone))) return 'Phone number is invalid';
+  if (String(data.phone || '').trim() && !phoneOrNull(data.phone)) return PHONE_ERROR_MESSAGE;
   return null;
+}
+
+function duplicatePhoneResponse() {
+  return NextResponse.json({
+    success: false,
+    code: 'CUSTOMER_PHONE_EXISTS',
+    message: 'This phone number is already registered.',
+    error: 'This phone number is already registered.',
+    field: 'phone',
+  }, { status: 409 });
+}
+
+async function normalizePreferredStaff(db, staffId) {
+  const id = Number(staffId || 0) || null;
+  if (!id) return null;
+  const staff = await db.get(`
+    SELECT u.id
+    FROM users u
+    JOIN staff_profiles sp ON sp.user_id = u.id
+    WHERE u.id = ? AND u.is_active = TRUE AND sp.salon_role IN (${SERVICE_STAFF_ROLES.map(() => '?').join(',')})
+  `, [id, ...SERVICE_STAFF_ROLES]);
+  if (!staff) {
+    const error = new Error('Selected preferred staff is not available.');
+    error.status = 422;
+    throw error;
+  }
+  return id;
 }
 
 export async function GET(request) {
@@ -62,6 +92,8 @@ export async function POST(request) {
     const data = await request.json();
     const validationError = validateCustomer(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    const normalizedPhone = phoneOrNull(data.phone);
+    const preferredStaffId = await normalizePreferredStaff(db, data.preferred_stylist_id);
 
     const result = await db.run(`
       INSERT INTO customers (
@@ -70,12 +102,12 @@ export async function POST(request) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       cleanText(data.name),
-      cleanText(data.phone, null),
+      normalizedPhone,
       cleanText(data.email, null),
       cleanText(data.address, null),
       cleanText(data.gender, null),
       cleanText(data.favorite_services, null),
-      data.preferred_stylist_id || null,
+      preferredStaffId,
       cleanText(data.notes, null),
       Number(data.credit_limit || 0)
     ]);
@@ -86,6 +118,8 @@ export async function POST(request) {
     const customer = await db.get('SELECT * FROM customers WHERE id = ?', [result.lastInsertRowid]);
     return NextResponse.json({ customer, message: 'Customer created successfully' }, { status: 201 });
   } catch (error) {
+    if (isUniqueViolation(error)) return duplicatePhoneResponse();
+    console.error('POST /api/admin/customers:', error);
     return NextResponse.json({ error: error.message || 'Failed to create customer' }, { status: error.status || 500 });
   }
 }
@@ -99,6 +133,12 @@ export async function PUT(request) {
     if (!data.id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     const validationError = validateCustomer(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    const normalizedPhone = phoneOrNull(data.phone);
+    const preferredStaffId = await normalizePreferredStaff(db, data.preferred_stylist_id);
+    if (normalizedPhone) {
+      const duplicate = await db.get('SELECT id FROM customers WHERE phone = ? AND id != ?', [normalizedPhone, data.id]);
+      if (duplicate) return duplicatePhoneResponse();
+    }
 
     await db.run(`
       UPDATE customers
@@ -108,12 +148,12 @@ export async function PUT(request) {
       WHERE id = ?
     `, [
       cleanText(data.name),
-      cleanText(data.phone, null),
+      normalizedPhone,
       cleanText(data.email, null),
       cleanText(data.address, null),
       cleanText(data.gender, null),
       cleanText(data.favorite_services, null),
-      data.preferred_stylist_id || null,
+      preferredStaffId,
       cleanText(data.notes, null),
       Number(data.credit_limit || 0),
       data.id
@@ -125,6 +165,8 @@ export async function PUT(request) {
     const customer = await db.get('SELECT * FROM customers WHERE id = ?', [data.id]);
     return NextResponse.json({ customer, message: 'Customer updated successfully' });
   } catch (error) {
+    if (isUniqueViolation(error)) return duplicatePhoneResponse();
+    console.error('PUT /api/admin/customers:', error);
     return NextResponse.json({ error: error.message || 'Failed to update customer' }, { status: error.status || 500 });
   }
 }

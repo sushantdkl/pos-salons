@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
 
 function normalizeDiscount(type, value, subtotal) {
   const amount = Number(value || 0);
@@ -104,7 +105,9 @@ export async function POST(request) {
         if (linkedToken.status !== 'WAITING') throw new Error('Only waiting tokens can be billed');
       }
       const customerName = cleanText(data.customer?.name || data.customer_name || 'Walk-in Customer');
-      const customerPhone = cleanText(data.customer?.phone || data.customer_phone, null);
+      const rawPhone = data.customer?.phone || data.customer_phone;
+      const customerPhone = String(rawPhone || '').trim() ? phoneOrNull(rawPhone) : null;
+      if (String(rawPhone || '').trim() && !customerPhone) throw new Error(PHONE_ERROR_MESSAGE);
 
       if (!customerId && customerPhone) {
         const existing = await tx.get('SELECT id FROM customers WHERE phone = ?', [customerPhone]);
@@ -127,9 +130,10 @@ export async function POST(request) {
         const staffId = Number(item.staff_id || 0) || null;
         if (!staffId) throw new Error(`Assign staff for ${service.name}`);
         const staffProfile = await tx.get(`
-          SELECT salon_role, commission_percentage, assigned_services
-          FROM staff_profiles
-          WHERE user_id = ? AND salon_role IN ('barber', 'stylist', 'beautician')
+          SELECT sp.salon_role, sp.commission_percentage, sp.assigned_services
+          FROM staff_profiles sp
+          JOIN users u ON u.id = sp.user_id
+          WHERE sp.user_id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
         `, [staffId]);
         if (!staffProfile) throw new Error(`Selected staff cannot perform ${service.name}`);
         const assignedServices = String(staffProfile.assigned_services || '')
@@ -328,6 +332,20 @@ export async function POST(request) {
 
     return NextResponse.json({ message: 'Bill completed successfully', ...result }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to complete bill' }, { status: 400 });
+    const knownMessages = [
+      PHONE_ERROR_MESSAGE,
+      'Add at least one service or product',
+      'This token has already been billed',
+      'Only waiting tokens can be billed',
+      'Amount paid is less than total',
+      'Cash amount and QR amount must equal total payable',
+      'Select QR type for split payment',
+    ];
+    const isKnownBusinessError = knownMessages.includes(error.message) || /Assign staff|unavailable|Not enough stock|cannot|Invalid|exceed|less than/i.test(error.message || '');
+    const message = isKnownBusinessError
+      ? error.message
+      : 'Unable to complete the bill. No transaction was saved. Please try again.';
+    console.error('POST /api/admin/billing:', error);
+    return NextResponse.json({ error: message, message, success: false }, { status: isKnownBusinessError ? (error.status || 400) : 500 });
   }
 }

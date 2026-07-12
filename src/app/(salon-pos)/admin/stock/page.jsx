@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Edit, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const emptyForm = {
   name: '',
@@ -24,6 +25,8 @@ export default function SalonInventoryPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [stockChange, setStockChange] = useState({ id: '', movement_type: 'stock_in', quantity: '', notes: '' });
   const [error, setError] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
 
@@ -101,9 +104,16 @@ export default function SalonInventoryPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this product?')) return;
+    setActionLoading(true);
     const response = await fetch(`/api/admin/salon-products?id=${id}`, { method: 'DELETE', headers: headers() });
-    if (response.ok) fetchProducts();
+    if (response.ok) {
+      setConfirmAction(null);
+      fetchProducts();
+    } else {
+      const data = await response.json();
+      setError(data.message || data.error || 'Could not delete product');
+    }
+    setActionLoading(false);
   };
 
   return (
@@ -190,7 +200,7 @@ export default function SalonInventoryPage() {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => openForm(product)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => handleDelete(product.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => setConfirmAction({ type: 'deleteProduct', product })} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -250,6 +260,16 @@ export default function SalonInventoryPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmAction?.type === 'deleteProduct'}
+        title="Delete Product"
+        description={`Delete ${confirmAction?.product?.name || 'this product'}? Historical sales will remain in reports.`}
+        confirmLabel="Delete"
+        destructive
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => handleDelete(confirmAction.product.id)}
+      />
     </>
   );
 }

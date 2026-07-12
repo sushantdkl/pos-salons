@@ -3,11 +3,13 @@ import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { BILL_DATE_EXPR } from '@/lib/db/postgres-dates';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PHONE_ERROR_MESSAGE, normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
+import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const SERVICE_ROLES = ['barber', 'stylist', 'beautician'];
+const SERVICE_ROLES = SERVICE_STAFF_ROLES;
 const TOKEN_STATUSES = ['WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW'];
 
 function today() {
@@ -77,13 +79,9 @@ function mapToken(token) {
   };
 }
 
-function normalizePhone(value) {
-  return cleanText(value, '').replace(/\s+/g, ' ').trim();
-}
-
 async function customerLookup(db, phone) {
-  const customerPhone = normalizePhone(phone);
-  if (!customerPhone || customerPhone.replace(/\D/g, '').length < 6) return null;
+  const customerPhone = normalizeCustomerPhone(phone);
+  if (!customerPhone) return null;
   return db.get(`
     SELECT c.*,
            MAX(COALESCE(b.transaction_time, b.created_at)) as last_visit
@@ -95,7 +93,7 @@ async function customerLookup(db, phone) {
 }
 
 async function findOrCreateCustomerForToken(tx, { name, phone }) {
-  const customerPhone = normalizePhone(phone);
+  const customerPhone = normalizeCustomerPhone(phone);
   const customerName = cleanText(name, '');
   if (!customerPhone) return null;
   const existing = await tx.get('SELECT * FROM customers WHERE phone = ?', [customerPhone]);
@@ -244,7 +242,9 @@ export async function POST(request) {
 
       let customerId = Number(data.customer_id || 0) || null;
       const enteredCustomerName = cleanText(data.customer_name, '');
-      const customerPhone = normalizePhone(data.customer_phone) || null;
+      const hasPhoneInput = String(data.customer_phone || '').trim();
+      const customerPhone = hasPhoneInput ? normalizeCustomerPhone(data.customer_phone) : null;
+      if (hasPhoneInput && !customerPhone) throw new Error(PHONE_ERROR_MESSAGE);
       let tokenCustomer = null;
       if (!customerId) {
         tokenCustomer = await findOrCreateCustomerForToken(tx, { name: enteredCustomerName, phone: customerPhone });

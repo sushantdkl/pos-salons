@@ -7,6 +7,8 @@ import {
   CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
+import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
 
 const draftKey = 'salon_pos_bill_draft';
 const walkInCustomer = { id: '', name: 'Walk-in Customer', phone: '' };
@@ -82,6 +84,7 @@ function BillingContent() {
   const [selectedToken, setSelectedToken] = useState(null);
   const [paymentQr, setPaymentQr] = useState(null);
   const [qrModal, setQrModal] = useState(null);
+  const [processingBill, setProcessingBill] = useState(false);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
   const isWalkIn = !customer.id;
@@ -98,10 +101,7 @@ function BillingContent() {
     if (productResponse.ok) setProducts((await productResponse.json()).products?.filter((item) => item.status === 'active') || []);
     if (customerResponse.ok) setCustomers((await customerResponse.json()).customers || []);
     if (staffResponse.ok) {
-      setStaff((await staffResponse.json()).employees?.filter((employee) => {
-        const role = String(employee.salon_role || employee.role || '').toLowerCase();
-        return employee.is_active && ['barber', 'stylist', 'beautician'].includes(role);
-      }) || []);
+      setStaff((await staffResponse.json()).employees?.filter(activeServiceStaffFilter) || []);
     }
     if (tokenResponse.ok) {
       setTokens(((await tokenResponse.json()).tokens || []).filter((token) => token.status === 'WAITING'));
@@ -292,9 +292,15 @@ function BillingContent() {
       return;
     }
     if (cartServices.some((service) => !service.staff_id)) {
-      setError('Assign a barber, stylist, or beautician for every service.');
+      setError('Please assign a staff member to every service before completing the bill.');
       return;
     }
+    if (customer.phone && !isValidPhone(customer.phone)) {
+      setError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+    if (processingBill) return;
+    setProcessingBill(true);
     if (paymentMethod === 'cash' && amountPaid && Number(amountPaid) < total) {
       setError('Cash received is less than the bill total.');
       return;
@@ -344,7 +350,8 @@ function BillingContent() {
     const data = await response.json();
     if (!response.ok) {
       if (receiptWindow) receiptWindow.close();
-      setError(data.error || 'Could not complete bill');
+      setError(data.message || data.error || 'Unable to complete the bill. No transaction was saved. Please try again.');
+      setProcessingBill(false);
       return;
     }
     setLastBill(data);
@@ -354,6 +361,7 @@ function BillingContent() {
     setSelectedToken(null);
     localStorage.removeItem(draftKey);
     fetchData();
+    setProcessingBill(false);
   };
 
   const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=340,height=700')) => {
@@ -385,7 +393,7 @@ function BillingContent() {
 
   const sendDigitalReceipt = () => {
     if (!lastBill?.bill?.customer_phone) {
-      alert('Customer phone number is required for digital receipt.');
+      setError('Customer phone number is required for digital receipt.');
       return;
     }
     const phone = lastBill.bill.customer_phone.replace(/[^\d]/g, '');
@@ -468,7 +476,7 @@ function BillingContent() {
                 />
                 <input
                   value={customer.phone}
-                  onChange={(event) => setCustomer({ ...customer, phone: event.target.value })}
+                  onChange={(event) => setCustomer({ ...customer, phone: sanitizePhoneInput(event.target.value) })}
                   placeholder="Phone (optional)"
                   className={inputClass}
                 />
@@ -876,18 +884,18 @@ function BillingContent() {
                     <button
                       type="button"
                       onClick={() => completeBill(false)}
-                      disabled={cartCount === 0}
+                      disabled={cartCount === 0 || processingBill}
                       className="rounded-lg bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Complete bill
+                      {processingBill ? 'Completing...' : 'Complete bill'}
                     </button>
                     <button
                       type="button"
                       onClick={() => completeBill(true)}
-                      disabled={cartCount === 0}
+                      disabled={cartCount === 0 || processingBill}
                       className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Bill &amp; print receipt
+                      {processingBill ? 'Completing...' : 'Bill & print receipt'}
                     </button>
                   </div>
 

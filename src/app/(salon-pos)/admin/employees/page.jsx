@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Edit, Key, Plus, Power, PowerOff, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { APP_ROLES, ROLE_LABELS } from '@/constants/roles';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 
 const emptyForm = {
   username: '',
@@ -26,6 +28,8 @@ export default function StaffPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
   const [pageMessage, setPageMessage] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
   const isDefaultAdmin = (employee) => employee?.username === 'admin' && String(employee?.role || '').toLowerCase() === 'admin';
@@ -71,6 +75,10 @@ export default function StaffPage() {
     event.preventDefault();
     setError('');
     setPageMessage('');
+    if (formData.phone && !isValidPhone(formData.phone)) {
+      setError(PHONE_ERROR_MESSAGE);
+      return;
+    }
     const response = await fetch('/api/admin/employees', {
       method: editingStaff ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -91,7 +99,7 @@ export default function StaffPage() {
   const toggleStaffStatus = async (employee) => {
     if (isDefaultAdmin(employee)) return;
     const nextActive = !employee.is_active;
-    if (!confirm(`${nextActive ? 'Activate' : 'Deactivate'} ${employee.full_name}?`)) return;
+    setActionLoading(true);
     setPageMessage('');
     const response = await fetch('/api/admin/employees', {
       method: 'PATCH',
@@ -101,23 +109,29 @@ export default function StaffPage() {
     const data = await response.json();
     if (!response.ok) {
       setPageMessage(data.message || data.error || 'Could not update staff status.');
+      setActionLoading(false);
       return;
     }
     setPageMessage(data.message || 'Staff status updated.');
+    setConfirmAction(null);
+    setActionLoading(false);
     fetchStaff();
   };
 
   const deleteStaff = async (employee) => {
     if (isDefaultAdmin(employee)) return;
-    if (!confirm(`Delete ${employee.full_name}? Staff with billing history must be marked inactive instead.`)) return;
+    setActionLoading(true);
     setPageMessage('');
     const response = await fetch(`/api/admin/employees?id=${employee.id}`, { method: 'DELETE', headers: headers() });
     const data = await response.json();
     if (!response.ok) {
       setPageMessage(data.message || data.error || 'Could not delete staff member.');
+      setActionLoading(false);
       return;
     }
     setPageMessage(data.message || 'Staff member deleted successfully.');
+    setConfirmAction(null);
+    setActionLoading(false);
     fetchStaff();
   };
 
@@ -187,13 +201,13 @@ export default function StaffPage() {
                         ) : (
                           <>
                             <button
-                              onClick={() => toggleStaffStatus(employee)}
+                              onClick={() => setConfirmAction({ type: 'toggleStaff', employee })}
                               className={`rounded-lg p-2 ${employee.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
                               title={employee.is_active ? 'Mark inactive' : 'Mark active'}
                             >
                               {employee.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                             </button>
-                            <button onClick={() => deleteStaff(employee)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={() => setConfirmAction({ type: 'deleteStaff', employee })} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-4 w-4" /></button>
                           </>
                         )}
                       </div>
@@ -244,7 +258,7 @@ export default function StaffPage() {
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Phone</span>
-                <input value={formData.phone} onChange={(event) => setFormData({ ...formData, phone: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+                <input value={formData.phone} onChange={(event) => setFormData({ ...formData, phone: sanitizePhoneInput(event.target.value) })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Commission %</span>
@@ -266,6 +280,26 @@ export default function StaffPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmAction?.type === 'toggleStaff'}
+        title={`${confirmAction?.employee?.is_active ? 'Deactivate' : 'Activate'} Staff`}
+        description={`${confirmAction?.employee?.is_active ? 'Deactivate' : 'Activate'} ${confirmAction?.employee?.full_name || 'this staff member'}?`}
+        confirmLabel={confirmAction?.employee?.is_active ? 'Deactivate' : 'Activate'}
+        destructive={Boolean(confirmAction?.employee?.is_active)}
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => toggleStaffStatus(confirmAction.employee)}
+      />
+      <ConfirmDialog
+        open={confirmAction?.type === 'deleteStaff'}
+        title="Delete Staff"
+        description={`Delete ${confirmAction?.employee?.full_name || 'this staff member'}? Staff with billing history must be marked inactive instead.`}
+        confirmLabel="Delete"
+        destructive
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => deleteStaff(confirmAction.employee)}
+      />
     </>
   );
 }

@@ -8,6 +8,7 @@ import {
   LogOut, Menu, X, LayoutDashboard, Warehouse, Scissors, MessageCircle, Globe
 } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
 let authInitialized = false;
@@ -19,6 +20,8 @@ export default function AdminLayout({ children }) {
   const [loading, setLoading] = useState(() => !authInitialized);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentRole, setCurrentRole] = useState('admin');
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   const toggleSidebar = () => {
     const newState = !sidebarOpen;
@@ -97,11 +100,34 @@ export default function AdminLayout({ children }) {
     restoreSidebarScroll();
   }, [pathname]);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    const handleKey = (event) => {
+      if (event.key === 'Escape' && sidebarOpen && window.innerWidth < 1024) {
+        setSidebarOpen(false);
+        localStorage.setItem('admin_sidebar_open', 'false');
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [sidebarOpen]);
+
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    const token = localStorage.getItem('pos_token');
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      // Local session cleanup is still required if the network drops during logout.
+    }
     authInitialized = false;
     sessionStorage.removeItem(SIDEBAR_SCROLL_KEY);
     localStorage.removeItem('pos_token');
     localStorage.removeItem('pos_user');
+    setLogoutLoading(false);
+    setLogoutOpen(false);
     router.push('/login');
   };
 
@@ -145,8 +171,11 @@ export default function AdminLayout({ children }) {
     <div className="min-h-screen bg-gray-50">
       {sidebarOpen ? (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={toggleSidebar}
+          className="fixed inset-0 z-30 bg-black/35 lg:hidden"
+          onClick={() => {
+            setSidebarOpen(false);
+            localStorage.setItem('admin_sidebar_open', 'false');
+          }}
         />
       ) : null}
 
@@ -190,7 +219,7 @@ export default function AdminLayout({ children }) {
         <div className="flex-shrink-0 p-4 border-t border-gray-200">
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => setLogoutOpen(true)}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
           >
             <LogOut className={sidebarOpen ? 'w-5 h-5' : 'w-6 h-6' } />
@@ -211,6 +240,16 @@ export default function AdminLayout({ children }) {
         </div>
         {children}
       </div>
+      <ConfirmDialog
+        open={logoutOpen}
+        title="Confirm Logout"
+        description="Are you sure you want to sign out?"
+        confirmLabel="Logout"
+        destructive
+        loading={logoutLoading}
+        onCancel={() => !logoutLoading && setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 }

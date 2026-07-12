@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Printer, RefreshCw, Ticket, UserCheck, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
+import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
 
 const statusStyles = {
   WAITING: 'bg-amber-100 text-amber-900 ring-1 ring-amber-200',
@@ -115,6 +118,9 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   const [date, setDate] = useState(today());
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [error, setError] = useState('');
   const [lastToken, setLastToken] = useState(null);
   const [customerLookup, setCustomerLookup] = useState({ status: '', message: '', customer: null });
@@ -186,10 +192,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       fetch('/api/admin/employees', { headers: headers() }),
     ]);
     if (serviceResponse.ok) setServices((await serviceResponse.json()).services?.filter((service) => service.is_active) || []);
-    if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter((employee) => {
-      const role = String(employee.salon_role || employee.role || '').toLowerCase();
-      return employee.is_active && ['barber', 'stylist', 'beautician'].includes(role);
-    }) || []);
+    if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter(activeServiceStaffFilter) || []);
   };
 
   useEffect(() => {
@@ -217,6 +220,12 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       setError('Select a service or package.');
       return;
     }
+    if (form.customer_phone && !isValidPhone(form.customer_phone)) {
+      setError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+    if (creating) return;
+    setCreating(true);
     const printWindow = shouldPrint ? window.open('', '', 'width=340,height=620') : null;
     const response = await fetch('/api/admin/tokens', {
       method: 'POST',
@@ -227,6 +236,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     if (!response.ok) {
       if (printWindow) printWindow.close();
       setError(data.error || 'Could not create token');
+      setCreating(false);
       return;
     }
     setLastToken(data.token);
@@ -235,10 +245,12 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     if (shouldPrint) printToken(data.token, printWindow);
     fetchTokens();
     fetchAnalytics();
+    setCreating(false);
   };
 
   const updateToken = async (token, action) => {
     setError('');
+    setActionLoading(true);
     const response = await fetch('/api/admin/tokens', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -247,10 +259,13 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     const data = await response.json();
     if (!response.ok) {
       setError(data.error || 'Could not update token');
+      setActionLoading(false);
       return null;
     }
+    setConfirmAction(null);
     fetchTokens();
     fetchAnalytics();
+    setActionLoading(false);
     return data.token;
   };
 
@@ -336,7 +351,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                   />
                   <input
                     value={form.customer_phone}
-                    onChange={(event) => setForm({ ...form, customer_phone: event.target.value })}
+                    onChange={(event) => setForm({ ...form, customer_phone: sanitizePhoneInput(event.target.value) })}
                     onBlur={() => lookupCustomerByPhone(form.customer_phone)}
                     placeholder="Phone (optional)"
                     className={inputClass}
@@ -389,16 +404,18 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                     <button
                       type="button"
                       onClick={() => createToken(false)}
+                      disabled={creating}
                       className="rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
                     >
-                      Generate token
+                      {creating ? 'Generating...' : 'Generate token'}
                     </button>
                     <button
                       type="button"
                       onClick={() => createToken(true)}
-                      className="rounded-lg border border-green-600 bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+                      disabled={creating}
+                      className="rounded-lg border border-green-600 bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-60"
                     >
-                      Generate &amp; print
+                      {creating ? 'Generating...' : 'Generate & print'}
                     </button>
                   </div>
                 </div>
@@ -528,13 +545,13 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                             </button>
                             <div className="flex gap-2 lg:contents">
                               <button
-                                onClick={() => updateToken(token, 'cancel')}
+                                onClick={() => setConfirmAction({ type: 'cancel', token })}
                                 className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 lg:flex-none"
                               >
                                 <XCircle className="h-4 w-4" /> Cancel
                               </button>
                               <button
-                                onClick={() => updateToken(token, 'no_show')}
+                                onClick={() => setConfirmAction({ type: 'no_show', token })}
                                 className="flex-1 rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50 lg:flex-none"
                               >
                                 No-show
@@ -551,6 +568,16 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.type === 'no_show' ? 'Mark No-show' : 'Cancel Token'}
+        description={`${confirmAction?.type === 'no_show' ? 'Mark' : 'Cancel'} token ${confirmAction?.token?.token_number || ''}?`}
+        confirmLabel={confirmAction?.type === 'no_show' ? 'Mark No-show' : 'Cancel Token'}
+        destructive
+        loading={actionLoading}
+        onCancel={() => !actionLoading && setConfirmAction(null)}
+        onConfirm={() => updateToken(confirmAction.token, confirmAction.type)}
+      />
     </>
   );
 }

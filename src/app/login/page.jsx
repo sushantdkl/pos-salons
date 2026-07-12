@@ -100,12 +100,6 @@ export default function LoginPage() {
               Select your staff profile and enter your private PIN to continue to the salon dashboard.
             </p>
           </div>
-          <div className="mt-10 rounded-2xl border border-white/10 bg-white/10 p-5">
-            <p className="text-sm font-semibold text-white">Production-ready login</p>
-            <p className="mt-2 text-sm leading-6 text-white/65">
-              PINs are verified by the backend authentication service and are never displayed on this screen.
-            </p>
-          </div>
         </section>
 
         <Card className="border-[#e7ded2] bg-white/95 shadow-xl">

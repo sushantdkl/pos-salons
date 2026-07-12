@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { MessageCircle } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { createBookingMessage, createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
+import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 import type { PublicPackage, PublicService, PublicStaffMember } from '../types';
 import { salonInfo } from '../data/salon-info';
 
@@ -47,6 +48,10 @@ export function BookingForm({
     event.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.service || !form.date || !form.time) {
       setError('Please fill name, phone, service, preferred date, and preferred time.');
+      return;
+    }
+    if (!isValidPhone(form.phone)) {
+      setError(PHONE_ERROR_MESSAGE);
       return;
     }
 
@@ -97,7 +102,7 @@ export function BookingForm({
                   <span className="mb-2 block text-sm font-semibold text-white/90">Phone number *</span>
                   <input
                     value={form.phone}
-                    onChange={(event) => update('phone', event.target.value)}
+                    onChange={(event) => update('phone', sanitizePhoneInput(event.target.value))}
                     className="w-full border border-white/20 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/40 focus:border-transparent focus:ring-2 focus:ring-salon-gold"
                   />
                 </label>

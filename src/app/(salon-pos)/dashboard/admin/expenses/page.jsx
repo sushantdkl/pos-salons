@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DollarSign, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const tabs = ['Overview', 'Expenses', 'Salary Payments', 'Reports'];
 const emptyExpense = {
@@ -72,6 +73,8 @@ export default function AdminExpensesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -161,15 +164,17 @@ export default function AdminExpensesPage() {
   };
 
   const removeRecord = async (id, type = 'expense') => {
-    if (!confirm('Delete this record?')) return;
+    setActionLoading(true);
     const response = await fetch(`/api/admin/expenses?id=${id}&type=${type}`, { method: 'DELETE', headers: headers() });
     const payload = await response.json();
     if (response.ok) {
       setMessage(payload.message || 'Record deleted.');
+      setConfirmAction(null);
       fetchData();
     } else {
       setError(payload.error || 'Could not delete record');
     }
+    setActionLoading(false);
   };
 
   if (loading && !data) {
@@ -203,18 +208,28 @@ export default function AdminExpensesPage() {
         {activeTab === 'Expenses' ? (
           <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
             <ExpenseForm form={expenseForm} setForm={setExpenseForm} categories={data?.categories || []} paymentMethods={data?.paymentMethods || []} saving={saving} onSave={saveExpense} />
-            <ExpenseTable expenses={data?.expenses || []} onEdit={setExpenseForm} onDelete={(id) => removeRecord(id, 'expense')} />
+            <ExpenseTable expenses={data?.expenses || []} onEdit={setExpenseForm} onDelete={(record) => setConfirmAction({ type: 'expense', record })} />
           </div>
         ) : null}
         {activeTab === 'Salary Payments' ? (
           <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
             <SalaryForm form={salaryForm} setForm={setSalaryForm} staff={data?.staff || []} totalPayable={totalPayable} remainingBalance={remainingBalance} paymentStatus={paymentStatus} saving={saving} onSave={saveSalary} />
-            <SalaryTable salaries={data?.salaries || []} onEdit={setSalaryForm} onDelete={(id) => removeRecord(id, 'salary')} />
+            <SalaryTable salaries={data?.salaries || []} onEdit={setSalaryForm} onDelete={(record) => setConfirmAction({ type: 'salary', record })} />
           </div>
         ) : null}
         {activeTab === 'Reports' ? (
           <Reports filters={filters} setFilters={setFilters} categories={data?.categories || []} paymentMethods={data?.paymentMethods || []} paymentStatuses={data?.paymentStatuses || []} staff={data?.staff || []} expenses={data?.expenses || []} salaries={data?.salaries || []} />
         ) : null}
+        <ConfirmDialog
+          open={Boolean(confirmAction)}
+          title={`Delete ${confirmAction?.type === 'salary' ? 'Salary Payment' : 'Expense'}`}
+          description="Delete this record? This action cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          loading={actionLoading}
+          onCancel={() => !actionLoading && setConfirmAction(null)}
+          onConfirm={() => removeRecord(confirmAction.record.id, confirmAction.type)}
+        />
       </div>
   );
 }
@@ -299,7 +314,7 @@ function ExpenseTable({ expenses, onEdit, onDelete }) {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Title</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Paid To</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {expenses.map((expense) => <tr key={expense.id}><td className="px-4 py-3 font-medium">{expense.title}</td><td className="px-4 py-3">{expense.category}</td><td className="px-4 py-3">{formatCurrency(expense.amount)}</td><td className="px-4 py-3">{expense.paymentMethod.replace('_', ' ')}</td><td className="px-4 py-3">{expense.expenseDate}</td><td className="px-4 py-3">{expense.paidTo || '-'}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(expense)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(expense.id)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+            {expenses.map((expense) => <tr key={expense.id}><td className="px-4 py-3 font-medium">{expense.title}</td><td className="px-4 py-3">{expense.category}</td><td className="px-4 py-3">{formatCurrency(expense.amount)}</td><td className="px-4 py-3">{expense.paymentMethod.replace('_', ' ')}</td><td className="px-4 py-3">{expense.expenseDate}</td><td className="px-4 py-3">{expense.paidTo || '-'}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(expense)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(expense)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
             {!expenses.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No expenses recorded yet.</td></tr> : null}
           </tbody>
         </table>
@@ -316,7 +331,7 @@ function SalaryTable({ salaries, onEdit, onDelete }) {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Staff</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Payable</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(salary.id)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(salary)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
             {!salaries.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No salary payments found.</td></tr> : null}
           </tbody>
         </table>

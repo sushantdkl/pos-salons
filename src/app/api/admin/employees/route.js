@@ -3,24 +3,51 @@ import bcrypt from 'bcryptjs';
 import Database from '@/lib/db/index';
 import { cleanText, ensureSalonSchema, requireAuth, requireRole } from '@/lib/salon-schema';
 import { APP_ROLES, normalizeRole } from '@/constants/roles';
+import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
+import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
+
+const PRIMARY_ADMIN_USERNAME = process.env.PRIMARY_ADMIN_USERNAME || 'admin';
 
 function validateStaff(data, editing = false) {
   if (!cleanText(data.username)) return 'Username is required';
   if (!cleanText(data.full_name)) return 'Staff name is required';
   if (!APP_ROLES.includes(normalizeRole(data.salon_role || data.role))) return 'Valid role is required';
   if (!editing && !/^\d{4,8}$/.test(String(data.password || ''))) return 'PIN must be 4 to 8 digits';
+  if (String(data.phone || '').trim() && !phoneOrNull(data.phone)) return PHONE_ERROR_MESSAGE;
   if (Number(data.commission_percentage || 0) < 0 || Number(data.commission_percentage || 0) > 100) return 'Commission must be between 0 and 100';
   if (Number(data.base_salary || 0) < 0) return 'Base salary cannot be negative';
   return null;
 }
 
 function isDefaultAdmin(user) {
-  return user?.username === 'admin' && normalizeRole(user?.role) === 'admin';
+  return user?.username === PRIMARY_ADMIN_USERNAME && normalizeRole(user?.role) === 'admin';
 }
 
 function defaultAdminBlocked() {
-  const message = 'Default admin cannot be deleted or deactivated.';
+  const message = 'The primary admin account cannot be deleted or deactivated.';
   return NextResponse.json({ success: false, message, error: message }, { status: 400 });
+}
+
+function adminRuleError(message) {
+  const error = new Error(message);
+  error.status = 422;
+  return error;
+}
+
+async function ensureAdminCanChange(tx, current, nextRole, nextActive) {
+  if (isDefaultAdmin(current) && (nextRole !== 'admin' || nextActive === false)) {
+    throw adminRuleError('The primary admin account cannot be deleted or deactivated.');
+  }
+  if (normalizeRole(current?.role) !== 'admin') return;
+  if (nextRole === 'admin' && nextActive !== false) return;
+
+  const row = await tx.get(
+    "SELECT COUNT(*)::int as count FROM users WHERE role = 'admin' AND is_active = TRUE AND id != ?",
+    [current.id]
+  );
+  if (Number(row?.count || 0) <= 0) {
+    throw adminRuleError('The last active admin account cannot be deleted. Please create another active admin first.');
+  }
 }
 
 export async function GET(request) {
@@ -44,9 +71,9 @@ export async function GET(request) {
         FROM users u
         LEFT JOIN staff_profiles sp ON sp.user_id = u.id
         WHERE u.is_active = TRUE
-          AND COALESCE(sp.salon_role, u.role) IN ('barber', 'stylist', 'beautician')
+          AND COALESCE(sp.salon_role, u.role) IN (${SERVICE_STAFF_ROLES.map(() => '?').join(',')})
         ORDER BY u.full_name ASC
-      `);
+      `, SERVICE_STAFF_ROLES);
       return NextResponse.json({ employees: serviceStaff });
     }
 
@@ -93,6 +120,7 @@ export async function POST(request) {
     if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
 
     const role = normalizeRole(data.salon_role || data.role);
+    const normalizedPhone = phoneOrNull(data.phone);
     const hashedPassword = bcrypt.hashSync(String(data.password), 10);
     const result = await db.run(`
       INSERT INTO users (username, full_name, role, password_hash, email, phone, is_active)
@@ -103,7 +131,7 @@ export async function POST(request) {
       role,
       hashedPassword,
       cleanText(data.email, null),
-      cleanText(data.phone, null),
+      normalizedPhone,
       data.is_active !== false
     ]);
 
@@ -153,47 +181,51 @@ export async function PUT(request) {
     const role = protectedAdmin ? 'admin' : normalizeRole(data.salon_role || data.role);
     const username = protectedAdmin ? current.username : cleanText(data.username);
     const isActive = protectedAdmin ? true : data.is_active !== false;
+    const normalizedPhone = phoneOrNull(data.phone);
 
-    const params = [
-      username,
-      cleanText(data.full_name),
-      role,
-      cleanText(data.email, null),
-      cleanText(data.phone, null),
-      isActive
-    ];
-    let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?, updated_at = NOW()';
-    const newPassword = data.password;
-    if (newPassword) {
-      if (!/^\d{4,8}$/.test(String(newPassword))) return NextResponse.json({ error: 'PIN must be 4 to 8 digits' }, { status: 400 });
-      sql += ', password_hash = ?';
-      params.push(bcrypt.hashSync(String(newPassword), 10));
-    }
-    sql += ' WHERE id = ?';
-    params.push(data.id);
-    await db.run(sql, params);
+    await db.transaction(async (tx) => {
+      await ensureAdminCanChange(tx, current, role, isActive);
+      const params = [
+        username,
+        cleanText(data.full_name),
+        role,
+        cleanText(data.email, null),
+        normalizedPhone,
+        isActive
+      ];
+      let sql = 'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?, updated_at = NOW()';
+      const newPassword = data.password;
+      if (newPassword) {
+        if (!/^\d{4,8}$/.test(String(newPassword))) throw adminRuleError('PIN must be 4 to 8 digits');
+        sql += ', password_hash = ?';
+        params.push(bcrypt.hashSync(String(newPassword), 10));
+      }
+      sql += ' WHERE id = ?';
+      params.push(data.id);
+      await tx.run(sql, params);
 
-    await db.run(`
-      INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT (user_id) DO UPDATE SET
-        display_name = EXCLUDED.display_name,
-        salon_role = EXCLUDED.salon_role,
-        assigned_services = EXCLUDED.assigned_services,
-        commission_percentage = EXCLUDED.commission_percentage,
-        base_salary = EXCLUDED.base_salary,
-        updated_at = NOW()
-    `, [
-      data.id,
-      cleanText(data.full_name),
-      role,
-      Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
-      Number(data.commission_percentage || 0),
-      Number(data.base_salary || 0)
-    ]);
+      await tx.run(`
+        INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (user_id) DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          salon_role = EXCLUDED.salon_role,
+          assigned_services = EXCLUDED.assigned_services,
+          commission_percentage = EXCLUDED.commission_percentage,
+          base_salary = EXCLUDED.base_salary,
+          updated_at = NOW()
+      `, [
+        data.id,
+        cleanText(data.full_name),
+        role,
+        Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
+        Number(data.commission_percentage || 0),
+        Number(data.base_salary || 0)
+      ]);
 
-    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-      [user.id, 'update', 'staff', data.id, cleanText(data.full_name)]);
+      await tx.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+        [user.id, 'update', 'staff', data.id, cleanText(data.full_name)]);
+    });
 
     const employee = await db.get('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?', [data.id]);
     return NextResponse.json({ employee, message: 'Staff member updated successfully' });
@@ -213,12 +245,13 @@ export async function PATCH(request) {
 
     const target = await db.get('SELECT id, username, role, is_active, full_name FROM users WHERE id = ?', [id]);
     if (!target) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
-    if (isDefaultAdmin(target) && data.is_active === false) return defaultAdminBlocked();
-
     const nextActive = data.is_active !== false;
-    await db.run('UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?', [nextActive, id]);
-    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-      [user.id, nextActive ? 'activate' : 'deactivate', 'staff', id, nextActive ? 'Staff set active' : 'Staff set inactive']);
+    await db.transaction(async (tx) => {
+      await ensureAdminCanChange(tx, target, normalizeRole(target.role), nextActive);
+      await tx.run('UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?', [nextActive, id]);
+      await tx.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+        [user.id, nextActive ? 'activate' : 'deactivate', 'staff', id, nextActive ? 'Staff set active' : 'Staff set inactive']);
+    });
 
     return NextResponse.json({
       message: `Staff member ${nextActive ? 'activated' : 'deactivated'} successfully`,
@@ -240,29 +273,25 @@ export async function DELETE(request) {
 
     const target = await db.get('SELECT id, username, role, full_name FROM users WHERE id = ?', [id]);
     if (!target) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
-    if (isDefaultAdmin(target)) return defaultAdminBlocked();
-
-    const references = await db.get(`
-      SELECT
-        (SELECT COUNT(*) FROM salon_bill_items WHERE staff_id = ?) +
-        (SELECT COUNT(*) FROM salon_bills WHERE cashier_id = ?) +
-        (SELECT COUNT(*) FROM walk_in_tokens WHERE assigned_staff_id = ? OR created_by = ? OR printed_by = ?) as count
-    `, [id, id, id, id, id]);
-
-    if (Number(references?.count || 0) > 0) {
-      return NextResponse.json({
-        success: false,
-        message: 'Staff member has billing or token history. Mark inactive instead of deleting.',
-        error: 'Staff member has billing or token history. Mark inactive instead of deleting.',
-      }, { status: 409 });
-    }
 
     await db.transaction(async (tx) => {
+      await ensureAdminCanChange(tx, target, 'deleted', false);
+      const references = await tx.get(`
+        SELECT
+          (SELECT COUNT(*) FROM salon_bill_items WHERE staff_id = ?) +
+          (SELECT COUNT(*) FROM salon_bills WHERE cashier_id = ?) +
+          (SELECT COUNT(*) FROM walk_in_tokens WHERE assigned_staff_id = ? OR created_by = ? OR printed_by = ?) as count
+      `, [id, id, id, id, id]);
+      if (Number(references?.count || 0) > 0) {
+        const error = new Error('Staff member has billing or token history. Mark inactive instead of deleting.');
+        error.status = 409;
+        throw error;
+      }
       await tx.run('DELETE FROM staff_profiles WHERE user_id = ?', [id]);
       await tx.run('DELETE FROM users WHERE id = ?', [id]);
+      await tx.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
+        [user.id, 'delete', 'staff', id, target.full_name || target.username]);
     });
-    await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-      [user.id, 'delete', 'staff', id, target.full_name || target.username]);
     return NextResponse.json({ message: 'Staff member deleted successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to delete staff member' }, { status: error.status || 500 });
