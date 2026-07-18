@@ -165,10 +165,10 @@ export default function StaffPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-950">Staff & Commission</h1>
+              <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Staff & Commission</h1>
               <p className="mt-1 text-sm text-gray-600">Salon roles, PIN access, service revenue, and commission summaries.</p>
             </div>
-            <button onClick={() => openForm()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800">
+            <button onClick={() => openForm()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800 sm:w-auto">
               <Plus className="h-5 w-5" />
               Add Staff
             </button>
@@ -187,8 +187,69 @@ export default function StaffPage() {
             </div>
           ) : null}
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="w-full">
+          {/* Mobile cards */}
+          <div className="space-y-3 md:hidden">
+            {filteredStaff.map((employee) => (
+              <div key={employee.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-950">{employee.full_name}</p>
+                    <p className="truncate text-sm text-gray-500">{employee.username}{employee.phone ? ` · ${employee.phone}` : ''}</p>
+                    <p className="mt-1 text-sm text-gray-700">{ROLE_LABELS[employee.salon_role] || employee.salon_role}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${employee.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {employee.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Revenue</p>
+                    <p className="font-semibold text-gray-950">{formatCurrency(employee.service_revenue || 0)}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Commission</p>
+                    <p className="font-semibold text-gray-950">{formatCurrency(employee.commission_earned || 0)}</p>
+                  </div>
+                  <div className="col-span-2 rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Salary + Commission</p>
+                    <p className="font-semibold text-gray-950">{formatCurrency(Number(employee.base_salary || 0) + Number(employee.commission_earned || 0))}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => openForm(employee)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label="Edit staff"><Edit className="h-5 w-5" /></button>
+                  {isDefaultAdmin(employee) ? (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
+                      <ShieldCheck className="h-4 w-4" />
+                      Protected
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction({ type: 'toggleStaff', employee })}
+                        className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg ${employee.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
+                        title={employee.is_active ? 'Mark inactive' : 'Mark active'}
+                      >
+                        {employee.is_active ? <PowerOff className="h-5 w-5" /> : <Power className="h-5 w-5" />}
+                      </button>
+                      <button type="button" onClick={() => setConfirmAction({ type: 'deleteStaff', employee })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-5 w-5" /></button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+            {filteredStaff.length === 0 && (
+              <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500">
+                <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="font-medium text-gray-700">No staff members found.</p>
+                <p className="mt-1 text-sm">Staff members will appear here after they are added.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto rounded-lg border border-gray-200 bg-white md:block">
+            <table className="min-w-[860px] w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Staff</th>
@@ -214,7 +275,7 @@ export default function StaffPage() {
                     <td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-medium ${employee.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{employee.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => openForm(employee)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => openForm(employee)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
                         {isDefaultAdmin(employee) ? (
                           <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
                             <ShieldCheck className="h-4 w-4" />
@@ -224,12 +285,12 @@ export default function StaffPage() {
                           <>
                             <button
                               onClick={() => setConfirmAction({ type: 'toggleStaff', employee })}
-                              className={`rounded-lg p-2 ${employee.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
+                              className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg ${employee.is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
                               title={employee.is_active ? 'Mark inactive' : 'Mark active'}
                             >
                               {employee.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                             </button>
-                            <button onClick={() => setConfirmAction({ type: 'deleteStaff', employee })} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={() => setConfirmAction({ type: 'deleteStaff', employee })} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" title="Delete staff"><Trash2 className="h-4 w-4" /></button>
                           </>
                         )}
                       </div>

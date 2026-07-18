@@ -141,10 +141,10 @@ export default function ServicesPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-950">Service Management</h1>
+              <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Service Management</h1>
               <p className="mt-1 text-sm text-gray-600">Create salon services, assign stylists, and control availability.</p>
             </div>
-            <button onClick={() => openForm()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800">
+            <button onClick={() => openForm()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800 sm:w-auto">
               <Plus className="h-5 w-5" />
               Add Service
             </button>
@@ -189,9 +189,9 @@ export default function ServicesPage() {
                   </div>
                 </div>
                 <p className="mb-4 text-sm text-gray-600">Staff: {service.assigned_staff_names || 'Any available staff'}</p>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => openForm(service)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Edit service"><Edit className="h-4 w-4" /></button>
-                  <button onClick={() => setConfirmAction({ type: 'deleteService', service })} className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Delete service"><Trash2 className="h-4 w-4" /></button>
+                <div className="flex justify-end gap-1">
+                  <button onClick={() => openForm(service)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" title="Edit service"><Edit className="h-5 w-5" /></button>
+                  <button onClick={() => setConfirmAction({ type: 'deleteService', service })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" title="Delete service"><Trash2 className="h-5 w-5" /></button>
                 </div>
               </div>
             ))}

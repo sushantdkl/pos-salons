@@ -65,20 +65,20 @@ export default function AdminDashboard() {
   return (
     <>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-gray-900">Dashboard</h1>
-            <p className="text-gray-500 mt-1 text-sm">Welcome back, Admin - {getNepaliDateString(new Date())}</p>
+      <header className="border-b border-gray-200 bg-white px-4 py-5 sm:px-8 sm:py-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Dashboard</h1>
+            <p className="mt-1 truncate text-sm text-gray-500">Welcome back, Admin - {getNepaliDateString(new Date())}</p>
           </div>
-          <div className="flex items-center space-x-2 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-green-700 text-sm font-medium">Live</span>
+          <div className="flex shrink-0 items-center space-x-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-green-500"></div>
+            <span className="text-sm font-medium text-green-700">Live</span>
           </div>
         </div>
       </header>
 
-      <div className="p-8 bg-gray-50">
+      <div className="bg-gray-50 p-4 sm:p-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="rounded-lg bg-gray-100 p-2.5">
               <DollarSign className="h-5 w-5 text-gray-700" />
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Walk-in queue summary — replaces 9 scattered token cards */}
-        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-amber-50 p-2.5">

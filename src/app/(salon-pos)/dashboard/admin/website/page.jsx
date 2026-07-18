@@ -362,16 +362,16 @@ export default function WebsiteCmsPage() {
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-gray-950">Website CMS</h1>
+          <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Website CMS</h1>
           <p className="mt-1 text-sm text-gray-600">
             Content here drives the live public website. Save after changes, then preview.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/" target="_blank" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <Link href="/" target="_blank" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700">
             <Eye className="h-4 w-4" /> Preview Website
           </Link>
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white disabled:opacity-60">
+          <button onClick={save} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white disabled:opacity-60">
             <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save CMS'}
           </button>
         </div>
@@ -380,21 +380,23 @@ export default function WebsiteCmsPage() {
       {message ? <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">{message}</div> : null}
       {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
 
-      <div className="mb-5 flex gap-2 overflow-x-auto rounded-lg border border-gray-200 bg-white p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`shrink-0 rounded-md px-4 py-2 text-sm font-semibold ${activeTab === tab ? 'bg-gray-950 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="-mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+        <div className="flex min-w-max gap-2 rounded-lg border border-gray-200 bg-white p-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`min-h-11 shrink-0 rounded-md px-4 py-2.5 text-sm font-semibold ${activeTab === tab ? 'bg-gray-950 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       {showFullSectionForm ? (
         <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-semibold text-gray-950">{activeTab} Section</h2>
             <Toggle checked={activeSection.isVisible} onChange={(value) => updateSection(activeSection.sectionKey, { isVisible: value })} label="Section" />
           </div>

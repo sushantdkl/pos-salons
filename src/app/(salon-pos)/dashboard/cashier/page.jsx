@@ -18,7 +18,7 @@ export default function CashierDashboard() {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-6">
-            <h1 className="text-3xl font-semibold text-gray-950">Cashier Dashboard</h1>
+            <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Cashier Dashboard</h1>
             <p className="mt-1 text-sm text-gray-600">Fast checkout tools for front-desk salon operations.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

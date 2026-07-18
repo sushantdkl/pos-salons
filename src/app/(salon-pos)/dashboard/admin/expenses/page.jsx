@@ -185,10 +185,10 @@ export default function AdminExpensesPage() {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-gray-950">Expenses & Salary</h1>
+            <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Expenses & Salary</h1>
             <p className="mt-1 text-sm text-gray-600">Track expenses, salary payments, commission payouts, and net profit.</p>
           </div>
-          <button onClick={() => setActiveTab('Expenses')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white">
+          <button onClick={() => setActiveTab('Expenses')} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white lg:w-auto">
             <Plus className="h-4 w-4" /> Add Expense
           </button>
         </div>
@@ -196,12 +196,14 @@ export default function AdminExpensesPage() {
         {message ? <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">{message}</div> : null}
         {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
 
-        <div className="mb-5 flex gap-2 overflow-x-auto rounded-lg border border-gray-200 bg-white p-2">
-          {tabs.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`shrink-0 rounded-md px-4 py-2 text-sm font-semibold ${activeTab === tab ? 'bg-gray-950 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
-              {tab}
-            </button>
-          ))}
+        <div className="-mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+          <div className="flex min-w-max gap-2 rounded-lg border border-gray-200 bg-white p-2">
+            {tabs.map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`min-h-11 shrink-0 rounded-md px-4 py-2.5 text-sm font-semibold ${activeTab === tab ? 'bg-gray-950 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
 
         {activeTab === 'Overview' ? <Overview summary={data?.summary} /> : null}
@@ -311,10 +313,10 @@ function ExpenseTable({ expenses, onEdit, onDelete }) {
     <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-4"><h2 className="text-xl font-semibold text-gray-950">Expense Records</h2></div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-[720px] w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Title</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Paid To</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {expenses.map((expense) => <tr key={expense.id}><td className="px-4 py-3 font-medium">{expense.title}</td><td className="px-4 py-3">{expense.category}</td><td className="px-4 py-3">{formatCurrency(expense.amount)}</td><td className="px-4 py-3">{expense.paymentMethod.replace('_', ' ')}</td><td className="px-4 py-3">{expense.expenseDate}</td><td className="px-4 py-3">{expense.paidTo || '-'}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(expense)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(expense)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+            {expenses.map((expense) => <tr key={expense.id}><td className="px-4 py-3 font-medium">{expense.title}</td><td className="px-4 py-3">{expense.category}</td><td className="px-4 py-3">{formatCurrency(expense.amount)}</td><td className="px-4 py-3">{expense.paymentMethod.replace('_', ' ')}</td><td className="px-4 py-3">{expense.expenseDate}</td><td className="px-4 py-3">{expense.paidTo || '-'}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(expense)} className="min-h-10 rounded border border-gray-300 px-3 py-2">Edit</button><button onClick={() => onDelete(expense)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-red-200 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
             {!expenses.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No expenses recorded yet.</td></tr> : null}
           </tbody>
         </table>
@@ -328,10 +330,10 @@ function SalaryTable({ salaries, onEdit, onDelete }) {
     <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-4"><h2 className="text-xl font-semibold text-gray-950">Salary Payments</h2></div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-[720px] w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Staff</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Payable</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="rounded border border-gray-300 px-3 py-1">Edit</button><button onClick={() => onDelete(salary)} className="rounded border border-red-200 px-3 py-1 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="min-h-10 rounded border border-gray-300 px-3 py-2">Edit</button><button onClick={() => onDelete(salary)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-red-200 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
             {!salaries.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No salary payments found.</td></tr> : null}
           </tbody>
         </table>

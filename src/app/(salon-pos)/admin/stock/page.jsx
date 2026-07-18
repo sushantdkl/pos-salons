@@ -122,10 +122,10 @@ export default function SalonInventoryPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-950">Salon Product Inventory</h1>
+              <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Salon Product Inventory</h1>
               <p className="mt-1 text-sm text-gray-600">Track retail and consumable salon stock without allowing negative quantities.</p>
             </div>
-            <button onClick={() => openForm()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800">
+            <button onClick={() => openForm()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800 sm:w-auto">
               <Plus className="h-5 w-5" />
               Add Product
             </button>
@@ -167,8 +167,51 @@ export default function SalonInventoryPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="w-full">
+          {/* Mobile cards */}
+          <div className="space-y-3 md:hidden">
+            {filteredProducts.map((product) => (
+              <div key={product.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      {product.is_low_stock ? <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" /> : <Package className="h-4 w-4 shrink-0 text-gray-400" />}
+                      <p className="font-semibold text-gray-950">{product.name}</p>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">{product.category}</p>
+                    {product.supplier ? <p className="text-xs text-gray-500">{product.supplier}</p> : null}
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${product.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{product.status}</span>
+                </div>
+                <div className="mb-3 grid grid-cols-3 gap-2 text-sm">
+                  <div className="rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Stock</p>
+                    <p className={`font-semibold ${product.is_low_stock ? 'text-red-600' : 'text-gray-950'}`}>{product.current_stock}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Buy</p>
+                    <p className="font-semibold text-gray-950">{formatCurrency(product.purchase_price)}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-xs text-gray-500">Sell</p>
+                    <p className="font-semibold text-gray-950">{formatCurrency(product.selling_price)}</p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => openForm(product)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label="Edit product"><Edit className="h-5 w-5" /></button>
+                  <button type="button" onClick={() => setConfirmAction({ type: 'deleteProduct', product })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" aria-label="Delete product"><Trash2 className="h-5 w-5" /></button>
+                </div>
+              </div>
+            ))}
+            {filteredProducts.length === 0 && (
+              <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500">
+                <p className="font-medium text-gray-700">No inventory items added yet.</p>
+                <p className="mt-1 text-sm">Salon products and stock levels will appear here once inventory is added.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-lg border border-gray-200 bg-white md:block">
+            <table className="min-w-[760px] w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
@@ -199,8 +242,8 @@ export default function SalonInventoryPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => openForm(product)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => setConfirmAction({ type: 'deleteProduct', product })} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => openForm(product)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => setConfirmAction({ type: 'deleteProduct', product })} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>

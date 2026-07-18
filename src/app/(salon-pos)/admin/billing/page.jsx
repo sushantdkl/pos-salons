@@ -823,12 +823,12 @@ function BillingContent() {
                         <p className="text-sm text-gray-600">{formatCurrency(product.selling_price)} each</p>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => updateProductQty(product.id, -1)} className="rounded-md border border-gray-300 p-1 hover:bg-gray-50">
-                          <Minus className="h-3.5 w-3.5" />
+                        <button type="button" onClick={() => updateProductQty(product.id, -1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50">
+                          <Minus className="h-4 w-4" />
                         </button>
-                        <span className="w-5 text-center text-sm font-semibold">{product.quantity}</span>
-                        <button type="button" onClick={() => updateProductQty(product.id, 1)} className="rounded-md border border-gray-300 p-1 hover:bg-gray-50">
-                          <Plus className="h-3.5 w-3.5" />
+                        <span className="w-6 text-center text-sm font-semibold">{product.quantity}</span>
+                        <button type="button" onClick={() => updateProductQty(product.id, 1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50">
+                          <Plus className="h-4 w-4" />
                         </button>
                         <button type="button" onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600">
                           <Trash2 className="h-4 w-4" />

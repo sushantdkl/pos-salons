@@ -215,7 +215,7 @@ export default function ReportsPage() {
               key={value}
               type="button"
               onClick={() => setPeriod(value)}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                 period === value ? 'bg-gray-950 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
               }`}
             >

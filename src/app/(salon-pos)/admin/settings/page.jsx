@@ -143,7 +143,7 @@ export default function SettingsPage() {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-6">
-            <h1 className="text-3xl font-semibold text-gray-950">Settings</h1>
+            <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Settings</h1>
             <p className="mt-1 text-sm text-gray-600">Salon details, receipt defaults, and payment preferences.</p>
           </div>
 
@@ -154,7 +154,7 @@ export default function SettingsPage() {
           )}
 
           <form onSubmit={saveSettings} className="space-y-5">
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
+            <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
               <div className="mb-5 flex items-center gap-2">
                 <Store className="h-5 w-5 text-gray-700" />
                 <h2 className="text-lg font-semibold text-gray-950">Salon Information</h2>
@@ -183,7 +183,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
+            <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
               <div className="mb-5 flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-gray-700" />
                 <h2 className="text-lg font-semibold text-gray-950">Receipt & Billing</h2>
@@ -208,7 +208,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
+            <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
               <div className="mb-3 flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-gray-700" />
                 <h2 className="text-lg font-semibold text-gray-950">Payment Methods</h2>

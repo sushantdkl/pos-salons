@@ -52,7 +52,7 @@ export default function RemindersPage() {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-6">
-            <h1 className="text-3xl font-semibold text-gray-950">Reminders</h1>
+            <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Reminders</h1>
             <p className="mt-1 text-sm text-gray-600">Send manual WhatsApp reminders using saved customer phone numbers.</p>
           </div>
           {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}

@@ -310,7 +310,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
 
   return (
     <>
-      <header className="border-b border-gray-200 bg-white px-6 py-5 sm:px-8">
+      <header className="border-b border-gray-200 bg-white px-4 py-5 sm:px-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">
@@ -322,7 +322,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
           </div>
           <button
             onClick={() => { fetchTokens(); fetchAnalytics(); }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
           </button>
@@ -540,29 +540,29 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                         </div>
 
                         {canCreate && token.status === 'WAITING' ? (
-                          <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch">
+                          <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:flex-col lg:items-stretch">
                             <button
                               onClick={() => convertToBill(token)}
-                              className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+                              className="min-h-11 flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-700 sm:flex-none"
                             >
                               Convert to bill
                             </button>
                             <button
                               onClick={() => printExistingToken(token)}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 sm:flex-none"
                             >
                               <Printer className="h-4 w-4" /> Print
                             </button>
-                            <div className="flex gap-2 lg:contents">
+                            <div className="flex w-full gap-2 lg:contents">
                               <button
                                 onClick={() => setConfirmAction({ type: 'cancel', token })}
-                                className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 lg:flex-none"
+                                className="inline-flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 lg:flex-none"
                               >
                                 <XCircle className="h-4 w-4" /> Cancel
                               </button>
                               <button
                                 onClick={() => setConfirmAction({ type: 'no_show', token })}
-                                className="flex-1 rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50 lg:flex-none"
+                                className="min-h-11 flex-1 rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50 lg:flex-none"
                               >
                                 No-show
                               </button>

@@ -11,22 +11,38 @@ import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
+const DESKTOP_MQ = '(min-width: 1024px)';
 let authInitialized = false;
+
+function isDesktopViewport() {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia(DESKTOP_MQ).matches;
+}
 
 export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const navRef = useRef(null);
   const [loading, setLoading] = useState(() => !authInitialized);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [currentRole, setCurrentRole] = useState('admin');
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
+  const closeMobileSidebar = () => setSidebarOpen(false);
+
   const toggleSidebar = () => {
-    const newState = !sidebarOpen;
-    setSidebarOpen(newState);
-    localStorage.setItem('admin_sidebar_open', newState.toString());
+    if (isDesktopViewport()) {
+      setDesktopCollapsed((current) => {
+        const next = !current;
+        localStorage.setItem('admin_sidebar_collapsed', String(next));
+        return next;
+      });
+      return;
+    }
+    setSidebarOpen((current) => !current);
   };
 
   const saveSidebarScroll = () => {
@@ -81,18 +97,36 @@ export default function AdminLayout({ children }) {
   };
 
   useEffect(() => {
-    const savedSidebarState = localStorage.getItem('admin_sidebar_open');
-    if (savedSidebarState !== null) {
-      setSidebarOpen(savedSidebarState === 'true');
+    const desktop = isDesktopViewport();
+    setIsDesktop(desktop);
+    setSidebarOpen(false);
+    const savedCollapsed = localStorage.getItem('admin_sidebar_collapsed');
+    if (savedCollapsed !== null) {
+      setDesktopCollapsed(savedCollapsed === 'true');
     }
+
+    const media = window.matchMedia(DESKTOP_MQ);
+    const onChange = (event) => {
+      setIsDesktop(event.matches);
+      if (event.matches) {
+        setSidebarOpen(false);
+      }
+    };
+    media.addEventListener('change', onChange);
 
     checkAuth();
     checkLicense();
+
+    return () => media.removeEventListener('change', onChange);
   }, []);
 
   useEffect(() => {
     if (authInitialized) {
       checkAuth();
+    }
+    // Close drawer after navigation on phones/tablets.
+    if (!isDesktopViewport()) {
+      setSidebarOpen(false);
     }
   }, [pathname]);
 
@@ -102,14 +136,24 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     const handleKey = (event) => {
-      if (event.key === 'Escape' && sidebarOpen && window.innerWidth < 1024) {
+      if (event.key === 'Escape' && sidebarOpen && !isDesktopViewport()) {
         setSidebarOpen(false);
-        localStorage.setItem('admin_sidebar_open', 'false');
       }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!isDesktop && sidebarOpen) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+    return undefined;
+  }, [isDesktop, sidebarOpen]);
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -162,56 +206,69 @@ export default function AdminLayout({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-gray-900 mx-auto mb-4"></div>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-4 border-gray-900" />
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
+  const showExpanded = isDesktop ? !desktopCollapsed : true;
+  const desktopWidthClass = desktopCollapsed ? 'lg:w-20' : 'lg:w-64';
+  const contentMarginClass = desktopCollapsed ? 'lg:ml-20' : 'lg:ml-64';
+
   return (
     <div className="min-h-screen bg-gray-50">
       {sidebarOpen ? (
-        <div
-          className="fixed inset-0 z-30 bg-black/35 lg:hidden"
-          onClick={() => {
-            setSidebarOpen(false);
-            localStorage.setItem('admin_sidebar_open', 'false');
-          }}
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={closeMobileSidebar}
         />
       ) : null}
 
-      <aside className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-40 flex flex-col ${
-        sidebarOpen ? 'w-64 translate-x-0' : 'w-28 -translate-x-full lg:translate-x-0'
-      }`}>
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-          {sidebarOpen ? <h2 className="text-xl font-bold text-gray-800">Salon POS</h2> : null}
-          <button type="button" onClick={toggleSidebar} className="p-2 hover:bg-gray-100 rounded-lg text-gray-700">
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[min(18rem,88vw)] flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-out lg:translate-x-0 ${desktopWidthClass} ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:px-4">
+          {showExpanded ? <h2 className="truncate text-lg font-bold text-gray-800 sm:text-xl">Salon POS</h2> : null}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={showExpanded ? 'Collapse menu' : 'Expand menu'}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-gray-700 hover:bg-gray-100"
+          >
+            {isDesktop ? (desktopCollapsed ? <Menu size={22} /> : <X size={22} />) : <X size={22} />}
           </button>
         </div>
 
         <nav
           ref={navRef}
           onScroll={saveSidebarScroll}
-          className="flex-1 overflow-y-auto p-4 space-y-2"
+          className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3"
         >
           {menuItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={saveSidebarScroll}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive ? 'bg-gray-100 border-l-4 border-gray-800' : 'hover:bg-gray-50'
-                }`}
+                onClick={() => {
+                  saveSidebarScroll();
+                  if (!isDesktopViewport()) closeMobileSidebar();
+                }}
+                className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                  isActive ? 'border-l-4 border-gray-900 bg-gray-100' : 'hover:bg-gray-50'
+                } ${showExpanded ? '' : 'justify-center px-2'}`}
               >
-                <item.icon className={`${item.color} ${sidebarOpen ? 'w-5 h-5' : 'w-6 h-6'}`} />
-                {sidebarOpen ? (
-                  <span className={`font-medium ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                <item.icon className={`${item.color} h-5 w-5 shrink-0`} />
+                {showExpanded ? (
+                  <span className={`truncate text-sm font-medium ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
                     {item.label}
                   </span>
                 ) : null}
@@ -220,30 +277,41 @@ export default function AdminLayout({ children }) {
           })}
         </nav>
 
-        <div className="flex-shrink-0 p-4 border-t border-gray-200">
+        <div className="shrink-0 border-t border-gray-200 p-3">
           <button
             type="button"
             onClick={() => setLogoutOpen(true)}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
+            className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-red-600 transition-colors hover:bg-red-50 ${
+              showExpanded ? '' : 'justify-center px-2'
+            }`}
           >
-            <LogOut className={sidebarOpen ? 'w-5 h-5' : 'w-6 h-6' } />
-            {sidebarOpen ? <span className="font-medium">Logout</span> : null}
+            <LogOut className="h-5 w-5 shrink-0" />
+            {showExpanded ? <span className="text-sm font-medium">Logout</span> : null}
           </button>
         </div>
       </aside>
 
-      <div className={`transition-all duration-300 min-h-screen ${
-        sidebarOpen ? 'ml-0 lg:ml-64' : 'ml-0 lg:ml-20'
-      }`}>
-        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-          <button type="button" onClick={toggleSidebar} className="p-2 hover:bg-gray-100 rounded-lg text-gray-700">
-            <Menu size={24} />
+      <div className={`min-h-screen transition-[margin] duration-300 ${contentMarginClass}`}>
+        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-gray-200 bg-white px-3 py-3 sm:px-4 lg:hidden">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label="Open menu"
+            className="inline-flex min-h-12 min-w-[5.5rem] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 shadow-sm active:bg-gray-100"
+          >
+            <Menu size={22} strokeWidth={2.25} />
+            Menu
           </button>
-          <h2 className="text-lg font-bold text-gray-800">Salon POS</h2>
-          <div className="w-10" />
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-base font-bold text-gray-900">Salon POS</h2>
+            <p className="truncate text-xs capitalize text-gray-500">{currentRole} panel</p>
+          </div>
         </div>
-        {children}
+        <div className="min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom)]">
+          {children}
+        </div>
       </div>
+
       <ConfirmDialog
         open={logoutOpen}
         title="Confirm logout"
