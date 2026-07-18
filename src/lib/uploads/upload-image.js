@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto';
 import path from 'path';
 import { mkdir, writeFile } from 'fs/promises';
+import { randomUUID } from 'crypto';
 
 const ALLOWED_TYPES = new Map([
   ['image/jpeg', '.jpg'],
@@ -9,13 +9,44 @@ const ALLOWED_TYPES = new Map([
 ]);
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_FOLDERS = new Set(['gallery', 'services', 'staff', 'packages', 'banners', 'seo', 'payment-qr']);
+const RELATIVE_UPLOAD_BASE = '/uploads/website-assets';
 
 function uploadRoot() {
   return process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads', 'website-assets');
 }
 
+/**
+ * Always prefer relative URLs so Next/Image never fetches localhost as a remote "private IP".
+ * Absolute production domains still normalize down to the path when they point at /uploads/.
+ */
+export function toPublicUploadUrl(value) {
+  const cleaned = String(value || '').trim();
+  if (!cleaned) return '';
+
+  if (cleaned.startsWith('/uploads/')) return cleaned.split('?')[0];
+
+  try {
+    if (/^https?:\/\//i.test(cleaned)) {
+      const url = new URL(cleaned);
+      if (url.pathname.startsWith('/uploads/')) {
+        return url.pathname;
+      }
+      if (['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
+        return url.pathname || RELATIVE_UPLOAD_BASE;
+      }
+      return cleaned;
+    }
+  } catch {
+    return cleaned;
+  }
+
+  if (cleaned.startsWith('uploads/')) return `/${cleaned}`;
+  return cleaned;
+}
+
 function uploadBaseUrl() {
-  return (process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || '/uploads/website-assets').replace(/\/+$/, '');
+  const configured = (process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || RELATIVE_UPLOAD_BASE).replace(/\/+$/, '');
+  return toPublicUploadUrl(configured) || RELATIVE_UPLOAD_BASE;
 }
 
 function safeFolder(value) {

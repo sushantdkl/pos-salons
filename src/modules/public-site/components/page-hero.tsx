@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import { CmsImage } from './cms-image';
 
 export function PageHero({
   eyebrow,
@@ -15,7 +15,7 @@ export function PageHero({
     <section className="relative overflow-hidden border-b border-[#e7ded2]/60 bg-[#fbfaf7]">
       {imageUrl ? (
         <div className="pointer-events-none absolute inset-0">
-          <Image src={imageUrl} alt="" fill priority sizes="100vw" className="object-cover opacity-[0.12]" />
+          <CmsImage src={imageUrl} alt="" fill priority sizes="100vw" className="object-cover opacity-[0.12]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#fbfaf7] via-[#fbfaf7]/95 to-[#fbfaf7]/80" />
         </div>
       ) : null}

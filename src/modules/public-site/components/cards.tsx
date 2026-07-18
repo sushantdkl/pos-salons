@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import { CmsImage } from './cms-image';
 import type { PublicPackage, PublicService, PublicStaffMember } from '../types';
 
 export function ServiceCard({
@@ -78,7 +78,7 @@ export function ServiceCard({
     <article className="overflow-hidden border border-[#e7ded2] bg-white">
       {service.image ? (
         <div className="relative aspect-[4/3] bg-[#171411]">
-          <Image src={service.image} alt={`${service.name} at The Hair Cut`} fill sizes="(min-width: 1024px) 33vw, 100vw" className="object-cover" />
+          <CmsImage src={service.image} alt={`${service.name} at The Hair Cut`} fill sizes="(min-width: 1024px) 33vw, 100vw" className="object-cover" />
         </div>
       ) : null}
       <div className="p-5">
@@ -168,7 +168,7 @@ export function StaffCard({
         <article className="group flex h-full flex-col border border-white/10 bg-[#0d0b0a]">
           <div className={`relative ${imageAspect} overflow-hidden bg-[#171411]`}>
             {member.image ? (
-              <Image
+              <CmsImage
                 src={member.image}
                 alt={`${member.name} at The Hair Cut`}
                 fill
@@ -207,7 +207,7 @@ export function StaffCard({
       <article className="group flex h-full flex-col overflow-hidden border border-[#e7ded2] bg-white transition-shadow duration-300 hover:shadow-md">
         <div className={`relative ${imageAspect} overflow-hidden bg-[#f8f3ed]`}>
           {member.image ? (
-            <Image
+            <CmsImage
               src={member.image}
               alt={`${member.name} at The Hair Cut`}
               fill
@@ -245,7 +245,7 @@ export function StaffCard({
     <article className="border border-[#e7ded2] bg-white p-6">
       {member.image ? (
         <div className="relative h-16 w-16 overflow-hidden bg-[#211d1a]">
-          <Image src={member.image} alt={`${member.name} at The Hair Cut`} fill sizes="64px" className="object-cover" />
+          <CmsImage src={member.image} alt={`${member.name} at The Hair Cut`} fill sizes="64px" className="object-cover" />
         </div>
       ) : (
         <div className="flex h-16 w-16 items-center justify-center bg-[#211d1a] font-serif text-xl font-light text-white">

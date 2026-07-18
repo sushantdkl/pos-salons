@@ -94,10 +94,15 @@ export default function AdminCustomers() {
     });
     const data = await response.json();
     if (!response.ok) {
-      if (data.field === 'phone' || data.code === 'CUSTOMER_PHONE_EXISTS') {
-        setFieldErrors({ phone: data.message || 'This phone number is already registered.' });
+      const apiMessage = data.message || data.error || 'Could not save customer';
+      if (data.field === 'phone' || data.code === 'CUSTOMER_PHONE_EXISTS' || apiMessage === PHONE_ERROR_MESSAGE) {
+        setFieldErrors({
+          phone: data.code === 'CUSTOMER_PHONE_EXISTS'
+            ? (data.message || 'This phone number is already registered.')
+            : (apiMessage || PHONE_ERROR_MESSAGE),
+        });
       } else {
-        setError(data.message || data.error || 'Could not save customer');
+        setError(apiMessage);
       }
       return;
     }
@@ -218,11 +223,18 @@ export default function AdminCustomers() {
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Phone</span>
-                <input value={formData.phone} onChange={(event) => {
+                <input
+                  value={formData.phone}
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="98XXXXXXXX"
+                  onChange={(event) => {
                   setFieldErrors({ ...fieldErrors, phone: '' });
                   setFormData({ ...formData, phone: sanitizePhoneInput(event.target.value) });
                 }} className={`w-full rounded-lg border px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900 ${fieldErrors.phone ? 'border-red-300' : 'border-gray-300'}`} />
-                {fieldErrors.phone ? <p className="mt-1 text-sm font-medium text-red-600">{fieldErrors.phone}</p> : null}
+                {fieldErrors.phone ? <p className="mt-1 text-sm font-medium text-red-600">{fieldErrors.phone}</p> : (
+                  <p className="mt-1 text-xs text-gray-500">Numbers only. Nepal mobile: 96/97/98 + 8 digits.</p>
+                )}
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Gender</span>

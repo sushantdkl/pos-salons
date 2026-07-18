@@ -12,8 +12,8 @@ const emptySalon = {
   salon_email: '',
   owner_name: '',
   vat_number: '',
-  vat_percentage: 0,
-  service_charge_percentage: 0,
+  vat_percentage: '',
+  service_charge_percentage: '',
   receipt_footer: 'Thank you for visiting.',
   esewa_phonepay_qr_url: '',
   bank_qr_url: '',
@@ -56,8 +56,8 @@ export default function SettingsPage() {
           salon_email: settings.salon_email || '',
           owner_name: settings.owner_name || '',
           vat_number: settings.vat_number || '',
-          vat_percentage: Number(settings.vat_percentage || 0),
-          service_charge_percentage: Number(settings.service_charge_percentage || 0),
+          vat_percentage: settings.vat_percentage === 0 || settings.vat_percentage ? String(settings.vat_percentage) : '',
+          service_charge_percentage: settings.service_charge_percentage === 0 || settings.service_charge_percentage ? String(settings.service_charge_percentage) : '',
           receipt_footer: settings.receipt_footer || 'Thank you for visiting.',
           esewa_phonepay_qr_url: settings.esewa_phonepay_qr_url || settings.esewa_qr_image || '',
           bank_qr_url: settings.bank_qr_url || settings.bank_qr_image || '',
@@ -114,6 +114,8 @@ export default function SettingsPage() {
         headers: headers(),
         body: JSON.stringify({
           ...form,
+          vat_percentage: Number(form.vat_percentage || 0),
+          service_charge_percentage: Number(form.service_charge_percentage || 0),
           salon_name: form.salon_name,
           salon_address: form.salon_address,
           salon_phone: form.salon_phone,
@@ -189,11 +191,11 @@ export default function SettingsPage() {
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-900">Tax %</span>
-                  <input type="number" min="0" max="100" step="0.1" value={form.vat_percentage} onChange={(e) => setForm({ ...form, vat_percentage: Number(e.target.value) })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
+                  <input type="number" min="0" max="100" step="0.1" value={form.vat_percentage} onChange={(e) => setForm({ ...form, vat_percentage: e.target.value })} placeholder="e.g. 13" className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 placeholder:text-gray-400" />
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-900">Service charge %</span>
-                  <input type="number" min="0" max="100" step="0.1" value={form.service_charge_percentage} onChange={(e) => setForm({ ...form, service_charge_percentage: Number(e.target.value) })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950" />
+                  <input type="number" min="0" max="100" step="0.1" value={form.service_charge_percentage} onChange={(e) => setForm({ ...form, service_charge_percentage: e.target.value })} placeholder="e.g. 5" className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 placeholder:text-gray-400" />
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-900">VAT/PAN</span>

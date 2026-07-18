@@ -117,7 +117,8 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   const [analytics, setAnalytics] = useState(null);
   const [date, setDate] = useState(today());
   const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -168,15 +169,24 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     }
   };
 
-  const fetchTokens = async () => {
-    setLoading(true);
+  const fetchTokens = async ({ soft = false } = {}) => {
+    if (soft) setRefreshing(true);
+    else if (initialLoading) setRefreshing(false);
+    else setRefreshing(true);
+
     const params = new URLSearchParams({ date });
     if (status) params.set('status', status);
-    const response = await fetch(`/api/admin/tokens?${params.toString()}`, { headers: headers() });
-    const data = await response.json();
-    if (response.ok) setTokens(data.tokens || []);
-    else setError(data.error || 'Could not load tokens');
-    setLoading(false);
+    try {
+      const response = await fetch(`/api/admin/tokens?${params.toString()}`, { headers: headers() });
+      const data = await response.json();
+      if (response.ok) setTokens(data.tokens || []);
+      else setError(data.error || 'Could not load tokens');
+    } catch {
+      setError('Could not load tokens');
+    } finally {
+      setInitialLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const fetchAnalytics = async () => {
@@ -314,7 +324,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
             onClick={() => { fetchTokens(); fetchAnalytics(); }}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
           >
-            <RefreshCw className="h-4 w-4" /> Refresh
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
       </header>
@@ -464,18 +474,18 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
               </div>
 
               <div className="p-5">
-                {loading ? (
+                {initialLoading ? (
                   <div className="rounded-lg bg-gray-50 py-12 text-center text-sm text-gray-500">Loading queue…</div>
                 ) : null}
-                {!loading && tokens.length === 0 ? (
+                {!initialLoading && tokens.length === 0 ? (
                   <div className="rounded-lg bg-gray-50 py-12 text-center text-sm text-gray-500">
                     <p className="font-medium text-gray-700">No tokens generated yet.</p>
                     <p className="mt-1">Walk-in tokens will appear here after they are created.</p>
                   </div>
                 ) : null}
 
-                <div className="space-y-3">
-                  {tokens.map((token) => (
+                <div className={`space-y-3 transition-opacity duration-200 ${refreshing && !initialLoading ? 'opacity-60' : 'opacity-100'}`}>
+                  {!initialLoading ? tokens.map((token) => (
                     <article
                       key={token.id}
                       className={`rounded-lg border p-4 transition ${
@@ -561,7 +571,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                         ) : null}
                       </div>
                     </article>
-                  ))}
+                  )) : null}
                 </div>
               </div>
             </section>

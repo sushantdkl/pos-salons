@@ -59,6 +59,8 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
       )
     : "sticky top-0 z-40 border-b border-[#e8dcc4] bg-[#fbfaf7]/95 backdrop-blur text-[#171411] transition-all duration-300";
 
+  const closeMobileMenu = () => setMobileOpen(false);
+
   return (
     <div className="min-h-screen bg-salon-cream text-salon-ink">
       <header className={headerClass}>
@@ -114,53 +116,69 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
               }`}
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={mobileOpen}
+              aria-controls="mobile-nav-panel"
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              <span className="relative h-5 w-5" aria-hidden="true">
+                <Menu className={`absolute inset-0 h-5 w-5 transition-opacity duration-200 ${mobileOpen ? 'opacity-0' : 'opacity-100'}`} />
+                <X className={`absolute inset-0 h-5 w-5 transition-opacity duration-200 ${mobileOpen ? 'opacity-100' : 'opacity-0'}`} />
+              </span>
             </button>
           </div>
         </div>
 
-        {mobileOpen ? (
-          <div className="lg:hidden">
-            <button
-              type="button"
-              aria-label="Close navigation overlay"
-              className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px]"
-              onClick={() => setMobileOpen(false)}
-            />
-            <div className="absolute left-0 right-0 top-full z-40 border-t border-[#e8dcc4] bg-[#fbfaf7] px-4 py-4 shadow-2xl">
-              <div className="mx-auto grid max-w-7xl gap-2">
-                {navLinks.map(([label, href]) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMobileOpen(false)}
-                    className={mobileLinkClass}
-                  >
-                    {label}
-                    <span className="text-[#d4af37]">/</span>
-                  </Link>
-                ))}
+        <div
+          id="mobile-nav-panel"
+          className={`lg:hidden ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          aria-hidden={!mobileOpen}
+        >
+          <button
+            type="button"
+            aria-label="Close navigation overlay"
+            tabIndex={mobileOpen ? 0 : -1}
+            className={`fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] transition-opacity duration-300 ${
+              mobileOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+            onClick={closeMobileMenu}
+          />
+          <div
+            className={`absolute left-0 right-0 top-full z-40 border-t border-[#e8dcc4] bg-[#fbfaf7] px-4 py-4 shadow-2xl transition-all duration-300 ${
+              mobileOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
+            }`}
+          >
+            <div className="mx-auto grid max-w-7xl gap-2">
+              {navLinks.map(([label, href]) => (
                 <Link
-                  href="/book-appointment"
-                  onClick={() => setMobileOpen(false)}
-                  className="mt-2 rounded-2xl bg-[#171411] px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-[#332920]"
+                  key={href}
+                  href={href}
+                  tabIndex={mobileOpen ? 0 : -1}
+                  onClick={closeMobileMenu}
+                  className={mobileLinkClass}
                 >
-                  Book Appointment
+                  {label}
+                  <span className="text-[#d4af37]">/</span>
                 </Link>
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-2xl bg-green-600 px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-green-700"
-                >
-                  WhatsApp
-                </a>
-              </div>
+              ))}
+              <Link
+                href="/book-appointment"
+                tabIndex={mobileOpen ? 0 : -1}
+                onClick={closeMobileMenu}
+                className="mt-2 rounded-2xl bg-[#171411] px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-[#332920]"
+              >
+                Book Appointment
+              </Link>
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                tabIndex={mobileOpen ? 0 : -1}
+                onClick={closeMobileMenu}
+                className="rounded-2xl bg-green-600 px-4 py-3 text-center text-sm font-bold uppercase tracking-wider text-white transition hover:bg-green-700"
+              >
+                WhatsApp
+              </a>
             </div>
           </div>
-        ) : null}
+        </div>
       </header>
 
       {children}

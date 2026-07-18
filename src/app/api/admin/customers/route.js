@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
-import { isUniqueViolation } from '@/lib/api/errors';
+import { isUniqueViolation, publicErrorMessage } from '@/lib/api/errors';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
 
@@ -9,6 +9,16 @@ function validateCustomer(data) {
   if (!cleanText(data.name)) return 'Customer name is required';
   if (String(data.phone || '').trim() && !phoneOrNull(data.phone)) return PHONE_ERROR_MESSAGE;
   return null;
+}
+
+function validationErrorResponse(message, field = null) {
+  return NextResponse.json({
+    success: false,
+    code: 'VALIDATION_ERROR',
+    message,
+    error: message,
+    field,
+  }, { status: 400 });
 }
 
 function duplicatePhoneResponse() {
@@ -80,7 +90,10 @@ export async function GET(request) {
 
     return NextResponse.json({ customers });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to fetch customers' }, { status: error.status || 500 });
+    return NextResponse.json(
+      { error: publicErrorMessage(error, 'Failed to fetch customers'), message: publicErrorMessage(error, 'Failed to fetch customers') },
+      { status: error.status || 500 }
+    );
   }
 }
 
@@ -91,8 +104,17 @@ export async function POST(request) {
     const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const validationError = validateCustomer(data);
-    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    if (validationError) {
+      return validationErrorResponse(
+        validationError,
+        validationError === PHONE_ERROR_MESSAGE ? 'phone' : null
+      );
+    }
     const normalizedPhone = phoneOrNull(data.phone);
+    if (normalizedPhone) {
+      const duplicate = await db.get('SELECT id FROM customers WHERE phone = ?', [normalizedPhone]);
+      if (duplicate) return duplicatePhoneResponse();
+    }
     const preferredStaffId = await normalizePreferredStaff(db, data.preferred_stylist_id);
 
     const result = await db.run(`
@@ -120,7 +142,10 @@ export async function POST(request) {
   } catch (error) {
     if (isUniqueViolation(error)) return duplicatePhoneResponse();
     console.error('POST /api/admin/customers:', error);
-    return NextResponse.json({ error: error.message || 'Failed to create customer' }, { status: error.status || 500 });
+    return NextResponse.json({
+      error: publicErrorMessage(error, 'Failed to create customer'),
+      message: publicErrorMessage(error, 'Failed to create customer'),
+    }, { status: error.status || 500 });
   }
 }
 
@@ -132,7 +157,12 @@ export async function PUT(request) {
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     const validationError = validateCustomer(data);
-    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    if (validationError) {
+      return validationErrorResponse(
+        validationError,
+        validationError === PHONE_ERROR_MESSAGE ? 'phone' : null
+      );
+    }
     const normalizedPhone = phoneOrNull(data.phone);
     const preferredStaffId = await normalizePreferredStaff(db, data.preferred_stylist_id);
     if (normalizedPhone) {
@@ -167,7 +197,10 @@ export async function PUT(request) {
   } catch (error) {
     if (isUniqueViolation(error)) return duplicatePhoneResponse();
     console.error('PUT /api/admin/customers:', error);
-    return NextResponse.json({ error: error.message || 'Failed to update customer' }, { status: error.status || 500 });
+    return NextResponse.json({
+      error: publicErrorMessage(error, 'Failed to update customer'),
+      message: publicErrorMessage(error, 'Failed to update customer'),
+    }, { status: error.status || 500 });
   }
 }
 
@@ -185,6 +218,9 @@ export async function DELETE(request) {
       [user.id, 'delete', 'customer', id, 'Customer deleted']);
     return NextResponse.json({ message: 'Customer deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to delete customer' }, { status: error.status || 500 });
+    return NextResponse.json({
+      error: publicErrorMessage(error, 'Failed to delete customer'),
+      message: publicErrorMessage(error, 'Failed to delete customer'),
+    }, { status: error.status || 500 });
   }
 }

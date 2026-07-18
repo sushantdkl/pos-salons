@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Edit, Key, Plus, Power, PowerOff, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { APP_ROLES, ROLE_LABELS } from '@/constants/roles';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { ConfirmDialog, AlertDialog } from '@/components/shared/confirm-dialog';
 import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 
 const emptyForm = {
@@ -14,8 +14,8 @@ const emptyForm = {
   password: '',
   email: '',
   phone: '',
-  commission_percentage: 10,
-  base_salary: 0,
+  commission_percentage: '',
+  base_salary: '',
   assigned_services: '',
   is_active: true
 };
@@ -28,11 +28,12 @@ export default function StaffPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
   const [pageMessage, setPageMessage] = useState('');
+  const [alertDialog, setAlertDialog] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
-  const isDefaultAdmin = (employee) => employee?.username === 'admin' && String(employee?.role || '').toLowerCase() === 'admin';
+    const isDefaultAdmin = (employee) => String(employee?.username || '').toLowerCase() === 'admin' && String(employee?.role || '').toLowerCase() === 'admin';
 
   const fetchStaff = async () => {
     const response = await fetch('/api/admin/employees', { headers: headers() });
@@ -63,8 +64,8 @@ export default function StaffPage() {
       password: '',
       email: employee.email || '',
       phone: employee.phone || '',
-      commission_percentage: employee.commission_percentage || 0,
-      base_salary: employee.base_salary || 0,
+      commission_percentage: employee.commission_percentage ?? '',
+      base_salary: employee.base_salary ?? '',
       assigned_services: employee.assigned_services || '',
       is_active: !!employee.is_active
     } : emptyForm);
@@ -82,11 +83,22 @@ export default function StaffPage() {
     const response = await fetch('/api/admin/employees', {
       method: editingStaff ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
-      body: JSON.stringify(editingStaff ? { ...formData, id: editingStaff.id } : formData)
+      body: JSON.stringify(editingStaff
+        ? {
+            ...formData,
+            id: editingStaff.id,
+            commission_percentage: Number(formData.commission_percentage || 0),
+            base_salary: Number(formData.base_salary || 0),
+          }
+        : {
+            ...formData,
+            commission_percentage: Number(formData.commission_percentage || 0),
+            base_salary: Number(formData.base_salary || 0),
+          })
     });
     const data = await response.json();
     if (!response.ok) {
-      setError(data.error || 'Could not save staff member');
+      setError(data.message || data.error || 'Could not save staff member');
       return;
     }
     setShowForm(false);
@@ -108,8 +120,13 @@ export default function StaffPage() {
     });
     const data = await response.json();
     if (!response.ok) {
-      setPageMessage(data.message || data.error || 'Could not update staff status.');
+      setConfirmAction(null);
       setActionLoading(false);
+      setAlertDialog({
+        title: 'Cannot update staff',
+        description: data.message || data.error || 'Could not update staff status.',
+        tone: 'danger',
+      });
       return;
     }
     setPageMessage(data.message || 'Staff status updated.');
@@ -125,8 +142,13 @@ export default function StaffPage() {
     const response = await fetch(`/api/admin/employees?id=${employee.id}`, { method: 'DELETE', headers: headers() });
     const data = await response.json();
     if (!response.ok) {
-      setPageMessage(data.message || data.error || 'Could not delete staff member.');
+      setConfirmAction(null);
       setActionLoading(false);
+      setAlertDialog({
+        title: 'Cannot delete staff',
+        description: data.message || data.error || 'Could not delete staff member.',
+        tone: 'danger',
+      });
       return;
     }
     setPageMessage(data.message || 'Staff member deleted successfully.');
@@ -237,7 +259,18 @@ export default function StaffPage() {
               {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 md:col-span-2">{error}</div>}
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Username *</span>
-                <input required disabled={editingDefaultAdmin} value={formData.username} onChange={(event) => setFormData({ ...formData, username: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900 disabled:bg-gray-100 disabled:text-gray-500" />
+                <input
+                  required
+                  disabled={editingDefaultAdmin}
+                  value={formData.username}
+                  onChange={(event) => setFormData({
+                    ...formData,
+                    username: event.target.value.toLowerCase().replace(/\s+/g, ''),
+                  })}
+                  placeholder="e.g. raashid"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Must be unique. Letters/numbers only — used for login.</p>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Staff name *</span>
@@ -262,11 +295,11 @@ export default function StaffPage() {
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Commission %</span>
-                <input type="number" min="0" max="100" step="0.01" value={formData.commission_percentage} onChange={(event) => setFormData({ ...formData, commission_percentage: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min="0" max="100" step="0.01" value={formData.commission_percentage} onChange={(event) => setFormData({ ...formData, commission_percentage: event.target.value })} placeholder="e.g. 10" className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-900">Base salary</span>
-                <input type="number" min="0" step="0.01" value={formData.base_salary} onChange={(event) => setFormData({ ...formData, base_salary: event.target.value })} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />
+                <input type="number" min="0" step="0.01" value={formData.base_salary} onChange={(event) => setFormData({ ...formData, base_salary: event.target.value })} placeholder="e.g. 25000" className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900" />
               </label>
               <label className="flex items-center gap-2 pt-8 text-sm font-medium text-gray-900">
                 <input type="checkbox" disabled={editingDefaultAdmin} checked={editingDefaultAdmin ? true : formData.is_active} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
@@ -299,6 +332,13 @@ export default function StaffPage() {
         loading={actionLoading}
         onCancel={() => !actionLoading && setConfirmAction(null)}
         onConfirm={() => deleteStaff(confirmAction.employee)}
+      />
+      <AlertDialog
+        open={Boolean(alertDialog)}
+        title={alertDialog?.title || 'Notice'}
+        description={alertDialog?.description || ''}
+        tone={alertDialog?.tone || 'default'}
+        onClose={() => setAlertDialog(null)}
       />
     </>
   );

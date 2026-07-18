@@ -7,7 +7,8 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "node server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:setup": "node scripts/db-setup.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",

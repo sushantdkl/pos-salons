@@ -1,5 +1,6 @@
 import Database from '@/lib/db/index';
 import { cleanText, ensureSalonSchema } from '@/lib/salon-schema';
+import { toPublicUploadUrl } from '@/lib/uploads/upload-image';
 import { galleryItems } from '@/modules/public-site/data/gallery';
 import { publicPackages } from '@/modules/public-site/data/packages';
 import { salonInfo } from '@/modules/public-site/data/salon-info';
@@ -31,10 +32,25 @@ function text(value, fallback = '') {
 }
 
 function imageUrl(value, fallback = '') {
-  const cleaned = text(value, fallback);
+  const cleaned = toPublicUploadUrl(text(value, fallback)) || text(value, fallback);
   if (!cleaned) return fallback;
-  if (cleaned.startsWith('/assets/') || cleaned.startsWith('/uploads/') || cleaned.startsWith('https://') || cleaned.startsWith('http://')) return cleaned;
+  if (
+    cleaned.startsWith('/assets/') ||
+    cleaned.startsWith('/uploads/') ||
+    cleaned.startsWith('https://') ||
+    cleaned.startsWith('http://')
+  ) {
+    return cleaned;
+  }
   return fallback;
+}
+
+function validationError(message, details = null) {
+  const error = new Error(message);
+  error.status = 400;
+  error.code = 'VALIDATION_ERROR';
+  error.details = details;
+  return error;
 }
 
 function safeLink(value, fallback = '') {
@@ -170,6 +186,11 @@ function mapSection(row, fallback) {
     metadata.mapEmbedUrl = safeMapEmbed(metadata.mapEmbedUrl, fallback.metadata.mapEmbedUrl);
     metadata.whatsappNumber = text(metadata.whatsappNumber, fallback.metadata.whatsappNumber).replace(/[^\d]/g, '') || fallback.metadata.whatsappNumber;
   }
+  if (row.section_key === 'about' && Array.isArray(metadata.galleryImages)) {
+    metadata.galleryImages = metadata.galleryImages
+      .map((url) => imageUrl(url, ''))
+      .filter(Boolean);
+  }
   return {
     sectionKey: row.section_key,
     title: text(row.title, fallback.title),
@@ -239,7 +260,7 @@ function mapService(row) {
     serviceCategory: row.category,
     category: row.is_package ? 'Package' : mapCategory(row.category),
     description: row.website_description || row.description || 'Salon service.',
-    image: row.website_image || '',
+    image: imageUrl(row.website_image, ''),
     featured: bool(row.featured_on_website),
     showOnWebsite: bool(row.show_on_website),
     isPackage: bool(row.is_package),
@@ -272,7 +293,7 @@ function mapWebsiteStaff(row) {
     role: row.role_title || '',
     bio: row.bio || '',
     specialties: String(row.specialties || '').split(',').map((item) => item.trim()).filter(Boolean),
-    image: row.image_url || undefined,
+    image: imageUrl(row.image_url, '') || undefined,
     featured: bool(row.featured_on_website),
     showOnWebsite: bool(row.show_on_website),
     sortOrder: number(row.display_order, 0)
@@ -449,7 +470,7 @@ export async function getPublicWebsiteData(options = {}) {
       role: row.website_title || row.salon_role,
       bio: row.website_bio || '',
       specialties: String(row.assigned_services || '').split(',').map((item) => item.trim()).filter(Boolean),
-      image: row.website_photo || undefined,
+      image: imageUrl(row.website_photo, '') || undefined,
       featured: bool(row.featured_on_website),
       showOnWebsite: bool(row.show_on_website)
     }));
@@ -464,7 +485,7 @@ export async function getPublicWebsiteData(options = {}) {
       id: row.id,
       title: row.title || row.alt_text || 'Salon photo',
       description: row.description || row.category || '',
-      image: row.image_url,
+      image: imageUrl(row.image_url, ''),
       altText: row.alt_text || row.title || 'Salon photo',
       category: row.category || '',
       sortOrder: row.sort_order || 0,
@@ -553,8 +574,13 @@ export async function saveWebsiteCms(db, data, userId) {
   await db.run('DELETE FROM website_services');
   for (const [index, item] of [...(data.services || []), ...(data.packages || [])].entries()) {
     const isPackage = Boolean(item.isPackage);
-    const name = text(item.name, isPackage ? 'Website Package' : 'Website Service');
-    if (!name) continue;
+    const name = text(item.name, '');
+    if (!name) {
+      throw validationError(
+        isPackage ? 'Package name is required.' : 'Service name is required.',
+        { tab: isPackage ? 'Packages' : 'Services', index, field: 'name' }
+      );
+    }
     await db.run(`
       INSERT INTO website_services (
         name, category, price, price_label, duration_minutes, description,
@@ -580,8 +606,10 @@ export async function saveWebsiteCms(db, data, userId) {
 
   await db.run('DELETE FROM website_staff_profiles');
   for (const [index, member] of (data.staff || []).entries()) {
-    const name = text(member.name, 'Staff');
-    if (!name) continue;
+    const name = text(member.name, '');
+    if (!name) {
+      throw validationError('Staff display name is required.', { tab: 'Staff', index, field: 'name' });
+    }
     await db.run(`
       INSERT INTO website_staff_profiles (
         name, role_title, bio, specialties, image_url, show_on_website,
@@ -601,45 +629,56 @@ export async function saveWebsiteCms(db, data, userId) {
   }
 
   const submittedGallery = Array.isArray(data.gallery) ? data.gallery : [];
-  const submittedGalleryIds = submittedGallery.map((item) => Number(item.id || 0)).filter(Boolean);
-  if (Array.isArray(data.gallery)) {
-    if (submittedGalleryIds.length) {
-      const placeholders = submittedGalleryIds.map(() => '?').join(',');
-      await db.run(`DELETE FROM website_gallery_images WHERE id NOT IN (${placeholders})`, submittedGalleryIds);
-    } else {
-      await db.run('DELETE FROM website_gallery_images');
-    }
-  }
+  const keptGalleryIds = [];
 
   for (const [index, item] of submittedGallery.entries()) {
     const url = imageUrl(item.image || item.imageUrl, '');
-    if (!url) continue;
-    const id = Number(item.id || 0) || null;
-    await db.run(`
+    if (!url) {
+      throw validationError('Please upload an image for each gallery photo.', {
+        tab: 'Gallery',
+        index,
+        field: 'image',
+      });
+    }
+
+    const title = text(item.title, 'Salon photo');
+    const altText = text(item.altText || item.alt_text, title || 'Salon photo');
+    const category = text(item.category, '');
+    const description = text(item.description, '');
+    const sortOrder = number(item.sortOrder, index + 1);
+    const isVisible = item.isVisible !== false;
+    const existingId = Number(item.id || 0);
+
+    if (existingId > 0) {
+      const existing = await db.get('SELECT id FROM website_gallery_images WHERE id = ?', [existingId]);
+      if (existing) {
+        await db.run(`
+          UPDATE website_gallery_images
+          SET image_url = ?, title = ?, alt_text = ?, category = ?, description = ?,
+              sort_order = ?, is_visible = ?, updated_by = ?, updated_at = NOW()
+          WHERE id = ?
+        `, [url, title, altText, category, description, sortOrder, isVisible, userId, existingId]);
+        keptGalleryIds.push(existingId);
+        continue;
+      }
+    }
+
+    const result = await db.run(`
       INSERT INTO website_gallery_images (
-        id, image_url, title, alt_text, category, description, sort_order,
+        image_url, title, alt_text, category, description, sort_order,
         is_visible, updated_by, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-      ON CONFLICT (id) DO UPDATE SET
-        image_url = EXCLUDED.image_url,
-        title = EXCLUDED.title,
-        alt_text = EXCLUDED.alt_text,
-        category = EXCLUDED.category,
-        description = EXCLUDED.description,
-        sort_order = EXCLUDED.sort_order,
-        is_visible = EXCLUDED.is_visible,
-        updated_by = EXCLUDED.updated_by,
-        updated_at = NOW()
-    `, [
-      id, url,
-      text(item.title, 'Salon photo'),
-      text(item.altText || item.alt_text, item.title || 'Salon photo'),
-      text(item.category, ''),
-      text(item.description, ''),
-      number(item.sortOrder, index + 1),
-      item.isVisible !== false,
-      userId,
-    ]);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [url, title, altText, category, description, sortOrder, isVisible, userId]);
+    if (result?.lastInsertRowid) keptGalleryIds.push(Number(result.lastInsertRowid));
+  }
+
+  if (Array.isArray(data.gallery)) {
+    if (keptGalleryIds.length) {
+      const placeholders = keptGalleryIds.map(() => '?').join(',');
+      await db.run(`DELETE FROM website_gallery_images WHERE id NOT IN (${placeholders})`, keptGalleryIds);
+    } else {
+      await db.run('DELETE FROM website_gallery_images');
+    }
   }
 
   await db.run(

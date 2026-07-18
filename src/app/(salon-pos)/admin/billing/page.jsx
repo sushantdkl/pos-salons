@@ -4,11 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
-  CreditCard, MessageCircle, Minus, Plus, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
+  CheckCircle2, CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
-import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
+import { activeServiceStaffFilter, staffForService as filterStaffForService } from '@/lib/staff/service-staff';
 
 const draftKey = 'salon_pos_bill_draft';
 const walkInCustomer = { id: '', name: 'Walk-in Customer', phone: '' };
@@ -30,13 +30,152 @@ function qrTypeLabel(type) {
 }
 
 function paymentBreakdownRows(bill) {
-  if (bill.payment_method !== 'split') return '';
+  if (bill.payment_method !== 'split') {
+    if (bill.payment_method === 'cash' && Number(bill.amount_paid || 0) > 0) {
+      const change = Math.max(0, Number(bill.amount_paid || 0) - Number(bill.grand_total || 0));
+      return `
+        <tr><td>Cash received</td><td style="text-align:right">${formatCurrency(bill.amount_paid || 0)}</td></tr>
+        ${change > 0 ? `<tr><td>Change</td><td style="text-align:right">${formatCurrency(change)}</td></tr>` : ''}
+      `;
+    }
+    return '';
+  }
   return `
-    <tr><td>Cash Paid</td><td style="text-align:right">${formatCurrency(bill.cash_amount || 0)}</td></tr>
-    <tr><td>QR Paid</td><td style="text-align:right">${formatCurrency(bill.qr_amount || 0)}</td></tr>
-    <tr><td>QR Type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type)}</td></tr>
-    <tr><td>Total Paid</td><td style="text-align:right">${formatCurrency(bill.total_paid || bill.amount_paid || 0)}</td></tr>
+    <tr><td>Cash paid</td><td style="text-align:right">${formatCurrency(bill.cash_amount || 0)}</td></tr>
+    <tr><td>QR paid</td><td style="text-align:right">${formatCurrency(bill.qr_amount || 0)}</td></tr>
+    <tr><td>QR type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type)}</td></tr>
   `;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function buildReceiptHtml(billData, salon = {}) {
+  const bill = billData.bill;
+  const salonName = escapeHtml(salon.salon_name || 'The Hair Cut');
+  const address = escapeHtml(salon.salon_address || '');
+  const phone = escapeHtml(salon.salon_phone || '');
+  const email = escapeHtml(salon.salon_email || '');
+  const vat = escapeHtml(salon.vat_number || '');
+  const footer = escapeHtml(salon.receipt_footer || 'Thank you for visiting. Please visit again.');
+  const billDate = new Date(bill.created_at || Date.now()).toLocaleString();
+  const customerPhone = bill.customer_phone ? `<div>${escapeHtml(bill.customer_phone)}</div>` : '';
+  const itemRows = (billData.items || []).map((item) => `
+    <tr>
+      <td>
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-meta">Qty ${Number(item.quantity || 1)} × ${formatCurrency(item.unit_price ?? (Number(item.subtotal || 0) / Number(item.quantity || 1)))}</div>
+      </td>
+      <td class="right">${formatCurrency(item.subtotal)}</td>
+    </tr>
+  `).join('');
+
+  const discountRow = Number(bill.discount_amount || 0) > 0
+    ? `<tr><td>Discount</td><td class="right">-${formatCurrency(bill.discount_amount)}</td></tr>`
+    : '';
+  const taxRow = Number(bill.tax || 0) > 0
+    ? `<tr><td>Tax${bill.tax_percent ? ` (${bill.tax_percent}%)` : ''}</td><td class="right">${formatCurrency(bill.tax)}</td></tr>`
+    : '';
+  const serviceChargeRow = Number(bill.service_charge || 0) > 0
+    ? `<tr><td>Service charge</td><td class="right">${formatCurrency(bill.service_charge)}</td></tr>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(bill.bill_number)}</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Courier New", Courier, monospace;
+      width: 76mm;
+      margin: 0 auto;
+      padding: 10px 8px 14px;
+      color: #111;
+      font-size: 12px;
+      line-height: 1.35;
+      background: #fff;
+    }
+    .brand { text-align: center; margin-bottom: 8px; }
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .muted { color: #444; font-size: 11px; }
+    .divider {
+      border: 0;
+      border-top: 1px dashed #222;
+      margin: 8px 0;
+    }
+    .meta, .customer { text-align: center; }
+    .customer { margin-top: 4px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 3px 0; vertical-align: top; }
+    .right { text-align: right; white-space: nowrap; }
+    .item-name { font-weight: bold; }
+    .item-meta { color: #555; font-size: 10px; }
+    .totals td { padding-top: 4px; }
+    .grand td {
+      border-top: 1px dashed #222;
+      padding-top: 6px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    .token {
+      text-align: center;
+      margin: 4px 0 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <h1>${salonName}</h1>
+    ${address ? `<div class="muted">${address}</div>` : ''}
+    ${phone ? `<div class="muted">Tel: ${phone}</div>` : ''}
+    ${email ? `<div class="muted">${email}</div>` : ''}
+    ${vat ? `<div class="muted">VAT/PAN: ${vat}</div>` : ''}
+  </div>
+  <hr class="divider" />
+  <div class="meta">
+    <div><strong>${escapeHtml(bill.bill_number)}</strong></div>
+    <div class="muted">${escapeHtml(billDate)}</div>
+  </div>
+  <div class="customer">${escapeHtml(bill.customer_name || 'Walk-in Customer')}</div>
+  ${customerPhone}
+  ${bill.token_number ? `<div class="token">Token #${escapeHtml(bill.token_number)}</div>` : ''}
+  <hr class="divider" />
+  <table>
+    ${itemRows}
+  </table>
+  <hr class="divider" />
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="right">${formatCurrency(bill.subtotal)}</td></tr>
+    ${discountRow}
+    ${taxRow}
+    ${serviceChargeRow}
+    <tr class="grand"><td>TOTAL</td><td class="right">${formatCurrency(bill.grand_total)}</td></tr>
+    <tr><td>Payment</td><td class="right">${escapeHtml(paymentLabel(bill.payment_method))}</td></tr>
+    ${paymentBreakdownRows(bill)}
+  </table>
+  <hr class="divider" />
+  <div class="footer">${footer}</div>
+</body>
+</html>`;
 }
 
 function qrConfigForType(type, paymentQr) {
@@ -77,12 +216,21 @@ function BillingContent() {
   const [splitQrAmount, setSplitQrAmount] = useState('');
   const [splitQrType, setSplitQrType] = useState('');
   const [splitQrEdited, setSplitQrEdited] = useState(false);
-  const [taxPercent, setTaxPercent] = useState(0);
+  const [taxPercent, setTaxPercent] = useState('');
   const [error, setError] = useState('');
   const [lastBill, setLastBill] = useState(null);
+  const [successBill, setSuccessBill] = useState(null);
   const [tokens, setTokens] = useState([]);
   const [selectedToken, setSelectedToken] = useState(null);
   const [paymentQr, setPaymentQr] = useState(null);
+  const [salonInfo, setSalonInfo] = useState({
+    salon_name: 'The Hair Cut',
+    salon_address: '',
+    salon_phone: '',
+    salon_email: '',
+    vat_number: '',
+    receipt_footer: 'Thank you for visiting. Please visit again.',
+  });
   const [qrModal, setQrModal] = useState(null);
   const [processingBill, setProcessingBill] = useState(false);
 
@@ -110,7 +258,18 @@ function BillingContent() {
 
   const fetchPaymentQr = async () => {
     const response = await fetch('/api/admin/settings?mode=payment-qr', { headers: headers() });
-    if (response.ok) setPaymentQr((await response.json()).settings || {});
+    if (response.ok) {
+      const settings = (await response.json()).settings || {};
+      setPaymentQr(settings);
+      setSalonInfo({
+        salon_name: settings.salon_name || 'The Hair Cut',
+        salon_address: settings.salon_address || '',
+        salon_phone: settings.salon_phone || '',
+        salon_email: settings.salon_email || '',
+        vat_number: settings.vat_number || '',
+        receipt_footer: settings.receipt_footer || 'Thank you for visiting. Please visit again.',
+      });
+    }
   };
 
   useEffect(() => {
@@ -244,9 +403,7 @@ function BillingContent() {
     }
   }, [tokens, services, searchParams]);
 
-  const staffForService = () => {
-    return staff;
-  };
+  const staffForService = (service) => filterStaffForService(staff, service);
 
   const addProduct = (product) => {
     setCartProducts((items) => {
@@ -281,7 +438,7 @@ function BillingContent() {
     setError('');
   };
 
-  const completeBill = async (shouldPrint = false) => {
+  const completeBill = async () => {
     setError('');
     if (cartServices.length === 0 && cartProducts.length === 0) {
       setError('Add at least one service or product.');
@@ -300,7 +457,6 @@ function BillingContent() {
       return;
     }
     if (processingBill) return;
-    setProcessingBill(true);
     if (paymentMethod === 'cash' && amountPaid && Number(amountPaid) < total) {
       setError('Cash received is less than the bill total.');
       return;
@@ -326,7 +482,7 @@ function BillingContent() {
       }
     }
 
-    const receiptWindow = shouldPrint ? window.open('', '', 'width=340,height=700') : null;
+    setProcessingBill(true);
     const response = await fetch('/api/admin/billing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
@@ -344,51 +500,37 @@ function BillingContent() {
         cash_amount: paymentMethod === 'split' ? Number(splitCashAmount || 0) : undefined,
         qr_amount: paymentMethod === 'split' ? Number(splitQrAmount || 0) : undefined,
         qr_type: paymentMethod === 'split' ? splitQrType : undefined,
-        should_print: shouldPrint,
+        should_print: false,
       }),
     });
     const data = await response.json();
     if (!response.ok) {
-      if (receiptWindow) receiptWindow.close();
       setError(data.message || data.error || 'Unable to complete the bill. No transaction was saved. Please try again.');
       setProcessingBill(false);
       return;
     }
     setLastBill(data);
-    if (shouldPrint) printReceipt(data, receiptWindow);
+    setSuccessBill(data);
     clearCart();
     setCustomer(walkInCustomer);
     setSelectedToken(null);
+    setTaxPercent('');
     localStorage.removeItem(draftKey);
     fetchData();
     setProcessingBill(false);
   };
 
-  const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=340,height=700')) => {
+  const closeSuccessBill = () => setSuccessBill(null);
+
+  const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=360,height=720')) => {
     if (!billData?.bill || !printWindow) return;
-    const rows = billData.items.map((item) => `<tr><td>${item.name} x${item.quantity}</td><td style="text-align:right">${formatCurrency(item.subtotal)}</td></tr>`).join('');
-    printWindow.document.write(`
-      <html><head><title>${billData.bill.bill_number}</title><style>
-        body{font-family:Courier New,monospace;width:72mm;margin:0 auto;padding:8px;font-size:12px;color:#111}
-        h1{text-align:center;font-size:16px;margin:0 0 4px}.meta{text-align:center;border-bottom:1px dashed #111;padding-bottom:6px;margin-bottom:6px}
-        table{width:100%;border-collapse:collapse}td{padding:3px 0}.total{border-top:1px dashed #111;font-weight:bold;font-size:14px}
-        .center{text-align:center;margin-top:8px}
-      </style></head><body>
-        <h1>The Hair Cut</h1><div class="meta">${billData.bill.bill_number}<br/>${new Date().toLocaleString()}<br/>${billData.bill.customer_name || 'Walk-in Customer'}</div>
-        ${billData.bill.token_number ? `<div class="center">Token: ${billData.bill.token_number}</div>` : ''}
-        <table>${rows}
-          <tr><td>Subtotal</td><td style="text-align:right">${formatCurrency(billData.bill.subtotal)}</td></tr>
-          <tr><td>Discount</td><td style="text-align:right">-${formatCurrency(billData.bill.discount_amount)}</td></tr>
-          <tr><td>Tax</td><td style="text-align:right">${formatCurrency(billData.bill.tax)}</td></tr>
-          <tr class="total"><td>Total</td><td style="text-align:right">${formatCurrency(billData.bill.grand_total)}</td></tr>
-          <tr><td>Payment</td><td style="text-align:right">${paymentLabel(billData.bill.payment_method)}</td></tr>
-          ${paymentBreakdownRows(billData.bill)}
-        </table><div class="center">Thank you. Please visit again.</div>
-      </body></html>
-    `);
+    printWindow.document.open();
+    printWindow.document.write(buildReceiptHtml(billData, salonInfo));
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   const sendDigitalReceipt = () => {
@@ -397,7 +539,8 @@ function BillingContent() {
       return;
     }
     const phone = lastBill.bill.customer_phone.replace(/[^\d]/g, '');
-    const message = `Receipt ${lastBill.bill.bill_number} from The Hair Cut. Total: ${formatCurrency(lastBill.bill.grand_total)}. Thank you.`;
+    const salonName = salonInfo.salon_name || 'The Hair Cut';
+    const message = `Receipt ${lastBill.bill.bill_number} from ${salonName}. Total: ${formatCurrency(lastBill.bill.grand_total)}. ${salonInfo.receipt_footer || 'Thank you.'}`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
@@ -827,7 +970,7 @@ function BillingContent() {
                     max="100"
                     value={taxPercent}
                     onChange={(event) => setTaxPercent(event.target.value)}
-                    placeholder="Tax %"
+                    placeholder="Tax % (optional)"
                     className={inputClass}
                   />
 
@@ -883,23 +1026,15 @@ function BillingContent() {
                   <div className="grid gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={() => completeBill(false)}
+                      onClick={completeBill}
                       disabled={cartCount === 0 || processingBill}
                       className="rounded-lg bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {processingBill ? 'Completing...' : 'Complete bill'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => completeBill(true)}
-                      disabled={cartCount === 0 || processingBill}
-                      className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {processingBill ? 'Completing...' : 'Bill & print receipt'}
-                    </button>
                   </div>
 
-                  {lastBill ? (
+                  {lastBill && !successBill ? (
                     <button
                       type="button"
                       onClick={sendDigitalReceipt}
@@ -915,6 +1050,77 @@ function BillingContent() {
           </aside>
         </div>
       </div>
+      {successBill?.bill ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-5 py-4 text-center">
+              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                <CheckCircle2 className="h-7 w-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-950">Bill completed</h3>
+              <p className="mt-1 text-sm text-gray-600">Payment saved successfully.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 font-mono text-xs text-gray-900">
+                <p className="text-center text-sm font-bold uppercase tracking-wide">{salonInfo.salon_name || 'The Hair Cut'}</p>
+                {salonInfo.salon_address ? <p className="mt-1 text-center text-gray-500">{salonInfo.salon_address}</p> : null}
+                {salonInfo.salon_phone ? <p className="text-center text-gray-500">Tel: {salonInfo.salon_phone}</p> : null}
+                {salonInfo.vat_number ? <p className="text-center text-gray-500">VAT/PAN: {salonInfo.vat_number}</p> : null}
+                <div className="my-3 border-t border-dashed border-gray-300" />
+                <p className="text-center font-semibold text-gray-800">{successBill.bill.bill_number}</p>
+                <p className="text-center text-gray-500">{new Date(successBill.bill.created_at || Date.now()).toLocaleString()}</p>
+                <p className="mt-2 text-center font-semibold">{successBill.bill.customer_name || 'Walk-in Customer'}</p>
+                {successBill.bill.customer_phone ? <p className="text-center text-gray-500">{successBill.bill.customer_phone}</p> : null}
+                {successBill.bill.token_number ? (
+                  <p className="mt-1 text-center font-semibold text-gray-700">Token #{successBill.bill.token_number}</p>
+                ) : null}
+                <div className="my-3 border-t border-dashed border-gray-300" />
+                <div className="space-y-2">
+                  {(successBill.items || []).map((item) => (
+                    <div key={`${item.name}-${item.item_id || item.id}`} className="flex justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{item.name}</p>
+                        <p className="text-[10px] text-gray-500">Qty {item.quantity}</p>
+                      </div>
+                      <span className="shrink-0 font-semibold">{formatCurrency(item.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="my-3 border-t border-dashed border-gray-300" />
+                <div className="space-y-1">
+                  <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(successBill.bill.subtotal)}</span></div>
+                  {Number(successBill.bill.discount_amount || 0) > 0 ? (
+                    <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(successBill.bill.discount_amount)}</span></div>
+                  ) : null}
+                  {Number(successBill.bill.tax || 0) > 0 ? (
+                    <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(successBill.bill.tax)}</span></div>
+                  ) : null}
+                  <div className="flex justify-between text-sm font-bold"><span>Total</span><span>{formatCurrency(successBill.bill.grand_total)}</span></div>
+                  <div className="flex justify-between"><span>Payment</span><span>{paymentLabel(successBill.bill.payment_method)}</span></div>
+                </div>
+                <p className="mt-3 text-center text-gray-500">{salonInfo.receipt_footer || 'Thank you for visiting. Please visit again.'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeSuccessBill}
+                className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+              >
+                Okay
+              </button>
+              <button
+                type="button"
+                onClick={() => printReceipt(successBill)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {qrModal ? (
         <PaymentQrModal
           qr={qrModal}

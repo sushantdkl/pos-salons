@@ -25,6 +25,7 @@ const DEFAULT_KEYS = [
   'bank_account_number',
   'show_esewa_phonepay_qr',
   'show_bank_qr',
+  'receipt_footer',
 ];
 
 async function seedDefaultsIfEmpty(db) {
@@ -73,6 +74,7 @@ async function seedDefaultsIfEmpty(db) {
     { key: 'bank_account_number', value: '' },
     { key: 'show_esewa_phonepay_qr', value: 'true' },
     { key: 'show_bank_qr', value: 'true' },
+    { key: 'receipt_footer', value: 'Thank you for visiting. Please visit again.' },
   ];
 
   for (const setting of defaults) {
@@ -105,6 +107,13 @@ export async function GET(request) {
     if (mode === 'payment-qr') {
       return NextResponse.json({
         settings: {
+          salon_name: settings.salon_name || 'The Hair Cut',
+          salon_address: settings.salon_address || '',
+          salon_phone: settings.salon_phone || '',
+          salon_email: settings.salon_email || '',
+          vat_number: settings.vat_number || settings.pan_number || '',
+          receipt_footer: settings.receipt_footer || 'Thank you for visiting. Please visit again.',
+          currency_symbol: settings.currency_symbol || 'Rs',
           esewa_phonepay_qr_url: settings.esewa_phonepay_qr_url || settings.esewa_qr_image || '',
           bank_qr_url: settings.bank_qr_url || settings.bank_qr_image || '',
           esewa_phonepay_label: settings.esewa_phonepay_label || 'Esewa / PhonePay QR',

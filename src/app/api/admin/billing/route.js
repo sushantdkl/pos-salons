@@ -136,18 +136,8 @@ export async function POST(request) {
           WHERE sp.user_id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
         `, [staffId]);
         if (!staffProfile) throw new Error(`Selected staff cannot perform ${service.name}`);
-        const assignedServices = String(staffProfile.assigned_services || '')
-          .split(',')
-          .map((name) => name.trim().toLowerCase())
-          .filter(Boolean);
-        const packageServices = String(service.package_items || '')
-          .split(',')
-          .map((name) => name.trim().toLowerCase())
-          .filter(Boolean);
-        const serviceKeys = [service.name.toLowerCase(), ...packageServices];
-        if (assignedServices.length && !serviceKeys.some((name) => assignedServices.includes(name) || (name.includes('facial') && assignedServices.includes('facial')))) {
-          throw new Error(`${staffProfile.salon_role} is not assigned to ${service.name}`);
-        }
+        // Assigned-services is guidance for the UI, not a hard billing block —
+        // cashier/admin may assign whoever actually did the work.
         const commissionPercentage = Number(staffProfile?.commission_percentage || 0);
         serviceRows.push({
           item_type: 'service',

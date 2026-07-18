@@ -117,7 +117,11 @@ export default function AdminLayout({ children }) {
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ token: token || '' }),
       });
     } catch {
       // Local session cleanup is still required if the network drops during logout.
@@ -242,9 +246,10 @@ export default function AdminLayout({ children }) {
       </div>
       <ConfirmDialog
         open={logoutOpen}
-        title="Confirm Logout"
-        description="Are you sure you want to sign out?"
+        title="Confirm logout"
+        description="Are you sure you want to sign out of Salon POS?"
         confirmLabel="Logout"
+        cancelLabel="Stay signed in"
         destructive
         loading={logoutLoading}
         onCancel={() => !logoutLoading && setLogoutOpen(false)}

@@ -3,7 +3,6 @@ import { parse } from 'url';
 import next from 'next';
 
 const dev = false;
-const hostname = '127.0.0.1';
 const port = Number(process.env.PORT || 3000);
 
 const app = next({ dev });
@@ -19,8 +18,8 @@ app.prepare().then(() => {
       res.statusCode = 500;
       res.end('internal server error');
     }
-  }).listen(port, hostname, (error) => {
+  }).listen(port, '0.0.0.0', (error) => {
     if (error) throw error;
-    console.log(`Salon POS ready on http://${hostname}:${port}`);
+    console.log(`Salon POS ready on port ${port}`);
   });
 });

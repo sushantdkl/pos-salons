@@ -23,14 +23,14 @@ const emptyExpense = {
 const emptySalary = {
   staffId: '',
   salaryMonth: new Date().toISOString().slice(0, 7),
-  baseSalary: 0,
-  commissionEarned: 0,
-  bonus: 0,
-  deduction: 0,
-  amountPaid: 0,
+  baseSalary: '',
+  commissionEarned: '',
+  bonus: '',
+  deduction: '',
+  amountPaid: '',
   paymentMethod: 'cash',
-  cashAmount: 0,
-  onlineAmount: 0,
+  cashAmount: '',
+  onlineAmount: '',
   paymentDate: new Date().toISOString().slice(0, 10),
   notes: '',
 };
@@ -52,7 +52,7 @@ function Field({ label, children }) {
 }
 
 function Input(props) {
-  return <input {...props} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none focus:ring-2 focus:ring-gray-900" />;
+  return <input {...props} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900" />;
 }
 
 function Select(props) {
@@ -112,8 +112,8 @@ export default function AdminExpensesPage() {
       const staff = payload.staff?.find((member) => String(member.id) === String(selectedStaff.id));
       setSalaryForm((current) => ({
         ...current,
-        baseSalary: Number(selectedStaff.baseSalary || 0),
-        commissionEarned: Number(staff?.monthMetrics?.commissionEarned || 0),
+        baseSalary: selectedStaff.baseSalary ? String(selectedStaff.baseSalary) : '',
+        commissionEarned: staff?.monthMetrics?.commissionEarned ? String(staff.monthMetrics.commissionEarned) : '',
       }));
     };
     loadMetrics();
@@ -267,7 +267,7 @@ function ExpenseForm({ form, setForm, categories, paymentMethods, saving, onSave
       <div className="grid gap-3">
         <Field label="Expense title"><Input value={form.title} onChange={(event) => update({ title: event.target.value })} /></Field>
         <Field label="Category"><Select value={form.category} onChange={(event) => update({ category: event.target.value })}>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</Select></Field>
-        <Field label="Amount"><Input type="number" min="0" value={form.amount} onChange={(event) => update({ amount: event.target.value })} /></Field>
+        <Field label="Amount"><Input type="number" min="0" value={form.amount} onChange={(event) => update({ amount: event.target.value })} placeholder="e.g. 1500" /></Field>
         <Field label="Payment method"><Select value={form.paymentMethod} onChange={(event) => update({ paymentMethod: event.target.value })}>{paymentMethods.map((method) => <option key={method} value={method}>{method.replace('_', ' ')}</option>)}</Select></Field>
         {form.paymentMethod === 'mixed' ? <div className="grid gap-3 md:grid-cols-2"><Field label="Cash amount"><Input type="number" min="0" value={form.cashAmount} onChange={(event) => update({ cashAmount: event.target.value })} /></Field><Field label="Online amount"><Input type="number" min="0" value={form.onlineAmount} onChange={(event) => update({ onlineAmount: event.target.value })} /></Field></div> : null}
         <div className="grid gap-3 md:grid-cols-2"><Field label="Paid by"><Input value={form.paidBy} onChange={(event) => update({ paidBy: event.target.value })} /></Field><Field label="Paid to"><Input value={form.paidTo} onChange={(event) => update({ paidTo: event.target.value })} /></Field></div>
@@ -288,16 +288,16 @@ function SalaryForm({ form, setForm, staff, totalPayable, remainingBalance, paym
       <div className="grid gap-3">
         <Field label="Staff"><Select value={form.staffId} onChange={(event) => update({ staffId: event.target.value })}><option value="">Select staff</option>{staff.map((member) => <option key={member.id} value={member.id}>{member.name} ({member.role})</option>)}</Select></Field>
         <Field label="Salary month"><Input type="month" value={form.salaryMonth} onChange={(event) => update({ salaryMonth: event.target.value })} /></Field>
-        <div className="grid gap-3 md:grid-cols-2"><Field label="Base salary"><Input type="number" min="0" value={form.baseSalary} onChange={(event) => update({ baseSalary: Number(event.target.value) })} /></Field><Field label="Commission earned"><Input type="number" min="0" value={form.commissionEarned} onChange={(event) => update({ commissionEarned: Number(event.target.value) })} /></Field></div>
-        <div className="grid gap-3 md:grid-cols-2"><Field label="Bonus"><Input type="number" min="0" value={form.bonus} onChange={(event) => update({ bonus: Number(event.target.value) })} /></Field><Field label="Deduction"><Input type="number" min="0" value={form.deduction} onChange={(event) => update({ deduction: Number(event.target.value) })} /></Field></div>
+        <div className="grid gap-3 md:grid-cols-2"><Field label="Base salary"><Input type="number" min="0" value={form.baseSalary} onChange={(event) => update({ baseSalary: event.target.value })} placeholder="e.g. 25000" /></Field><Field label="Commission earned"><Input type="number" min="0" value={form.commissionEarned} onChange={(event) => update({ commissionEarned: event.target.value })} placeholder="e.g. 1500" /></Field></div>
+        <div className="grid gap-3 md:grid-cols-2"><Field label="Bonus"><Input type="number" min="0" value={form.bonus} onChange={(event) => update({ bonus: event.target.value })} placeholder="e.g. 500" /></Field><Field label="Deduction"><Input type="number" min="0" value={form.deduction} onChange={(event) => update({ deduction: event.target.value })} placeholder="e.g. 200" /></Field></div>
         <div className="rounded-lg bg-gray-50 p-4 text-sm">
           <div className="flex justify-between"><span>Total payable</span><strong>{formatCurrency(totalPayable)}</strong></div>
           <div className="mt-2 flex justify-between"><span>Remaining balance</span><strong>{formatCurrency(remainingBalance)}</strong></div>
           <div className="mt-2 flex justify-between"><span>Status</span><strong>{paymentStatus.replace('_', ' ')}</strong></div>
         </div>
-        <Field label="Amount paid"><Input type="number" min="0" value={form.amountPaid} onChange={(event) => update({ amountPaid: Number(event.target.value) })} /></Field>
+        <Field label="Amount paid"><Input type="number" min="0" value={form.amountPaid} onChange={(event) => update({ amountPaid: event.target.value })} placeholder="e.g. 25000" /></Field>
         <Field label="Payment method"><Select value={form.paymentMethod} onChange={(event) => update({ paymentMethod: event.target.value })}><option value="cash">cash</option><option value="online">online</option><option value="bank_transfer">bank transfer</option><option value="mixed">mixed</option></Select></Field>
-        {form.paymentMethod === 'mixed' ? <div className="grid gap-3 md:grid-cols-2"><Field label="Cash paid"><Input type="number" min="0" value={form.cashAmount} onChange={(event) => update({ cashAmount: Number(event.target.value) })} /></Field><Field label="Online paid"><Input type="number" min="0" value={form.onlineAmount} onChange={(event) => update({ onlineAmount: Number(event.target.value) })} /></Field></div> : null}
+        {form.paymentMethod === 'mixed' ? <div className="grid gap-3 md:grid-cols-2"><Field label="Cash paid"><Input type="number" min="0" value={form.cashAmount} onChange={(event) => update({ cashAmount: event.target.value })} placeholder="e.g. 10000" /></Field><Field label="Online paid"><Input type="number" min="0" value={form.onlineAmount} onChange={(event) => update({ onlineAmount: event.target.value })} placeholder="e.g. 15000" /></Field></div> : null}
         <Field label="Payment date"><Input type="date" value={form.paymentDate} onChange={(event) => update({ paymentDate: event.target.value })} /></Field>
         <Field label="Notes"><Textarea rows={3} value={form.notes} onChange={(event) => update({ notes: event.target.value })} /></Field>
         <button onClick={onSave} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white disabled:opacity-60"><DollarSign className="h-4 w-4" />{saving ? 'Saving...' : 'Save Salary Payment'}</button>

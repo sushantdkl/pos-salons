@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import Image from 'next/image';
-import { MessageCircle, Sparkles, Star, Users } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
 import { PackageCard, ServiceCard } from '@/modules/public-site/components/cards';
 import { StaffCarousel } from '@/modules/public-site/components/staff-carousel';
+import { CmsImage } from '@/modules/public-site/components/cms-image';
 import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
 import { createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
 import type { PublicPackage, PublicService } from '@/modules/public-site/types';
@@ -25,7 +25,6 @@ export default async function HomePage() {
   const staffSection = sections.staff;
   const about = sections.about;
   const contact = sections.contact;
-  const aboutImages = about.metadata.galleryImages?.length ? about.metadata.galleryImages : [info.assets.banner, info.assets.details];
   return (
     <PublicLayout info={info} isHome={true}>
       <main>
@@ -33,7 +32,7 @@ export default async function HomePage() {
           <section className="relative w-full h-[90vh] min-h-[600px] md:h-screen md:min-h-[750px] bg-[#12100e] overflow-hidden flex items-end">
             {/* Background Image */}
             <div className="absolute inset-0 w-full h-full">
-              <Image 
+              <CmsImage 
                 src={hero.imageUrl || info.assets.hero} 
                 alt="The Hair Cut premium salon interior" 
                 fill 
@@ -95,7 +94,7 @@ export default async function HomePage() {
           >
             <div className="grid items-start gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-14">
               <div className="relative min-h-[420px] overflow-hidden bg-[#3a3530] lg:min-h-[560px]">
-                <Image
+                <CmsImage
                   src={servicesSection.imageUrl || info.assets.services}
                   alt="Haircut service at The Hair Cut"
                   fill
@@ -187,96 +186,63 @@ export default async function HomePage() {
           </Section>
         ) : null}
 
-        <Section
-          eyebrow="Why choose us"
-          title="Simple, premium, and reliable"
-          description="Designed around everyday salon needs."
-        >
-          <div className="grid items-stretch gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
-            <div className="divide-y divide-[#e7ded2] border border-[#e7ded2]">
-              {[
-                [Sparkles, 'Premium finish', 'Clean service flow with careful grooming and beauty treatments.'],
-                [Users, 'Friendly staff', 'A focused team for barbering, beauty care, and reception.'],
-                [Star, 'Clear packages', 'Transparent service and package pricing before you visit.'],
-              ].map(([Icon, title, description], index) => (
-                <div key={String(title)} className="flex gap-6 p-7 md:p-8">
-                  <span className="shrink-0 font-serif text-3xl font-light leading-none text-[#d7b56d]/50">
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <Icon className="mb-4 h-5 w-5 text-[#9b742d]" strokeWidth={1.5} />
-                    <h3 className="font-serif text-xl font-light tracking-tight text-[#171411] md:text-2xl">{String(title)}</h3>
-                    <p className="mt-3 max-w-md text-sm font-light leading-relaxed text-[#6d625b]">{String(description)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="relative min-h-[440px] overflow-hidden bg-[#171411] lg:min-h-full">
-              <Image
-                src={about.imageUrl || info.assets.about}
-                alt="The Hair Cut outside view"
-                fill
-                sizes="(min-width: 1024px) 42vw, 100vw"
-                className="object-cover opacity-80"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/15 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 bg-[#0d0b0a]/80 px-6 py-5 backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">The experience</p>
-                <p className="mt-2 max-w-sm font-serif text-lg font-light leading-snug text-white/85">
-                  A calm space built for consistent grooming, every visit.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Section>
-
         {about.isVisible ? (
           <Section
-            theme="dark"
             eyebrow={about.subtitle || 'About'}
             title={about.title}
             description={about.description}
           >
-            <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
-              {aboutImages.map((image: string, index: number) => (
-                <div
-                  key={image}
-                  className={`relative overflow-hidden bg-[#0d0b0a] ${
-                    index === 0
-                      ? 'min-h-[360px] lg:col-span-7 lg:min-h-[520px]'
-                      : 'min-h-[280px] lg:col-span-5 lg:min-h-[520px]'
-                  }`}
-                >
-                  <Image
-                    src={image}
-                    alt={index === 0 ? 'The Hair Cut banner' : 'The Hair Cut details'}
-                    fill
-                    sizes={index === 0 ? '(min-width: 1024px) 55vw, 100vw' : '(min-width: 1024px) 40vw, 100vw'}
-                    className="object-cover opacity-80"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a]/80 via-transparent to-transparent" />
-                  {index === 0 ? (
-                    <div className="absolute bottom-0 left-0 right-0 border-t border-[#d7b56d]/30 px-6 py-5">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{info.name}</p>
-                      <p className="mt-2 max-w-lg font-serif text-lg font-light leading-snug text-white/85">{info.tagline}</p>
-                    </div>
-                  ) : null}
+            <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+              <div className="relative min-h-[420px] overflow-hidden bg-[#171411] lg:min-h-[560px]">
+                <CmsImage
+                  src={about.imageUrl || about.metadata.galleryImages?.[0] || info.assets.about}
+                  alt={`${info.name} salon`}
+                  fill
+                  sizes="(min-width: 1024px) 48vw, 100vw"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a]/60 via-transparent to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 px-6 py-5 md:px-8 md:py-6">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">{info.name}</p>
+                  <p className="mt-2 max-w-md font-serif text-xl font-light leading-snug text-white/90 md:text-2xl">
+                    {info.tagline}
+                  </p>
                 </div>
-              ))}
-            </div>
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <Link
-                href="/gallery"
-                className="inline-flex items-center justify-center bg-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#c39e2e]"
-              >
-                View gallery
-              </Link>
-              <Link
-                href="/contact"
-                className="inline-flex items-center justify-center border border-white/20 bg-white/5 px-8 py-4 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition-colors duration-300 hover:border-white/45 hover:bg-white/10"
-              >
-                Get in touch
-              </Link>
+              </div>
+
+              <div>
+                <ul className="divide-y divide-[#e7ded2] border-y border-[#e7ded2]">
+                  {(
+                    Array.isArray(about.metadata.highlights) && about.metadata.highlights.length
+                      ? about.metadata.highlights
+                      : ['Premium finish', 'Friendly staff', 'Clear packages']
+                  )
+                    .slice(0, 3)
+                    .map((item: string, index: number) => (
+                      <li key={item} className="flex gap-5 py-5 md:py-6">
+                        <span className="shrink-0 font-serif text-2xl font-light leading-none text-[#d7b56d]/70">
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+                        <p className="font-serif text-lg font-light tracking-tight text-[#171411] md:text-xl">{item}</p>
+                      </li>
+                    ))}
+                </ul>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Link
+                    href={about.buttonLink || '/gallery'}
+                    className="inline-flex items-center justify-center bg-[#171411] px-8 py-4 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-300 hover:bg-[#332920]"
+                  >
+                    {about.buttonText || 'View gallery'}
+                  </Link>
+                  <Link
+                    href={about.secondaryButtonLink || '/contact'}
+                    className="inline-flex items-center justify-center border border-[#d7b56d] px-8 py-4 text-xs font-bold uppercase tracking-wider text-[#171411] transition-colors duration-300 hover:bg-[#f8f3ed]"
+                  >
+                    {about.secondaryButtonText || 'Get in touch'}
+                  </Link>
+                </div>
+              </div>
             </div>
           </Section>
         ) : null}

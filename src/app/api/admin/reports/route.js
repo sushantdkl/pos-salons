@@ -22,10 +22,10 @@ export async function GET(request) {
     );
 
     const summary = await db.get(`
-      SELECT COALESCE(SUM(grand_total), 0) as totalSales,
-             COUNT(*)::int as totalBills,
-             COUNT(DISTINCT customer_id)::int as uniqueCustomers,
-             CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(grand_total), 0) / COUNT(*) ELSE 0 END as avgBillValue
+      SELECT COALESCE(SUM(grand_total), 0) AS total_sales,
+             COUNT(*)::int AS total_bills,
+             COUNT(DISTINCT customer_id)::int AS unique_customers,
+             CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(grand_total), 0) / COUNT(*) ELSE 0 END AS avg_bill_value
       FROM salon_bills
       WHERE ${clause} AND status = 'paid'
     `, params);
@@ -165,12 +165,12 @@ export async function GET(request) {
     ].filter(Boolean);
 
     return NextResponse.json({
-      totalSales: numeric(summary.totalSales),
-      totalBills: Number(summary.totalBills || 0),
-      totalOrders: Number(summary.totalBills || 0),
-      avgBillValue: numeric(summary.avgBillValue),
-      avgOrderValue: numeric(summary.avgBillValue),
-      uniqueCustomers: Number(summary.uniqueCustomers || 0),
+      totalSales: numeric(summary.total_sales ?? summary.totalsales ?? summary.totalSales),
+      totalBills: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
+      totalOrders: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
+      avgBillValue: numeric(summary.avg_bill_value ?? summary.avgbillvalue ?? summary.avgBillValue),
+      avgOrderValue: numeric(summary.avg_bill_value ?? summary.avgbillvalue ?? summary.avgBillValue),
+      uniqueCustomers: Number(summary.unique_customers ?? summary.uniquecustomers ?? summary.uniqueCustomers ?? 0),
       totalCustomers: totalCustomersRow?.count || 0,
       repeatCustomers: repeatCustomersRow?.count || 0,
       paymentMethods,

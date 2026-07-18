@@ -21,16 +21,17 @@ export async function GET() {
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
       WHERE u.is_active = TRUE
-      ORDER BY 
-        CASE u.username
+      ORDER BY
+        CASE u.role
           WHEN 'admin' THEN 1
-          WHEN 'kanchan' THEN 2
-          WHEN 'raashid' THEN 3
-          WHEN 'salman' THEN 4
-          WHEN 'saajid' THEN 5
+          WHEN 'cashier' THEN 2
+          WHEN 'barber' THEN 3
+          WHEN 'stylist' THEN 4
+          WHEN 'beautician' THEN 5
           ELSE 6
         END,
-        u.full_name
+        COALESCE(NULLIF(sp.display_name, ''), u.full_name),
+        u.username
     `);
 
     return NextResponse.json({

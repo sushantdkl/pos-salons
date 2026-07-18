@@ -5,11 +5,22 @@ import { cleanText, ensureSalonSchema, requireAuth, requireRole } from '@/lib/sa
 import { APP_ROLES, normalizeRole } from '@/constants/roles';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
+import { publicErrorMessage } from '@/lib/api/errors';
 
 const PRIMARY_ADMIN_USERNAME = process.env.PRIMARY_ADMIN_USERNAME || 'admin';
+const LAST_ADMIN_MESSAGE = 'The last active admin account cannot be deleted. Please create another admin before deleting this account.';
+const USERNAME_TAKEN_MESSAGE = 'This username is already taken. Please choose a different username.';
+
+function normalizeUsername(value) {
+  return cleanText(value).toLowerCase().replace(/\s+/g, '');
+}
 
 function validateStaff(data, editing = false) {
-  if (!cleanText(data.username)) return 'Username is required';
+  const username = normalizeUsername(data.username);
+  if (!username) return 'Username is required';
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+    return 'Username must be 3–32 characters (letters, numbers, . _ - only).';
+  }
   if (!cleanText(data.full_name)) return 'Staff name is required';
   if (!APP_ROLES.includes(normalizeRole(data.salon_role || data.role))) return 'Valid role is required';
   if (!editing && !/^\d{4,8}$/.test(String(data.password || ''))) return 'PIN must be 4 to 8 digits';
@@ -20,7 +31,25 @@ function validateStaff(data, editing = false) {
 }
 
 function isDefaultAdmin(user) {
-  return user?.username === PRIMARY_ADMIN_USERNAME && normalizeRole(user?.role) === 'admin';
+  return String(user?.username || '').toLowerCase() === PRIMARY_ADMIN_USERNAME.toLowerCase()
+    && normalizeRole(user?.role) === 'admin';
+}
+
+async function findUsernameConflict(db, username, excludeId = null) {
+  if (excludeId) {
+    return db.get(
+      'SELECT id, username FROM users WHERE LOWER(username) = LOWER(?) AND id != ?',
+      [username, excludeId]
+    );
+  }
+  return db.get('SELECT id, username FROM users WHERE LOWER(username) = LOWER(?)', [username]);
+}
+
+function usernameTakenResponse() {
+  return NextResponse.json(
+    { success: false, error: USERNAME_TAKEN_MESSAGE, message: USERNAME_TAKEN_MESSAGE, field: 'username' },
+    { status: 409 }
+  );
 }
 
 function defaultAdminBlocked() {
@@ -32,6 +61,11 @@ function adminRuleError(message) {
   const error = new Error(message);
   error.status = 422;
   return error;
+}
+
+function staffErrorResponse(error, fallback) {
+  const message = publicErrorMessage(error, fallback);
+  return NextResponse.json({ success: false, message, error: message }, { status: error.status || 500 });
 }
 
 async function ensureAdminCanChange(tx, current, nextRole, nextActive) {
@@ -46,7 +80,7 @@ async function ensureAdminCanChange(tx, current, nextRole, nextActive) {
     [current.id]
   );
   if (Number(row?.count || 0) <= 0) {
-    throw adminRuleError('The last active admin account cannot be deleted. Please create another active admin first.');
+    throw adminRuleError(LAST_ADMIN_MESSAGE);
   }
 }
 
@@ -103,7 +137,7 @@ export async function GET(request) {
     return NextResponse.json({ employees });
   } catch (error) {
     console.error('GET /api/admin/employees:', error);
-    return NextResponse.json({ error: error.message || 'Failed to fetch staff' }, { status: error.status || 500 });
+    return staffErrorResponse(error, 'Failed to fetch staff');
   }
 }
 
@@ -114,10 +148,11 @@ export async function POST(request) {
     const user = await requireRole(request, db, 'admin');
     const data = await request.json();
     const validationError = validateStaff(data);
-    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    if (validationError) return NextResponse.json({ error: validationError, message: validationError }, { status: 400 });
 
-    const existing = await db.get('SELECT id FROM users WHERE username = ?', [cleanText(data.username)]);
-    if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
+    const username = normalizeUsername(data.username);
+    const existing = await findUsernameConflict(db, username);
+    if (existing) return usernameTakenResponse();
 
     const role = normalizeRole(data.salon_role || data.role);
     const normalizedPhone = phoneOrNull(data.phone);
@@ -126,7 +161,7 @@ export async function POST(request) {
       INSERT INTO users (username, full_name, role, password_hash, email, phone, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
-      cleanText(data.username),
+      username,
       cleanText(data.full_name),
       role,
       hashedPassword,
@@ -153,7 +188,10 @@ export async function POST(request) {
     const employee = await db.get('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?', [result.lastInsertRowid]);
     return NextResponse.json({ employee, message: 'Staff member created successfully' }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to create staff member' }, { status: error.status || 500 });
+    if (error?.code === '23505' || /unique|duplicate/i.test(String(error?.message || ''))) {
+      return usernameTakenResponse();
+    }
+    return staffErrorResponse(error, 'Failed to create staff member');
   }
 }
 
@@ -174,12 +212,13 @@ export async function PUT(request) {
       return defaultAdminBlocked();
     }
     const validationError = validateStaff(data, true);
-    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+    if (validationError) return NextResponse.json({ error: validationError, message: validationError }, { status: 400 });
 
-    const existing = await db.get('SELECT id FROM users WHERE username = ? AND id != ?', [cleanText(data.username), data.id]);
-    if (existing) return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
+    const requestedUsername = normalizeUsername(data.username);
+    const existing = await findUsernameConflict(db, requestedUsername, data.id);
+    if (existing) return usernameTakenResponse();
     const role = protectedAdmin ? 'admin' : normalizeRole(data.salon_role || data.role);
-    const username = protectedAdmin ? current.username : cleanText(data.username);
+    const username = protectedAdmin ? current.username : requestedUsername;
     const isActive = protectedAdmin ? true : data.is_active !== false;
     const normalizedPhone = phoneOrNull(data.phone);
 
@@ -230,7 +269,10 @@ export async function PUT(request) {
     const employee = await db.get('SELECT id, username, full_name, role, email, phone, is_active FROM users WHERE id = ?', [data.id]);
     return NextResponse.json({ employee, message: 'Staff member updated successfully' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to update staff member' }, { status: error.status || 500 });
+    if (error?.code === '23505' || /unique|duplicate/i.test(String(error?.message || ''))) {
+      return usernameTakenResponse();
+    }
+    return staffErrorResponse(error, 'Failed to update staff member');
   }
 }
 
@@ -258,7 +300,7 @@ export async function PATCH(request) {
       employee: { ...target, is_active: nextActive },
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to update staff status' }, { status: error.status || 500 });
+    return staffErrorResponse(error, 'Failed to update staff status');
   }
 }
 
@@ -294,6 +336,6 @@ export async function DELETE(request) {
     });
     return NextResponse.json({ message: 'Staff member deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to delete staff member' }, { status: error.status || 500 });
+    return staffErrorResponse(error, 'Failed to delete staff member');
   }
 }

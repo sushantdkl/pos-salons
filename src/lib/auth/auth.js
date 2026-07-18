@@ -9,12 +9,13 @@ export class AuthService {
   }
 
   async authenticate(username, password) {
+    const normalizedUsername = String(username || '').trim().toLowerCase();
     const user = await this.db.get(`
       SELECT u.*, sp.salon_role
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
-      WHERE u.username = ? AND u.is_active = TRUE
-    `, [username]);
+      WHERE LOWER(u.username) = ? AND u.is_active = TRUE
+    `, [normalizedUsername]);
 
     if (!user) {
       return { success: false, error: 'User not found' };

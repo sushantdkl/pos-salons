@@ -1,8 +1,8 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { PageHero } from '@/modules/public-site/components/page-hero';
 import { Section } from '@/modules/public-site/components/section';
+import { CmsImage } from '@/modules/public-site/components/cms-image';
 import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
 import type { GalleryItem } from '@/modules/public-site/types';
 
@@ -27,11 +27,11 @@ export default async function GalleryPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {cms.gallery.map((item: GalleryItem) => (
             <article
-              key={item.title}
+              key={`${item.id || item.title}-${item.image}`}
               className="group overflow-hidden border border-[#e7ded2] bg-white transition-shadow duration-300 hover:shadow-md"
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-[#f8f3ed]">
-                <Image
+                <CmsImage
                   src={item.image}
                   alt={item.altText || item.title}
                   fill
