@@ -71,7 +71,6 @@ export async function GET(request) {
       if (key === 'split') paymentSummary.splitPaymentSales += numeric(row.amount);
       if (row.qr_type === 'ESEWA_PHONEPAY') paymentSummary.esewaPhonePaySales += numeric(row.qr_amount);
       if (row.qr_type === 'BANK') paymentSummary.bankQrSales += numeric(row.qr_amount);
-      if (key === 'online' && !row.qr_type) paymentSummary.esewaPhonePaySales += numeric(row.qr_amount);
     });
 
     const itemClause = periodDateFilter(
@@ -101,13 +100,14 @@ export async function GET(request) {
     `, params);
 
     const bestStaff = await db.all(`
-      SELECT u.full_name as name, COUNT(i.id)::int as services, COALESCE(SUM(i.subtotal), 0) as revenue,
+      SELECT COALESCE(NULLIF(i.staff_name_snapshot, ''), u.full_name, 'Former staff') as name,
+             COUNT(i.id)::int as services, COALESCE(SUM(i.subtotal), 0) as revenue,
              COALESCE(SUM(i.commission_amount), 0) as commission
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
       LEFT JOIN users u ON u.id = i.staff_id
       WHERE ${itemClause} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
-      GROUP BY i.staff_id, u.full_name
+      GROUP BY i.staff_id, i.staff_name_snapshot, u.full_name
       ORDER BY revenue DESC
       LIMIT 10
     `, params);
@@ -135,6 +135,39 @@ export async function GET(request) {
       ORDER BY ${BILL_DATE_EXPR} DESC, id DESC
       LIMIT 500
     `, params);
+
+    const transactionIds = transactions.map((transaction) => transaction.id).filter(Boolean);
+    const itemRows = transactionIds.length
+      ? await db.all(`
+          SELECT i.bill_id,
+                 i.item_type,
+                 i.name,
+                 i.quantity,
+                 i.unit_price,
+                 i.subtotal,
+                 i.staff_id,
+                 COALESCE(NULLIF(i.staff_name_snapshot, ''), NULLIF(sp.display_name, ''), u.full_name, '') as staff_name
+          FROM salon_bill_items i
+          LEFT JOIN users u ON u.id = i.staff_id
+          LEFT JOIN staff_profiles sp ON sp.user_id = i.staff_id
+          WHERE i.bill_id IN (${transactionIds.map(() => '?').join(',')})
+          ORDER BY i.id ASC
+        `, transactionIds)
+      : [];
+    const itemsByBill = itemRows.reduce((acc, item) => {
+      const key = String(item.bill_id);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push({
+        type: item.item_type,
+        name: item.name,
+        quantity: Number(item.quantity || 0),
+        unitPrice: numeric(item.unit_price),
+        subtotal: numeric(item.subtotal),
+        staffId: item.staff_id || null,
+        staffName: item.staff_name || '',
+      });
+      return acc;
+    }, {});
 
     const lowStockProducts = await db.all(`
       SELECT name, current_stock, low_stock_threshold
@@ -192,10 +225,14 @@ export async function GET(request) {
         amountPaid: numeric(transaction.amount_paid),
         cashAmount: numeric(transaction.cash_amount),
         qrAmount: numeric(transaction.qr_amount),
-        qrType: transaction.qr_type || '',
+        qrType: transaction.qr_type || 'Not recorded',
         totalPaid: numeric(transaction.total_paid || transaction.amount_paid),
         paymentStatus: transaction.payment_status || 'paid',
         transactionDate: transaction.transaction_date,
+        items: itemsByBill[String(transaction.id)] || [],
+        assignedStaff: (itemsByBill[String(transaction.id)] || [])
+          .filter((item) => item.type === 'service')
+          .map((item) => `${item.name} - ${item.staffName || 'Unassigned'}`),
       })),
       bestStaff: bestStaff.map((staff) => ({
         ...staff,

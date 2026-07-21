@@ -36,6 +36,16 @@ psql "$DATABASE_URL" -f docs/postgresql-seed.sql
 
 The seed creates the required salon roles/users, services, packages, staff profiles, CMS defaults, and settings.
 
+For an existing deployed database, run only migrations that have not been applied yet. Do not re-run the seed unless you intentionally want to restore demo/default data:
+
+```bash
+psql "$DATABASE_URL" -f docs/migrations/2026-06-23-add-salon-bill-payment-fields.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-19-add-website-cms-tables.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-21-final-pos-sync-enhancements.sql
+```
+
+If `psql` is unavailable, run those SQL files once in phpPgAdmin.
+
 Default testing PINs:
 
 | Staff | Role | PIN |
@@ -81,7 +91,7 @@ The folder must be writable by the Node.js app and publicly accessible from `NEX
 
 ## 5. Build And Start
 
-Use a Node.js version supported by Next.js 16. Recommended: Node 20+.
+Use a Node.js version supported by Next.js 15. Recommended: Node 20+.
 
 ```bash
 npm install
@@ -89,7 +99,7 @@ npm run build
 npm run start
 ```
 
-The app starts through `server.js` and listens on `process.env.PORT || 3000`.
+The app starts through `server.js`, listens on `process.env.PORT || 3000`, and binds to `127.0.0.1` by default for cPanel's Node.js reverse proxy.
 
 ## 6. Pre-Hosting QA
 

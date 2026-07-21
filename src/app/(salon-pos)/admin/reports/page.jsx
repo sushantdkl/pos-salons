@@ -39,7 +39,7 @@ function qrTypeLabel(type) {
   return {
     ESEWA_PHONEPAY: 'Esewa / PhonePay',
     BANK: 'Bank QR',
-  }[type] || '-';
+  }[type] || (type === 'Not recorded' ? 'Not recorded' : '-');
 }
 
 function csvCell(value) {
@@ -166,12 +166,13 @@ export default function ReportsPage() {
       ]),
       [],
       ['Transactions'],
-      ['Date', 'Invoice', 'Customer', 'Phone', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'],
+      ['Date', 'Invoice', 'Customer', 'Phone', 'Services / Assigned Staff', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'],
       ...transactions.map((transaction) => [
         formatDateTime(transaction.transactionDate),
         transaction.billNumber,
         transaction.customerName,
         transaction.customerPhone,
+        (transaction.assignedStaff || []).join('; '),
         transaction.paymentMethod,
         money(transaction.cashAmount),
         money(transaction.qrAmount),
@@ -287,10 +288,10 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[720px] w-full">
+                <table className="min-w-[980px] w-full">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50/80">
-                      {['Date', 'Invoice', 'Customer', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'].map((heading) => (
+                      {['Date', 'Invoice', 'Customer', 'Services / Staff', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'].map((heading) => (
                         <th
                           key={heading}
                           className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-gray-600 sm:px-4 ${
@@ -312,6 +313,17 @@ export default function ReportsPage() {
                             <div className="font-medium text-gray-900">{transaction.customerName || 'Walk-in Customer'}</div>
                             {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
                           </td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">
+                            {(transaction.assignedStaff || []).length ? (
+                              <div className="space-y-1">
+                                {transaction.assignedStaff.map((line) => (
+                                  <div key={`${transaction.id}-${line}`} className="text-xs font-medium text-gray-700">{line}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">No services</span>
+                            )}
+                          </td>
                           <td className="px-3 py-3 text-sm capitalize text-gray-700 sm:px-4">{transaction.paymentMethod || '-'}</td>
                           <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.cashAmount)}</td>
                           <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.qrAmount)}</td>
@@ -321,7 +333,7 @@ export default function ReportsPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-500">
                           No sales records found for this period.
                         </td>
                       </tr>

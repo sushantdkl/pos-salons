@@ -4,6 +4,7 @@ import next from 'next';
 
 const dev = false;
 const port = Number(process.env.PORT || 3000);
+const hostname = process.env.HOST || '127.0.0.1';
 
 const app = next({ dev });
 const handle = app.getRequestHandler();
@@ -18,8 +19,8 @@ app.prepare().then(() => {
       res.statusCode = 500;
       res.end('internal server error');
     }
-  }).listen(port, '0.0.0.0', (error) => {
+  }).listen(port, hostname, (error) => {
     if (error) throw error;
-    console.log(`Salon POS ready on port ${port}`);
+    console.log(`Salon POS ready on http://${hostname}:${port}`);
   });
 });

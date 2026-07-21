@@ -47,6 +47,16 @@ If shell `psql` is not available, open phpPgAdmin and run the SQL files manually
 1. Run `docs/postgresql-schema.sql`.
 2. Run `docs/postgresql-seed.sql`.
 
+For an existing deployed database, do not re-run the seed unless you intentionally want to restore demo data. Apply only the required migrations that are newer than your deployed schema:
+
+```bash
+psql "$DATABASE_URL" -f docs/migrations/2026-06-23-add-salon-bill-payment-fields.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-19-add-website-cms-tables.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-21-final-pos-sync-enhancements.sql
+```
+
+If using phpPgAdmin, open each migration file and run it once from the SQL panel.
+
 ## 4. Environment Variables
 
 Set these in the cPanel Node.js app environment:
@@ -123,6 +133,8 @@ Application startup file: server.js
 Application mode: production
 Node.js version: 20+
 ```
+
+The app listens on `process.env.PORT` and binds to `127.0.0.1` by default for cPanel's Node.js reverse proxy. Set `HOST=0.0.0.0` only if your hosting provider specifically requires it.
 
 After setting environment variables:
 

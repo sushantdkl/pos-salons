@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { CreditCard, ImagePlus, Loader2, Receipt, Save, Settings, Store, X } from 'lucide-react';
+import { CreditCard, ImagePlus, Loader2, Receipt, Save, Store, X } from 'lucide-react';
 import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 
 const emptySalon = {
@@ -250,13 +250,6 @@ export default function SettingsPage() {
             </button>
           </form>
 
-          <div className="mt-6 rounded-lg bg-gray-100 p-5">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <Settings className="h-4 w-4" />
-              Environment
-            </div>
-            <p className="text-xs text-gray-600">License checks are controlled by <code>NEXT_PUBLIC_LICENSE_ENABLED</code>. Set it to <code>false</code> for local testing.</p>
-          </div>
         </div>
       </div>
   );

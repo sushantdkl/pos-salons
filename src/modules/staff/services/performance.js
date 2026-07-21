@@ -1,4 +1,4 @@
-import { BILL_DATE_EXPR_B, STAFF_PERF_PERIODS } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR_B, STAFF_PERF_PERIODS, periodDateFilter } from '@/lib/db/postgres-dates';
 
 function emptyMetric() {
   return {
@@ -9,7 +9,12 @@ function emptyMetric() {
   };
 }
 
-export async function getStaffPerformance(db, staffId) {
+function numeric(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function getStaffPerformance(db, staffId, options = {}) {
   const metrics = {};
   for (const [period, clause] of Object.entries(STAFF_PERF_PERIODS)) {
     const row = await db.get(`
@@ -50,13 +55,55 @@ export async function getStaffPerformance(db, staffId) {
     WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
   `, [staffId]);
   const daysActive = Math.max(1, Number(daysRow?.count || 1));
+  const reportFilter = periodDateFilter(
+    options.period || 'today',
+    options.startDate,
+    options.endDate,
+    BILL_DATE_EXPR_B
+  );
+  const reportRows = await db.all(`
+    SELECT ${BILL_DATE_EXPR_B} as date,
+           b.bill_number as invoice,
+           b.customer_name as customerName,
+           i.name as serviceName,
+           i.subtotal as amount,
+           i.commission_amount as commission,
+           b.payment_status as paymentStatus
+    FROM salon_bill_items i
+    JOIN salon_bills b ON b.id = i.bill_id
+    WHERE i.item_type = 'service'
+      AND i.staff_id = ?
+      AND b.status = 'paid'
+      AND ${reportFilter.clause}
+    ORDER BY ${BILL_DATE_EXPR_B} DESC, i.id DESC
+    LIMIT 500
+  `, [staffId, ...reportFilter.params]);
+  const uniqueCustomers = new Set(reportRows.map((row) => row.customerName || 'Walk-in Customer')).size;
 
   return {
     metrics,
-    recentServices,
+    recentServices: recentServices.map((row) => ({
+      ...row,
+      revenue: numeric(row.revenue),
+      commission: numeric(row.commission),
+    })),
     summary: {
       averageServicesPerDay: metrics.lifetime.servicesCompleted / daysActive,
       averageRevenuePerDay: metrics.lifetime.revenue / daysActive,
+    },
+    report: {
+      period: options.period || 'today',
+      rows: reportRows.map((row) => ({
+        ...row,
+        amount: numeric(row.amount),
+        commission: numeric(row.commission),
+      })),
+      totals: {
+        services: reportRows.length,
+        revenue: reportRows.reduce((sum, row) => sum + numeric(row.amount), 0),
+        commission: reportRows.reduce((sum, row) => sum + numeric(row.commission), 0),
+        customers: uniqueCustomers,
+      },
     },
   };
 }

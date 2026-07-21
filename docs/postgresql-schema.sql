@@ -235,6 +235,8 @@ CREATE TABLE IF NOT EXISTS salon_bills (
   is_printed BOOLEAN DEFAULT FALSE,
   printed_at TIMESTAMPTZ,
   printed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  backdated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  backdated_reason TEXT,
   notes TEXT,
   status TEXT DEFAULT 'paid' CHECK (status IN ('paid', 'cancelled')),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -250,6 +252,7 @@ CREATE TABLE IF NOT EXISTS salon_bill_items (
   unit_price NUMERIC NOT NULL CHECK (unit_price >= 0),
   subtotal NUMERIC NOT NULL CHECK (subtotal >= 0),
   staff_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  staff_name_snapshot TEXT,
   commission_percentage NUMERIC DEFAULT 0,
   commission_amount NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -291,6 +294,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   reference_number TEXT,
   attachment_url TEXT,
   salary_payment_id BIGINT,
+  record_type TEXT DEFAULT 'EXPENSE' CHECK (record_type IN ('EXPENSE', 'CASH_TRANSFER')),
   created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   deleted_at TIMESTAMPTZ,
@@ -359,6 +363,10 @@ CREATE INDEX IF NOT EXISTS idx_website_content_section ON website_content(sectio
 CREATE INDEX IF NOT EXISTS idx_website_gallery_visible_order ON website_gallery_images(is_visible, sort_order);
 CREATE INDEX IF NOT EXISTS idx_website_services_visible_order ON website_services(show_on_website, display_order);
 CREATE INDEX IF NOT EXISTS idx_website_staff_visible_order ON website_staff_profiles(show_on_website, display_order);
+CREATE INDEX IF NOT EXISTS idx_bills_transaction_time_status ON salon_bills(transaction_time, status);
+CREATE INDEX IF NOT EXISTS idx_bills_cashier_date ON salon_bills(cashier_id, transaction_time);
+CREATE INDEX IF NOT EXISTS idx_bills_token_status ON salon_bills(token_id, status);
+CREATE INDEX IF NOT EXISTS idx_bill_items_staff_service ON salon_bill_items(staff_id, item_type);
 CREATE INDEX IF NOT EXISTS idx_tokens_date ON walk_in_tokens(token_date);
 CREATE INDEX IF NOT EXISTS idx_tokens_number ON walk_in_tokens(token_number);
 CREATE INDEX IF NOT EXISTS idx_tokens_status ON walk_in_tokens(status);
@@ -369,6 +377,8 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_expenses_payment_method ON expenses(payment_method);
 CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at);
+CREATE INDEX IF NOT EXISTS idx_expenses_created_by_date ON expenses(created_by, expense_date);
+CREATE INDEX IF NOT EXISTS idx_expenses_record_type_date ON expenses(record_type, expense_date);
 CREATE INDEX IF NOT EXISTS idx_salary_staff ON salary_payments(staff_id);
 CREATE INDEX IF NOT EXISTS idx_salary_month ON salary_payments(salary_month);
 CREATE INDEX IF NOT EXISTS idx_salary_status ON salary_payments(payment_status);

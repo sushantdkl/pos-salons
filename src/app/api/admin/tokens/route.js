@@ -139,7 +139,7 @@ export async function GET(request) {
           COUNT(*)::int as generated,
           SUM(CASE WHEN NOT COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalTokens,
           SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedTokens,
-          SUM(CASE WHEN status = 'BILLED' THEN 1 ELSE 0 END)::int as billed,
+          SUM(CASE WHEN status = 'BILLED' AND invoice_id IS NOT NULL THEN 1 ELSE 0 END)::int as billed,
           SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END)::int as waiting,
           SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END)::int as cancelled,
           SUM(CASE WHEN status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as noShow
@@ -165,7 +165,7 @@ export async function GET(request) {
         SELECT COALESCE(u.full_name, sp.display_name, 'Unassigned') as staff_name,
                COALESCE(sp.salon_role, 'unassigned') as staff_role,
                COUNT(t.id)::int as tokens_handled,
-               SUM(CASE WHEN t.status = 'BILLED' THEN 1 ELSE 0 END)::int as services_completed,
+               SUM(CASE WHEN t.status = 'BILLED' AND t.invoice_id IS NOT NULL THEN 1 ELSE 0 END)::int as services_completed,
                COALESCE(SUM(b.grand_total), 0) as revenue_generated,
                AVG(s.duration_minutes) as average_service_duration
         FROM walk_in_tokens t

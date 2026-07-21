@@ -22,6 +22,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO salon_services (name, category, price, duration_minutes, description, is_package, package_items, is_active)
 VALUES
   ('Hair Cut', 'Haircut', 150, 30, 'Client rate card service', FALSE, NULL, TRUE),
+  ('Haircut + Wash', 'Haircut', 200, 30, 'Haircut with hair wash.', FALSE, NULL, TRUE),
   ('Hair Wash', 'Treatment', 50, 15, 'Client rate card service', FALSE, NULL, TRUE),
   ('Shaving', 'Beard', 100, 20, 'Client rate card service', FALSE, NULL, TRUE),
   ('Head Massage', 'Spa', 200, 20, 'Client rate card service', FALSE, NULL, TRUE),

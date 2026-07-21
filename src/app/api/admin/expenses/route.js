@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
 const EXPENSE_CATEGORIES = [
   'Staff Salary', 'Staff Commission', 'Product Purchase', 'Rent', 'Electricity',
   'Water', 'Internet', 'Maintenance', 'Marketing', 'Equipment', 'Cleaning', 'Other',
+  'TEA_SNACKS', 'WATER_JAR', 'CLEANING', 'TRANSPORT', 'MAINTENANCE', 'PETTY_PURCHASE',
+  'OTHER_EXPENSE', 'DAILY_SAVING',
 ];
 const PAYMENT_METHODS = ['cash', 'online', 'bank_transfer', 'mixed'];
 const PAYMENT_STATUSES = ['unpaid', 'partially_paid', 'paid'];
@@ -67,6 +69,7 @@ function mapExpense(row) {
     notes: row.notes || '',
     referenceNumber: row.reference_number || '',
     attachmentUrl: row.attachment_url || '',
+    recordType: row.record_type || 'EXPENSE',
     createdByName: row.created_by_name || '',
     updatedByName: row.updated_by_name || '',
     createdAt: row.created_at,
@@ -217,9 +220,10 @@ async function getSalaries(db, searchParams) {
 async function getSummary(db) {
   const expenseRow = await db.get(`
     SELECT
-      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE THEN amount ELSE 0 END), 0) as today,
-      COALESCE(SUM(CASE WHEN expense_date >= ${currentWeekStartSql()} AND expense_date < ${currentWeekStartSql()} + INTERVAL '7 days' THEN amount ELSE 0 END), 0) as week,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date THEN amount ELSE 0 END), 0) as month,
+      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as today,
+      COALESCE(SUM(CASE WHEN expense_date >= ${currentWeekStartSql()} AND expense_date < ${currentWeekStartSql()} + INTERVAL '7 days' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as week,
+      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as month,
+      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE AND COALESCE(record_type, 'EXPENSE') = 'CASH_TRANSFER' THEN amount ELSE 0 END), 0) as dailySaving,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
@@ -245,6 +249,7 @@ async function getSummary(db) {
     commissionPaidMonth: Number(expenseRow?.commissionPaid || 0),
     productPurchaseMonth: Number(expenseRow?.productPurchase || 0),
     otherExpensesMonth: Number(expenseRow?.otherExpenses || 0),
+    dailySavingToday: Number(expenseRow?.dailySaving || 0),
     pendingSalaryBalance: Number(pendingRow?.total || 0),
     monthlyRevenue: revenue,
     netRevenueAfterExpenses: revenue - Number(expenseRow?.month || 0),
@@ -265,29 +270,30 @@ async function saveExpense(db, data, userId) {
   if (!title) throw new Error('Expense title is required');
   const expenseDate = cleanText(data.expenseDate || data.expense_date, today());
   const notes = cleanText(data.notes, '') || title;
+  const recordType = category === 'DAILY_SAVING' ? 'CASH_TRANSFER' : 'EXPENSE';
   const values = [
     title, category, amount, payment.paymentMethod, payment.cash, payment.online,
     cleanText(data.paidBy || data.paid_by, ''), cleanText(data.paidTo || data.paid_to, ''),
     expenseDate, notes, cleanText(data.referenceNumber || data.reference_number, ''),
-    cleanText(data.attachmentUrl || data.attachment_url, ''), userId,
+    cleanText(data.attachmentUrl || data.attachment_url, ''),
   ];
   if (data.id) {
     await db.run(`
       UPDATE expenses
       SET title = ?, category = ?, amount = ?, payment_method = ?, cash_amount = ?,
           online_amount = ?, paid_by = ?, paid_to = ?, expense_date = ?::date, notes = ?,
-          reference_number = ?, attachment_url = ?, updated_by = ?, updated_at = NOW()
+          reference_number = ?, attachment_url = ?, record_type = ?, updated_by = ?, updated_at = NOW()
       WHERE id = ? AND deleted_at IS NULL
-    `, [...values, Number(data.id)]);
+    `, [...values, recordType, userId, Number(data.id)]);
     return Number(data.id);
   }
   const result = await db.run(`
     INSERT INTO expenses (
       title, category, amount, payment_method, cash_amount, online_amount,
       paid_by, paid_to, expense_date, notes, reference_number, attachment_url,
-      created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?)
-  `, [...values, userId]);
+      record_type, created_by, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?, ?)
+  `, [...values, recordType, userId, userId]);
   return result.lastInsertRowid;
 }
 

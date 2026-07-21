@@ -104,7 +104,7 @@ export async function GET(request) {
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN grand_total WHEN payment_method = 'split' THEN cash_amount ELSE 0 END), 0) as cash_sales,
         COALESCE(SUM(CASE WHEN payment_method = 'online' THEN grand_total WHEN payment_method = 'split' THEN qr_amount ELSE 0 END), 0) as qr_sales,
         COALESCE(SUM(CASE WHEN payment_method = 'split' THEN grand_total ELSE 0 END), 0) as split_sales,
-        COALESCE(SUM(CASE WHEN qr_type = 'ESEWA_PHONEPAY' THEN qr_amount WHEN payment_method = 'online' AND qr_type IS NULL THEN grand_total ELSE 0 END), 0) as esewa_phonepay_sales,
+        COALESCE(SUM(CASE WHEN qr_type = 'ESEWA_PHONEPAY' THEN CASE WHEN payment_method = 'online' THEN grand_total ELSE qr_amount END ELSE 0 END), 0) as esewa_phonepay_sales,
         COALESCE(SUM(CASE WHEN qr_type = 'BANK' THEN qr_amount ELSE 0 END), 0) as bank_qr_sales
       FROM salon_bills
       WHERE ${todayFilter.clause} AND status = 'paid'
@@ -157,7 +157,7 @@ export async function GET(request) {
         SUM(CASE WHEN NOT COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalTokens,
         SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedTokens,
         SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END)::int as waiting,
-        SUM(CASE WHEN status = 'BILLED' THEN 1 ELSE 0 END)::int as billed,
+        SUM(CASE WHEN status = 'BILLED' AND invoice_id IS NOT NULL THEN 1 ELSE 0 END)::int as billed,
         SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END)::int as cancelled,
         SUM(CASE WHEN status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as noShow
       FROM walk_in_tokens
@@ -168,7 +168,8 @@ export async function GET(request) {
         COUNT(*)::int as billsDone,
         SUM(CASE WHEN NOT COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalBills,
         SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedBills,
-        SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END)::int as billsWithoutToken
+        SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END)::int as billsWithoutToken,
+        SUM(CASE WHEN token_id IS NOT NULL THEN 1 ELSE 0 END)::int as tokenBills
       FROM salon_bills
       WHERE ${todayFilter.clause} AND status = 'paid'
     `, todayFilter.params);
@@ -209,6 +210,8 @@ export async function GET(request) {
           digitalBills: Number(billPrintStats?.digitalBills || 0),
           printedBills: Number(billPrintStats?.printedBills || 0),
           billsWithoutToken: Number(billPrintStats?.billsWithoutToken || 0),
+          directBills: Number(billPrintStats?.billsWithoutToken || 0),
+          tokenBills: Number(billPrintStats?.tokenBills || 0),
           mismatchWarning: Number(tokenStats?.waiting || 0) > 0 || Number(billPrintStats?.billsWithoutToken || 0) > 0,
         },
         topCustomers,

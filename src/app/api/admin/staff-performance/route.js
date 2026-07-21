@@ -19,7 +19,11 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json(await getStaffPerformance(db, staffId));
+    return NextResponse.json(await getStaffPerformance(db, staffId, {
+      period: searchParams.get('period') || 'today',
+      startDate: searchParams.get('startDate'),
+      endDate: searchParams.get('endDate'),
+    }));
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to fetch staff performance' }, { status: error.status || 500 });
   }

@@ -38,6 +38,9 @@ function paymentBreakdownRows(bill) {
         ${change > 0 ? `<tr><td>Change</td><td style="text-align:right">${formatCurrency(change)}</td></tr>` : ''}
       `;
     }
+    if (bill.payment_method === 'online') {
+      return `<tr><td>QR type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type) || 'Not recorded'}</td></tr>`;
+    }
     return '';
   }
   return `
@@ -63,13 +66,14 @@ function buildReceiptHtml(billData, salon = {}) {
   const email = escapeHtml(salon.salon_email || '');
   const vat = escapeHtml(salon.vat_number || '');
   const footer = escapeHtml(salon.receipt_footer || 'Thank you for visiting. Please visit again.');
-  const billDate = new Date(bill.created_at || Date.now()).toLocaleString();
+  const billDate = new Date(bill.transaction_time || bill.created_at || Date.now()).toLocaleString();
   const customerPhone = bill.customer_phone ? `<div>${escapeHtml(bill.customer_phone)}</div>` : '';
   const itemRows = (billData.items || []).map((item) => `
     <tr>
       <td>
         <div class="item-name">${escapeHtml(item.name)}</div>
-        <div class="item-meta">Qty ${Number(item.quantity || 1)} × ${formatCurrency(item.unit_price ?? (Number(item.subtotal || 0) / Number(item.quantity || 1)))}</div>
+        <div class="item-meta">Qty ${Number(item.quantity || 1)} x ${formatCurrency(item.unit_price ?? (Number(item.subtotal || 0) / Number(item.quantity || 1)))}</div>
+        ${item.staff_name_snapshot ? `<div class="item-meta">Staff: ${escapeHtml(item.staff_name_snapshot)}</div>` : ''}
       </td>
       <td class="right">${formatCurrency(item.subtotal)}</td>
     </tr>
@@ -215,6 +219,7 @@ function BillingContent() {
   const [splitCashAmount, setSplitCashAmount] = useState('');
   const [splitQrAmount, setSplitQrAmount] = useState('');
   const [splitQrType, setSplitQrType] = useState('');
+  const [onlineQrType, setOnlineQrType] = useState('');
   const [splitQrEdited, setSplitQrEdited] = useState(false);
   const [taxPercent, setTaxPercent] = useState('');
   const [error, setError] = useState('');
@@ -288,6 +293,7 @@ function BillingContent() {
         setSplitCashAmount(parsed.splitCashAmount || '');
         setSplitQrAmount(parsed.splitQrAmount || '');
         setSplitQrType(parsed.splitQrType || '');
+        setOnlineQrType(parsed.onlineQrType || '');
       } catch {}
     }
   }, []);
@@ -303,8 +309,9 @@ function BillingContent() {
       splitCashAmount,
       splitQrAmount,
       splitQrType,
+      onlineQrType,
     }));
-  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod, splitCashAmount, splitQrAmount, splitQrType]);
+  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod, splitCashAmount, splitQrAmount, splitQrType, onlineQrType]);
 
   const filteredServices = useMemo(() => services.filter((service) =>
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -461,6 +468,10 @@ function BillingContent() {
       setError('Cash received is less than the bill total.');
       return;
     }
+    if (paymentMethod === 'online' && !onlineQrType) {
+      setError('Select a QR type for online payment.');
+      return;
+    }
     if (paymentMethod === 'split') {
       const cash = Number(splitCashAmount || 0);
       const qr = Number(splitQrAmount || 0);
@@ -499,7 +510,7 @@ function BillingContent() {
         amount_paid: Number(amountPaid || total),
         cash_amount: paymentMethod === 'split' ? Number(splitCashAmount || 0) : undefined,
         qr_amount: paymentMethod === 'split' ? Number(splitQrAmount || 0) : undefined,
-        qr_type: paymentMethod === 'split' ? splitQrType : undefined,
+        qr_type: paymentMethod === 'online' ? onlineQrType : paymentMethod === 'split' ? splitQrType : undefined,
         should_print: false,
       }),
     });
@@ -864,30 +875,33 @@ function BillingContent() {
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
                       <p className="mb-2 text-sm font-semibold text-blue-950">Show QR to customer</p>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {paymentQr?.show_esewa_phonepay_qr !== false ? (
-                          <QrButton
-                            label={paymentQr?.esewa_phonepay_label || 'Esewa / PhonePay QR'}
-                            imageUrl={paymentQr?.esewa_phonepay_qr_url}
-                            onClick={() => setQrModal({
-                              label: paymentQr?.esewa_phonepay_label || 'Esewa / PhonePay QR',
-                              imageUrl: paymentQr?.esewa_phonepay_qr_url,
-                            })}
-                          />
-                        ) : null}
-                        {paymentQr?.show_bank_qr !== false ? (
-                          <QrButton
-                            label={paymentQr?.bank_label || 'Bank QR'}
-                            imageUrl={paymentQr?.bank_qr_url}
-                            detail={[paymentQr?.bank_name, paymentQr?.bank_account_name].filter(Boolean).join(' · ')}
-                            onClick={() => setQrModal({
-                              label: paymentQr?.bank_label || 'Bank QR',
-                              imageUrl: paymentQr?.bank_qr_url,
-                              bankName: paymentQr?.bank_name,
-                              accountName: paymentQr?.bank_account_name,
-                              accountNumber: paymentQr?.bank_account_number,
-                            })}
-                          />
-                        ) : null}
+                        <label className="text-xs font-semibold text-blue-950 sm:col-span-2">
+                          QR Type
+                          <select
+                            value={onlineQrType}
+                            onChange={(event) => {
+                              setOnlineQrType(event.target.value);
+                              const qr = qrConfigForType(event.target.value, paymentQr);
+                              if (qr) setQrModal({ ...qr, amount: total });
+                            }}
+                            className={`${inputClass} mt-1 bg-white`}
+                          >
+                            <option value="">Select QR type</option>
+                            <option value="ESEWA_PHONEPAY">Esewa / PhonePay QR</option>
+                            <option value="BANK">Bank QR</option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          disabled={!onlineQrType || !qrConfigForType(onlineQrType, paymentQr)?.imageUrl}
+                          onClick={() => {
+                            const qr = qrConfigForType(onlineQrType, paymentQr);
+                            if (qr) setQrModal({ ...qr, amount: total });
+                          }}
+                          className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-900 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+                        >
+                          Show Selected QR
+                        </button>
                       </div>
                       {!paymentQr?.esewa_phonepay_qr_url && !paymentQr?.bank_qr_url ? (
                         <p className="mt-2 text-xs font-medium text-blue-800">QR images are not configured yet. Admin can add them in Settings.</p>
@@ -1081,6 +1095,7 @@ function BillingContent() {
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{item.name}</p>
                         <p className="text-[10px] text-gray-500">Qty {item.quantity}</p>
+                        {item.staff_name_snapshot ? <p className="text-[10px] text-gray-500">Staff: {item.staff_name_snapshot}</p> : null}
                       </div>
                       <span className="shrink-0 font-semibold">{formatCurrency(item.subtotal)}</span>
                     </div>

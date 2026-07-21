@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
-  Users, FileText, Settings, DollarSign,
+  Users, FileText, Settings, DollarSign, ReceiptText,
   LogOut, Menu, X, LayoutDashboard, Warehouse, Scissors, MessageCircle, Globe
 } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
@@ -191,6 +191,7 @@ export default function AdminLayout({ children }) {
     { roles: ['stylist'], icon: Scissors, label: 'Queue', href: '/dashboard/stylist/queue', color: 'text-amber-700' },
     { roles: ['beautician'], icon: Scissors, label: 'Queue', href: '/dashboard/beautician/queue', color: 'text-amber-700' },
     { roles: ['admin', 'cashier'], icon: DollarSign, label: 'Billing', href: '/admin/billing', color: 'text-teal-600' },
+    { roles: ['cashier'], icon: ReceiptText, label: 'Daily Expenses', href: '/dashboard/cashier/daily-expenses', color: 'text-emerald-700' },
     { roles: ['admin', 'cashier'], icon: Scissors, label: 'Services', href: '/admin/products', color: 'text-blue-600' },
     { roles: ['admin', 'cashier'], icon: Warehouse, label: 'Inventory', href: '/admin/stock', color: 'text-indigo-600' },
     { roles: ['admin'], icon: Users, label: 'Staff', href: '/admin/employees', color: 'text-green-600' },

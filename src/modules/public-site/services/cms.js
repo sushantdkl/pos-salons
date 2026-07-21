@@ -300,45 +300,41 @@ function mapWebsiteStaff(row) {
   };
 }
 
-async function ensureWebsiteCmsRuntimeSchema(db) {
-  await db.run(`
-    CREATE TABLE IF NOT EXISTS website_services (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      category TEXT DEFAULT 'Other',
-      price NUMERIC DEFAULT 0,
-      price_label TEXT,
-      duration_minutes INTEGER DEFAULT 30,
-      description TEXT,
-      image_url TEXT,
-      is_package BOOLEAN DEFAULT FALSE,
-      package_items TEXT,
-      show_on_website BOOLEAN DEFAULT TRUE,
-      featured_on_website BOOLEAN DEFAULT FALSE,
-      display_order INTEGER DEFAULT 0,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
-    )
-  `);
-  await db.run(`
-    CREATE TABLE IF NOT EXISTS website_staff_profiles (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      role_title TEXT,
-      bio TEXT,
-      specialties TEXT,
-      image_url TEXT,
-      show_on_website BOOLEAN DEFAULT TRUE,
-      featured_on_website BOOLEAN DEFAULT FALSE,
-      display_order INTEGER DEFAULT 0,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
-    )
-  `);
-  await db.run('CREATE INDEX IF NOT EXISTS idx_website_services_visible_order ON website_services(show_on_website, display_order)');
-  await db.run('CREATE INDEX IF NOT EXISTS idx_website_staff_visible_order ON website_staff_profiles(show_on_website, display_order)');
+const REQUIRED_CMS_TABLES = [
+  'website_content',
+  'website_gallery_images',
+  'website_services',
+  'website_staff_profiles',
+];
+
+async function assertWebsiteCmsSchema(db) {
+  const missingTables = [];
+
+  for (const tableName of REQUIRED_CMS_TABLES) {
+    const row = await db.get(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = current_schema()
+            AND table_name = ?
+        ) AS exists
+      `,
+      [tableName]
+    );
+
+    if (!bool(row?.exists)) {
+      missingTables.push(tableName);
+    }
+  }
+
+  if (missingTables.length) {
+    const error = new Error(
+      `Website CMS tables are missing. Apply docs/postgresql-schema.sql or docs/migrations/2026-07-19-add-website-cms-tables.sql before using the CMS. Missing: ${missingTables.join(', ')}.`
+    );
+    error.code = 'WEBSITE_CMS_SCHEMA_MISSING';
+    throw error;
+  }
 }
 
 function mapCategory(category) {
@@ -379,7 +375,7 @@ export async function getPublicWebsiteData(options = {}) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await ensureWebsiteCmsRuntimeSchema(db);
+    await assertWebsiteCmsSchema(db);
     const defaults = sectionFallback();
     const rows = await db.all('SELECT * FROM website_content ORDER BY sort_order ASC, id ASC');
     const sections = { ...defaults };
@@ -539,7 +535,7 @@ function normalizeSection(input, fallback) {
 
 export async function saveWebsiteCms(db, data, userId) {
   await ensureSalonSchema();
-  await ensureWebsiteCmsRuntimeSchema(db);
+  await assertWebsiteCmsSchema(db);
   const defaults = sectionFallback();
   const sections = data.sections || {};
   for (const key of SECTION_KEYS) {

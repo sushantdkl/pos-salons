@@ -34,6 +34,7 @@ function normalizePayment(data, grandTotal) {
     if (totalPaid < total) throw new Error('Amount paid is less than total');
     cashAmount = total;
   } else if (paymentMethod === 'online') {
+    if (!qrType) throw new Error('Select QR type for online payment');
     qrAmount = total;
     totalPaid = total;
   } else if (paymentMethod === 'card') {
@@ -41,7 +42,7 @@ function normalizePayment(data, grandTotal) {
   } else if (paymentMethod === 'split') {
     cashAmount = money(data.cash_amount);
     qrAmount = money(data.qr_amount);
-    if (!qrType) throw new Error('Select QR type for split payment');
+    if (qrAmount > 0 && !qrType) throw new Error('Select QR type for split payment');
     if (cashAmount < 0) throw new Error('Cash amount cannot be negative');
     if (qrAmount < 0) throw new Error('QR amount cannot be negative');
     if (cashAmount > total) throw new Error('Cash amount cannot exceed total payable');
@@ -56,9 +57,40 @@ function normalizePayment(data, grandTotal) {
     paymentMethod,
     cashAmount,
     qrAmount,
-    qrType: paymentMethod === 'split' ? qrType : null,
+    qrType: paymentMethod === 'online' || (paymentMethod === 'split' && qrAmount > 0) ? qrType : null,
     totalPaid,
     paymentStatus: 'paid',
+  };
+}
+
+function resolveTransactionAudit(data, user) {
+  const now = new Date();
+  const requested = cleanText(data.transaction_time || data.transactionTime, '');
+  if (!requested) {
+    return {
+      transactionTime: now.toISOString(),
+      backdatedBy: null,
+      backdatedReason: null,
+    };
+  }
+
+  if (user.role !== 'admin') {
+    const error = new Error('Only Admin can set a historical transaction date.');
+    error.status = 403;
+    throw error;
+  }
+
+  const selectedDate = new Date(requested);
+  if (Number.isNaN(selectedDate.getTime())) throw new Error('Invalid transaction date and time');
+  if (selectedDate.getTime() > now.getTime() + 60_000) throw new Error('Future transaction dates are not allowed');
+
+  const reason = cleanText(data.backdated_reason || data.backdatedReason, '');
+  if (!reason) throw new Error('Reason for historical entry is required');
+
+  return {
+    transactionTime: selectedDate.toISOString(),
+    backdatedBy: user.id,
+    backdatedReason: reason,
   };
 }
 
@@ -90,6 +122,7 @@ export async function POST(request) {
     const services = Array.isArray(data.services) ? data.services : [];
     const products = Array.isArray(data.products) ? data.products : [];
     const shouldPrint = Boolean(data.should_print);
+    const transactionAudit = resolveTransactionAudit(data, user);
     if (services.length === 0 && products.length === 0) {
       return NextResponse.json({ error: 'Add at least one service or product' }, { status: 400 });
     }
@@ -130,7 +163,8 @@ export async function POST(request) {
         const staffId = Number(item.staff_id || 0) || null;
         if (!staffId) throw new Error(`Assign staff for ${service.name}`);
         const staffProfile = await tx.get(`
-          SELECT sp.salon_role, sp.commission_percentage, sp.assigned_services
+          SELECT sp.salon_role, sp.commission_percentage, sp.assigned_services,
+                 COALESCE(NULLIF(sp.display_name, ''), u.full_name) as staff_name
           FROM staff_profiles sp
           JOIN users u ON u.id = sp.user_id
           WHERE sp.user_id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
@@ -147,6 +181,7 @@ export async function POST(request) {
           unit_price: Number(service.price),
           subtotal: Number(service.price),
           staff_id: staffId,
+          staff_name_snapshot: staffProfile.staff_name,
           staff_role: staffProfile.salon_role,
           commission_percentage: commissionPercentage,
           commission_amount: Number(service.price) * commissionPercentage / 100,
@@ -195,8 +230,9 @@ export async function POST(request) {
           discount_amount, discount_type, tax, tax_percent, service_charge,
           grand_total, payment_method, amount_paid, cash_amount, qr_amount,
           qr_type, total_paid, payment_status, cashier_id, token_id,
-          transaction_time, is_printed, printed_at, printed_by, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
+          transaction_time, is_printed, printed_at, printed_by,
+          backdated_by, backdated_reason, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?, ?, ?)
       `, [
         billNumber,
         customerId,
@@ -218,9 +254,12 @@ export async function POST(request) {
         payment.paymentStatus,
         user.id,
         tokenId,
+        transactionAudit.transactionTime,
         shouldPrint,
         shouldPrint ? new Date().toISOString() : null,
         shouldPrint ? user.id : null,
+        transactionAudit.backdatedBy,
+        transactionAudit.backdatedReason,
         cleanText(data.notes, null),
       ]);
 
@@ -229,11 +268,11 @@ export async function POST(request) {
         await tx.run(`
           INSERT INTO salon_bill_items (
             bill_id, item_type, item_id, name, quantity, unit_price,
-            subtotal, staff_id, commission_percentage, commission_amount
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            subtotal, staff_id, staff_name_snapshot, commission_percentage, commission_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           billId, item.item_type, item.item_id, item.name, item.quantity, item.unit_price,
-          item.subtotal, item.staff_id, item.commission_percentage, item.commission_amount,
+          item.subtotal, item.staff_id, item.staff_name_snapshot || null, item.commission_percentage, item.commission_amount,
         ]);
         if (item.item_type === 'product') {
           await tx.run('UPDATE salon_products SET current_stock = ?, updated_at = NOW() WHERE id = ?', [item.new_stock, item.item_id]);
@@ -283,9 +322,9 @@ export async function POST(request) {
       if (tokenId) {
         await tx.run(`
           UPDATE walk_in_tokens
-          SET status = 'BILLED', billed_at = NOW(), invoice_id = ?, updated_at = NOW()
+          SET status = 'BILLED', billed_at = ?::timestamptz, invoice_id = ?, updated_at = NOW()
           WHERE id = ?
-        `, [billId, tokenId]);
+        `, [transactionAudit.transactionTime, billId, tokenId]);
       }
 
       return {
@@ -314,6 +353,7 @@ export async function POST(request) {
           is_printed: shouldPrint,
           printed_at: shouldPrint ? new Date().toISOString() : null,
           printed_by: shouldPrint ? user.id : null,
+          transaction_time: transactionAudit.transactionTime,
           created_at: new Date().toISOString(),
         },
         items,
@@ -330,6 +370,10 @@ export async function POST(request) {
       'Amount paid is less than total',
       'Cash amount and QR amount must equal total payable',
       'Select QR type for split payment',
+      'Select QR type for online payment',
+      'Reason for historical entry is required',
+      'Future transaction dates are not allowed',
+      'Only Admin can set a historical transaction date.',
     ];
     const isKnownBusinessError = knownMessages.includes(error.message) || /Assign staff|unavailable|Not enough stock|cannot|Invalid|exceed|less than/i.test(error.message || '');
     const message = isKnownBusinessError
