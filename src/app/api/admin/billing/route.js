@@ -27,18 +27,21 @@ function normalizePayment(data, grandTotal) {
   const qrType = ['ESEWA_PHONEPAY', 'BANK'].includes(data.qr_type) ? data.qr_type : null;
   let cashAmount = 0;
   let qrAmount = 0;
-  let totalPaid = total;
+  // amountTendered is what the customer handed over (cash may exceed the bill, and the
+  // receipt prints the change). totalPaid is what the salon actually collected, and it
+  // always equals cash + QR = final bill total.
+  let amountTendered = total;
 
   if (paymentMethod === 'cash') {
-    totalPaid = money(data.amount_paid || total);
-    if (totalPaid < total) throw new Error('Amount paid is less than total');
+    amountTendered = money(data.amount_paid || total);
+    if (amountTendered < total) throw new Error('Amount paid is less than total');
     cashAmount = total;
   } else if (paymentMethod === 'online') {
     if (!qrType) throw new Error('Select QR type for online payment');
     qrAmount = total;
-    totalPaid = total;
   } else if (paymentMethod === 'card') {
-    totalPaid = total;
+    // Card settles to the salon's bank account, so it belongs with online collection.
+    qrAmount = total;
   } else if (paymentMethod === 'split') {
     cashAmount = money(data.cash_amount);
     qrAmount = money(data.qr_amount);
@@ -50,15 +53,15 @@ function normalizePayment(data, grandTotal) {
     if (Math.abs((cashAmount + qrAmount) - total) > 0.01) {
       throw new Error('Cash amount and QR amount must equal total payable');
     }
-    totalPaid = money(cashAmount + qrAmount);
   }
 
   return {
     paymentMethod,
-    cashAmount,
-    qrAmount,
+    cashAmount: money(cashAmount),
+    qrAmount: money(qrAmount),
     qrType: paymentMethod === 'online' || (paymentMethod === 'split' && qrAmount > 0) ? qrType : null,
-    totalPaid,
+    amountTendered: money(amountTendered),
+    totalPaid: money(cashAmount + qrAmount),
     paymentStatus: 'paid',
   };
 }
@@ -132,10 +135,32 @@ export async function POST(request) {
       const tokenId = Number(data.token_id || 0) || null;
       let linkedToken = null;
       if (tokenId) {
-        linkedToken = await tx.get('SELECT * FROM walk_in_tokens WHERE id = ?', [tokenId]);
-        if (!linkedToken) throw new Error('Selected token was not found');
-        if (linkedToken.invoice_id || linkedToken.status === 'BILLED') throw new Error('This token has already been billed');
-        if (linkedToken.status !== 'WAITING') throw new Error('Only waiting tokens can be billed');
+        linkedToken = await tx.get(`
+          SELECT id, token_number, status, invoice_id, customer_id, customer_name, customer_phone
+          FROM walk_in_tokens
+          WHERE id = ?
+          FOR UPDATE
+        `, [tokenId]);
+        if (!linkedToken) {
+          const error = new Error('Selected token was not found');
+          error.status = 404;
+          throw error;
+        }
+        if (linkedToken.invoice_id || linkedToken.status === 'BILLED') {
+          const error = new Error('This token has already been billed.');
+          error.status = 409;
+          throw error;
+        }
+        if (['CANCELLED', 'NO_SHOW'].includes(linkedToken.status)) {
+          const error = new Error('This token cannot be billed because it is no longer active.');
+          error.status = 422;
+          throw error;
+        }
+        if (linkedToken.status !== 'WAITING') {
+          const error = new Error('Only waiting tokens can be billed');
+          error.status = 422;
+          throw error;
+        }
       }
       const customerName = cleanText(data.customer?.name || data.customer_name || 'Walk-in Customer');
       const rawPhone = data.customer?.phone || data.customer_phone;
@@ -246,7 +271,7 @@ export async function POST(request) {
         serviceCharge,
         grandTotal,
         payment.paymentMethod,
-        payment.totalPaid,
+        payment.amountTendered,
         payment.cashAmount,
         payment.qrAmount,
         payment.qrType,
@@ -320,11 +345,16 @@ export async function POST(request) {
       await logAction(tx, user.id, shouldPrint ? 'create_printed' : 'create', 'bill', billId, billNumber);
 
       if (tokenId) {
-        await tx.run(`
+        const tokenUpdate = await tx.run(`
           UPDATE walk_in_tokens
           SET status = 'BILLED', billed_at = ?::timestamptz, invoice_id = ?, updated_at = NOW()
-          WHERE id = ?
+          WHERE id = ? AND status = 'WAITING' AND invoice_id IS NULL
         `, [transactionAudit.transactionTime, billId, tokenId]);
+        if (Number(tokenUpdate.rowCount || 0) !== 1) {
+          const error = new Error('Unable to complete the token-linked bill. No transaction was saved. Please try again.');
+          error.status = 409;
+          throw error;
+        }
       }
 
       return {
@@ -342,7 +372,7 @@ export async function POST(request) {
           service_charge: serviceCharge,
           grand_total: grandTotal,
           payment_method: payment.paymentMethod,
-          amount_paid: payment.totalPaid,
+          amount_paid: payment.amountTendered,
           cash_amount: payment.cashAmount,
           qr_amount: payment.qrAmount,
           qr_type: payment.qrType,
@@ -365,7 +395,9 @@ export async function POST(request) {
     const knownMessages = [
       PHONE_ERROR_MESSAGE,
       'Add at least one service or product',
-      'This token has already been billed',
+      'This token has already been billed.',
+      'This token cannot be billed because it is no longer active.',
+      'Unable to complete the token-linked bill. No transaction was saved. Please try again.',
       'Only waiting tokens can be billed',
       'Amount paid is less than total',
       'Cash amount and QR amount must equal total payable',

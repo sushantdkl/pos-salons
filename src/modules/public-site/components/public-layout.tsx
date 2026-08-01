@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ReactNode, useState, useEffect } from 'react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { Facebook, Menu, MessageCircle, Music2, X } from 'lucide-react';
 import { salonInfo } from '../data/salon-info';
 import { createWhatsAppLink } from '../utils/whatsapp';
@@ -20,6 +21,7 @@ type PublicLayoutInfo = typeof salonInfo;
 
 export function PublicLayout({ children, info = salonInfo, isHome = false }: { children: ReactNode; info?: PublicLayoutInfo; isHome?: boolean }) {
   const whatsappUrl = createWhatsAppLink(undefined, info.whatsappNumber);
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -76,9 +78,10 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
               <Link 
                 key={href} 
                 href={href} 
+                aria-current={pathname === href ? 'page' : undefined}
                 className={isDarkTheme 
-                  ? "text-white/80 transition hover:text-white text-xs" 
-                  : "text-[#5f554e] transition hover:text-[#211d1a] text-xs"
+                  ? `text-xs transition hover:text-white ${pathname === href ? 'text-white' : 'text-white/80'}`
+                  : `text-xs transition hover:text-[#211d1a] ${pathname === href ? 'text-[#171411]' : 'text-[#5f554e]'}`
                 }
               >
                 {label}
@@ -150,6 +153,7 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
                 <Link
                   key={href}
                   href={href}
+                  aria-current={pathname === href ? 'page' : undefined}
                   tabIndex={mobileOpen ? 0 : -1}
                   onClick={closeMobileMenu}
                   className={mobileLinkClass}
@@ -187,7 +191,9 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
         href={whatsappUrl}
         target="_blank"
         rel="noreferrer"
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition hover:bg-green-700"
+        className={`fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition hover:bg-green-700 ${
+          mobileOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
         aria-label="Chat on WhatsApp"
       >
         <MessageCircle className="h-6 w-6" />

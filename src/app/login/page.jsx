@@ -95,8 +95,6 @@ export default function LoginPage() {
 
   const getProfileLabel = (user) => {
     const role = normalizeRole(user.role)
-    const serviceRole = normalizeRole(user.salon_role || user.role)
-    if (role === 'cashier' && serviceRole === 'beautician') return 'Cashier / Beautician'
     return ROLE_LABELS[role] || 'Staff'
   }
 

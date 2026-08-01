@@ -1,4 +1,4 @@
-# Salon POS Backend Schema
+# The Hair Cut Pos Backend Schema
 
 This document describes the logical backend entities. Physical SQLite names may use `salon_*` prefixes where useful.
 

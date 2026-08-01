@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckCircle2, CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
@@ -202,6 +202,7 @@ function qrConfigForType(type, paymentQr) {
 }
 
 function BillingContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -528,6 +529,7 @@ function BillingContent() {
     setTaxPercent('');
     localStorage.removeItem(draftKey);
     fetchData();
+    router.refresh();
     setProcessingBill(false);
   };
 
@@ -608,7 +610,7 @@ function BillingContent() {
                 <select
                   value={customer.id || ''}
                   onChange={(event) => selectCustomer(event.target.value)}
-                  className={`min-w-[200px] flex-1 rounded-lg border px-3 py-2.5 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-gray-200 ${
+                  className={`min-w-0 flex-1 rounded-lg border px-3 py-2.5 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-gray-200 ${
                     !isWalkIn ? 'border-gray-900 bg-gray-50' : 'border-gray-300 bg-white'
                   }`}
                 >
@@ -789,7 +791,7 @@ function BillingContent() {
                   </div>
                 ) : null}
 
-                <div className="max-h-[36vh] space-y-2 overflow-y-auto">
+                <div className="max-h-[48vh] space-y-2 overflow-y-auto xl:max-h-[36vh]">
                   {cartServices.map((service) => (
                     <div key={service.cart_id} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -799,6 +801,7 @@ function BillingContent() {
                         </div>
                         <button
                           type="button"
+                          aria-label={`Remove ${service.name}`}
                           onClick={() => setCartServices((items) => items.filter((item) => item.cart_id !== service.cart_id))}
                           className="shrink-0 p-1 text-red-600 hover:text-red-700"
                         >
@@ -841,7 +844,7 @@ function BillingContent() {
                         <button type="button" onClick={() => updateProductQty(product.id, 1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50">
                           <Plus className="h-4 w-4" />
                         </button>
-                        <button type="button" onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600">
+                        <button type="button" aria-label={`Remove ${product.name}`} onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -1090,8 +1093,9 @@ function BillingContent() {
                 ) : null}
                 <div className="my-3 border-t border-dashed border-gray-300" />
                 <div className="space-y-2">
-                  {(successBill.items || []).map((item) => (
-                    <div key={`${item.name}-${item.item_id || item.id}`} className="flex justify-between gap-3">
+                  {/* Keyed by index: the same service can appear twice on one bill. */}
+                  {(successBill.items || []).map((item, index) => (
+                    <div key={`${item.item_id || item.id}-${index}`} className="flex justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{item.name}</p>
                         <p className="text-[10px] text-gray-500">Qty {item.quantity}</p>
@@ -1172,8 +1176,8 @@ function QrButton({ label, imageUrl, detail, onClick }) {
 
 function PaymentQrModal({ qr, amount, onClose, onReceived }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center sm:p-4">
+      <div className="max-h-[calc(100vh-24px)] w-full max-w-md overflow-y-auto rounded-xl bg-white p-4 shadow-2xl sm:p-5">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-gray-950">{qr.label}</h2>
@@ -1184,7 +1188,7 @@ function PaymentQrModal({ qr, amount, onClose, onReceived }) {
           </button>
         </div>
         <div className="flex justify-center rounded-lg bg-gray-50 p-4">
-          <div className="relative h-72 w-72">
+          <div className="relative aspect-square w-full max-w-72">
             <Image src={qr.imageUrl} alt={qr.label} fill sizes="288px" className="object-contain" unoptimized />
           </div>
         </div>

@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Terms of Service | Salon POS System',
-  description: 'Terms of service placeholder for the Salon POS launch checklist.',
+  title: 'Terms of Service | The Hair Cut Pos',
+  description: 'Terms of service placeholder for The Hair Cut Pos launch checklist.',
 };
 
 export default function TermsPage() {

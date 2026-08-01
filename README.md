@@ -1,4 +1,4 @@
-# Salon POS System
+# The Hair Cut Pos
 
 A professional Salon Management POS built with Next.js for day-to-day salon operations, billing, staff commissions, inventory, customers, reports, and reminders.
 

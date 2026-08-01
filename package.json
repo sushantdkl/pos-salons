@@ -7,8 +7,7 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "node server.js",
-    "lint": "eslint",
-    "db:setup": "node scripts/db-setup.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",
@@ -17,7 +16,8 @@
     "next": "15.5.19",
     "pg": "^8.12.0",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "sharp": "^0.34.5"
   },
   "overrides": {
     "postcss": "$postcss"

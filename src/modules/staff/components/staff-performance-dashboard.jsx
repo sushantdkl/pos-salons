@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Award, CalendarDays, Scissors, TrendingUp, Users } from 'lucide-react';
+import { Award, Banknote, CalendarDays, Scissors, Smartphone, TrendingUp, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 function MetricCard({ title, value, icon: Icon, sub }) {
@@ -95,8 +95,8 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(data?.recentServices || []).map((item) => (
-                    <tr key={`${item.invoice}-${item.serviceName}`}>
+                  {(data?.recentServices || []).map((item, index) => (
+                    <tr key={`${item.invoice}-${index}`}>
                       <td className="px-5 py-3 text-gray-950">{item.customerName || 'Walk-in Customer'}</td>
                       <td className="px-5 py-3 text-gray-700">{item.serviceName}</td>
                       <td className="px-5 py-3 text-gray-700">{item.invoice}</td>
@@ -147,14 +147,16 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
                 <input type="date" value={customDates.end} onChange={(event) => setCustomDates({ ...customDates, end: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               </div>
             ) : null}
-            <div className="grid gap-3 border-b border-gray-100 p-4 sm:grid-cols-4">
+            <div className="grid gap-3 border-b border-gray-100 p-4 sm:grid-cols-2 xl:grid-cols-3">
               <MetricCard title="Total Services" value={report.totals?.services || 0} icon={Scissors} />
               <MetricCard title="Total Revenue" value={formatCurrency(report.totals?.revenue || 0)} icon={TrendingUp} />
-              <MetricCard title="Total Customers" value={report.totals?.customers || 0} icon={Users} />
               <MetricCard title="Total Commission" value={formatCurrency(report.totals?.commission || 0)} icon={Award} />
+              <MetricCard title="Cash in Hand" value={formatCurrency(report.totals?.cashCollected || 0)} icon={Banknote} sub="Cash collected from this staff's services" />
+              <MetricCard title="QR Collected" value={formatCurrency(report.totals?.qrCollected || 0)} icon={Smartphone} sub="Online / QR from this staff's services" />
+              <MetricCard title="Total Customers" value={report.totals?.customers || 0} icon={Users} />
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-[780px] w-full">
+              <table className="min-w-[920px] w-full">
                 <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                   <tr>
                     <th className="px-5 py-3">Date</th>
@@ -162,23 +164,38 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
                     <th className="px-5 py-3">Customer</th>
                     <th className="px-5 py-3">Service</th>
                     <th className="px-5 py-3 text-right">Amount</th>
+                    <th className="px-5 py-3 text-right">Cash</th>
+                    <th className="px-5 py-3 text-right">QR</th>
                     <th className="px-5 py-3 text-right">Commission</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {report.rows?.length ? report.rows.map((row) => (
-                    <tr key={`${row.invoice}-${row.serviceName}-${row.date}`}>
+                  {report.rows?.length ? report.rows.map((row, index) => (
+                    <tr key={`${row.invoice}-${index}`}>
                       <td className="px-5 py-3 text-sm text-gray-500">{new Date(row.date).toLocaleString()}</td>
                       <td className="px-5 py-3 text-sm text-gray-700">{row.invoice}</td>
                       <td className="px-5 py-3 text-sm text-gray-950">{row.customerName || 'Walk-in Customer'}</td>
                       <td className="px-5 py-3 text-sm text-gray-700">{row.serviceName}</td>
-                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950">{formatCurrency(row.amount || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950">{formatCurrency(row.commission || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950 tabular-nums">{formatCurrency(row.amount || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm text-gray-700 tabular-nums">{formatCurrency(row.cash || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm text-gray-700 tabular-nums">{formatCurrency(row.qr || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950 tabular-nums">{formatCurrency(row.commission || 0)}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">No services have been recorded for this staff member yet.</td></tr>
+                    <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">No services have been recorded for this staff member yet.</td></tr>
                   )}
                 </tbody>
+                {report.rows?.length ? (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-950">
+                      <td className="px-5 py-3 text-sm" colSpan={4}>Totals · {report.totals?.services || 0} services</td>
+                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.revenue || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.cashCollected || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.qrCollected || 0)}</td>
+                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.commission || 0)}</td>
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
           </section>

@@ -22,7 +22,7 @@ export default function ActivationPage() {
           href="/login"
           className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-[#6b4f3f] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#563f32]"
         >
-          Continue to Salon POS
+          Continue to The Hair Cut Pos
         </Link>
       </div>
     </div>

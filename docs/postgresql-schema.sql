@@ -329,6 +329,29 @@ CREATE TABLE IF NOT EXISTS salary_payments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Savings transfers (Bank / Sahakari / other deposits). These are internal fund movements,
+-- never operating expenses: they reduce available cash or online balance but not operating profit.
+CREATE TABLE IF NOT EXISTS savings_deposits (
+  id BIGSERIAL PRIMARY KEY,
+  deposit_type TEXT NOT NULL CHECK (deposit_type IN ('BANK_DEPOSIT', 'SAHAKARI_DEPOSIT', 'OTHER_SAVING')),
+  amount NUMERIC NOT NULL CHECK (amount > 0),
+  source_account TEXT NOT NULL CHECK (source_account IN ('CASH', 'ESEWA_PHONEPAY', 'BANK_QR', 'OTHER_ONLINE')),
+  institution_name TEXT,
+  reference_number TEXT,
+  notes TEXT,
+  deposit_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'CANCELLED')),
+  legacy_expense_id BIGINT REFERENCES expenses(id) ON DELETE SET NULL,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  cancelled_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  cancelled_at TIMESTAMPTZ,
+  cancel_reason TEXT,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS system_settings (
   id BIGSERIAL PRIMARY KEY,
   setting_key TEXT UNIQUE NOT NULL,
@@ -383,5 +406,12 @@ CREATE INDEX IF NOT EXISTS idx_salary_staff ON salary_payments(staff_id);
 CREATE INDEX IF NOT EXISTS idx_salary_month ON salary_payments(salary_month);
 CREATE INDEX IF NOT EXISTS idx_salary_status ON salary_payments(payment_status);
 CREATE INDEX IF NOT EXISTS idx_salary_created_at ON salary_payments(created_at);
+CREATE INDEX IF NOT EXISTS idx_savings_deposit_date ON savings_deposits(deposit_date);
+CREATE INDEX IF NOT EXISTS idx_savings_type_date ON savings_deposits(deposit_type, deposit_date);
+CREATE INDEX IF NOT EXISTS idx_savings_source_date ON savings_deposits(source_account, deposit_date);
+CREATE INDEX IF NOT EXISTS idx_savings_status_date ON savings_deposits(status, deposit_date);
+CREATE INDEX IF NOT EXISTS idx_savings_created_by_date ON savings_deposits(created_by, deposit_date);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_savings_legacy_expense
+  ON savings_deposits (legacy_expense_id) WHERE legacy_expense_id IS NOT NULL;
 
 COMMIT;

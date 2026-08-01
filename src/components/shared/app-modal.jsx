@@ -82,7 +82,7 @@ export function AppModal({
       if (!nextOpen && !loading) onClose?.();
     }}>
       <DialogContent
-        className="mx-4 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-0 shadow-xl"
+        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-0 shadow-xl"
         role={isConfirm ? 'alertdialog' : 'dialog'}
         aria-modal="true"
       >
@@ -119,7 +119,7 @@ export function AppModal({
                 type="button"
                 disabled={loading}
                 onClick={onClose}
-                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {cancelLabel}
               </button>
@@ -132,7 +132,7 @@ export function AppModal({
                 if (isConfirm) onConfirm?.();
                 else onClose?.();
               }}
-              className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${styles.confirm}`}
+              className={`min-h-11 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${styles.confirm}`}
             >
               {loading ? 'Working...' : (isConfirm ? confirmLabel : dismissLabel)}
             </button>

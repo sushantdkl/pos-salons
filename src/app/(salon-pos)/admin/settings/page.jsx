@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { CreditCard, ImagePlus, Loader2, Receipt, Save, Store, X } from 'lucide-react';
 import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
+import { formatUploadLimit, getUploadRule, validateImageFileForFolder } from '@/lib/uploads/upload-rules';
 
 const emptySalon = {
   salon_name: '',
@@ -79,6 +80,12 @@ export default function SettingsPage() {
     if (!file) return;
     setSaving(true);
     setMessage('');
+    const validationError = validateImageFileForFolder(file, 'payment-qr');
+    if (validationError) {
+      setMessage(validationError);
+      setSaving(false);
+      return;
+    }
     if (form.salon_phone && !isValidPhone(form.salon_phone)) {
       setMessage(PHONE_ERROR_MESSAGE);
       setSaving(false);
@@ -261,7 +268,9 @@ function QrSettingsCard({ title, imageUrl, label, enabled, onUpload, onRemove, o
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-gray-950">{title}</h3>
-          <p className="text-xs text-gray-500">Upload PNG, JPG, or WebP QR image.</p>
+          <p className="text-xs text-gray-500">
+            Upload PNG, JPG, or WebP QR image. Max {formatUploadLimit(getUploadRule('payment-qr')?.maxSize || 0)}.
+          </p>
         </div>
         <button
           type="button"

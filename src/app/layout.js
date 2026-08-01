@@ -13,7 +13,7 @@ export const metadata = {
     images: ['/assets/Salon_Banner.jpeg'],
     type: 'website',
     url: '/',
-    siteName: 'Salon POS System',
+    siteName: 'The Hair Cut Pos',
   },
   twitter: {
     card: 'summary',
@@ -46,6 +46,8 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        {/* Dashboard redesign typography: Manrope (headings + tabular figures) and IBM Plex Sans (body). Additive — other pages keep Outfit. */}
+        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
         <script dangerouslySetInnerHTML={{
           __html: `
             (function() {

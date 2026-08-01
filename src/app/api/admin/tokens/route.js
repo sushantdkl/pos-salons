@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
-import { BILL_DATE_EXPR } from '@/lib/db/postgres-dates';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
@@ -132,29 +131,88 @@ export async function GET(request) {
       });
     }
 
+    if (mode === 'customer_search') {
+      await requireRole(request, db, ['admin', 'cashier']);
+      const query = cleanText(searchParams.get('q'), '');
+      if (query.length < 2) return NextResponse.json({ customers: [] });
+      const normalizedPhone = normalizeCustomerPhone(query);
+      const digits = query.replace(/\D/g, '');
+      const clauses = ['c.name ILIKE ?'];
+      const params = [`%${query}%`];
+      if (digits.length >= 3) {
+        clauses.push('c.phone ILIKE ?');
+        params.push(`%${digits}%`);
+      }
+      if (normalizedPhone) {
+        clauses.push('c.phone = ?');
+        params.push(normalizedPhone);
+      }
+      const customers = await db.all(`
+        SELECT c.id, c.name, c.phone, c.total_visits, c.total_spent,
+               MAX(COALESCE(b.transaction_time, b.created_at)) as last_visit
+        FROM customers c
+        LEFT JOIN salon_bills b ON b.customer_id = c.id AND b.status = 'paid'
+        WHERE ${clauses.map((clause) => `(${clause})`).join(' OR ')}
+        GROUP BY c.id, c.name, c.phone, c.total_visits, c.total_spent
+        ORDER BY MAX(c.updated_at) DESC, c.name ASC
+        LIMIT 8
+      `, params);
+      return NextResponse.json({
+        customers: customers.map((customer) => ({
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          totalVisits: Number(customer.total_visits || 0),
+          totalSpending: Number(customer.total_spent || 0),
+          lastVisit: customer.last_visit || null,
+        })),
+      });
+    }
+
     if (mode === 'analytics') {
       await requireRole(request, db, 'admin');
       const summary = await db.get(`
         SELECT
           COUNT(*)::int as generated,
-          SUM(CASE WHEN NOT COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalTokens,
-          SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedTokens,
-          SUM(CASE WHEN status = 'BILLED' AND invoice_id IS NOT NULL THEN 1 ELSE 0 END)::int as billed,
-          SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END)::int as waiting,
-          SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END)::int as cancelled,
-          SUM(CASE WHEN status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as noShow
-        FROM walk_in_tokens
-        WHERE token_date = ?::date AND status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')
+          SUM(CASE WHEN NOT COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalTokens,
+          SUM(CASE WHEN COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedTokens,
+          SUM(CASE WHEN wt.status = 'WAITING' THEN 1 ELSE 0 END)::int as waiting,
+          SUM(CASE WHEN wt.status = 'CANCELLED' THEN 1 ELSE 0 END)::int as cancelled,
+          SUM(CASE WHEN wt.status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as noShow
+        FROM walk_in_tokens wt
+        WHERE wt.token_date = ?::date AND wt.status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')
+      `, [date]);
+      const converted = await db.get(`
+        SELECT COUNT(DISTINCT wt.id)::int as billed
+        FROM walk_in_tokens wt
+        JOIN salon_bills sb
+          ON sb.id = wt.invoice_id
+         AND sb.token_id = wt.id
+         AND sb.status = 'paid'
+        WHERE wt.status = 'BILLED'
+          AND wt.invoice_id IS NOT NULL
+          AND ((COALESCE(wt.billed_at, sb.transaction_time, sb.created_at)) AT TIME ZONE 'Asia/Kathmandu')::date = ?::date
       `, [date]);
       const bills = await db.get(`
-        SELECT COUNT(*)::int as totalBills,
-               SUM(CASE WHEN NOT COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalBills,
-               SUM(CASE WHEN COALESCE(is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedBills,
-               SUM(CASE WHEN token_id IS NULL THEN 1 ELSE 0 END)::int as directBills,
-               SUM(CASE WHEN token_id IS NOT NULL THEN 1 ELSE 0 END)::int as tokenBills
-        FROM salon_bills
-        WHERE (${BILL_DATE_EXPR}) >= ?::date AND (${BILL_DATE_EXPR}) < (?::date + INTERVAL '1 day') AND status = 'paid'
-      `, [date, date]);
+        SELECT COUNT(DISTINCT sb.id)::int as tokenBills,
+               COUNT(DISTINCT CASE WHEN NOT COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as digitalBills,
+               COUNT(DISTINCT CASE WHEN COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as printedBills
+        FROM walk_in_tokens wt
+        JOIN salon_bills sb
+          ON sb.id = wt.invoice_id
+         AND sb.token_id = wt.id
+         AND sb.status = 'paid'
+        WHERE wt.token_date = ?::date
+          AND wt.status = 'BILLED'
+          AND wt.invoice_id IS NOT NULL
+      `, [date]);
+      const directBills = await db.get(`
+        SELECT COUNT(DISTINCT sb.id)::int as directBills
+        FROM salon_bills sb
+        WHERE sb.token_id IS NULL
+          AND sb.status = 'paid'
+          AND ((COALESCE(sb.transaction_time, sb.created_at)) AT TIME ZONE 'Asia/Kathmandu')::date = ?::date
+      `, [date]);
       const statusRows = await db.all(`
         SELECT status, COUNT(*)::int as count
         FROM walk_in_tokens
@@ -165,22 +223,43 @@ export async function GET(request) {
         SELECT COALESCE(u.full_name, sp.display_name, 'Unassigned') as staff_name,
                COALESCE(sp.salon_role, 'unassigned') as staff_role,
                COUNT(t.id)::int as tokens_handled,
-               SUM(CASE WHEN t.status = 'BILLED' AND t.invoice_id IS NOT NULL THEN 1 ELSE 0 END)::int as services_completed,
-               COALESCE(SUM(b.grand_total), 0) as revenue_generated,
+               COUNT(DISTINCT CASE WHEN t.status = 'BILLED' AND t.invoice_id IS NOT NULL AND b.id IS NOT NULL AND b.status = 'paid' THEN t.id END)::int as services_completed,
+               COALESCE(SUM(CASE WHEN b.status = 'paid' THEN b.grand_total ELSE 0 END), 0) as revenue_generated,
                AVG(s.duration_minutes) as average_service_duration
         FROM walk_in_tokens t
         JOIN salon_services s ON s.id = t.service_id
         LEFT JOIN users u ON u.id = t.assigned_staff_id
         LEFT JOIN staff_profiles sp ON sp.user_id = t.assigned_staff_id
-        LEFT JOIN salon_bills b ON b.id = t.invoice_id
+        LEFT JOIN salon_bills b ON b.id = t.invoice_id AND b.token_id = t.id
         WHERE t.token_date = ?::date AND t.status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')
         GROUP BY t.assigned_staff_id, u.full_name, sp.display_name, sp.salon_role
         ORDER BY tokens_handled DESC
       `, [date]);
       const warnings = [];
       if (Number(summary.waiting || 0) > 0) warnings.push(`${summary.waiting} token(s) are still waiting.`);
-      if (Number(bills.directBills || 0) > 0) warnings.push(`${bills.directBills} bill(s) were created without a token.`);
-      return NextResponse.json({ summary, bills, statuses: statusRows, staff: staffRows, warnings });
+      const directBillCount = Number(directBills?.directbills || directBills?.directBills || 0);
+      if (directBillCount > 0) warnings.push(`${directBillCount} bill(s) were created without a token.`);
+      return NextResponse.json({
+        summary: {
+          generated: Number(summary?.generated || 0),
+          digitalTokens: Number(summary?.digitaltokens || summary?.digitalTokens || 0),
+          printedTokens: Number(summary?.printedtokens || summary?.printedTokens || 0),
+          waiting: Number(summary?.waiting || 0),
+          cancelled: Number(summary?.cancelled || 0),
+          noShow: Number(summary?.noshow || summary?.noShow || 0),
+          billed: Number(converted?.billed || 0),
+        },
+        bills: {
+          totalBills: Number(bills?.tokenbills || bills?.tokenBills || 0),
+          digitalBills: Number(bills?.digitalbills || bills?.digitalBills || 0),
+          printedBills: Number(bills?.printedbills || bills?.printedBills || 0),
+          directBills: Number(directBills?.directbills || directBills?.directBills || 0),
+          tokenBills: Number(bills?.tokenbills || bills?.tokenBills || 0),
+        },
+        statuses: statusRows,
+        staff: staffRows,
+        warnings,
+      });
     }
 
     const clauses = ["t.token_date = ?::date", "t.status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')"];

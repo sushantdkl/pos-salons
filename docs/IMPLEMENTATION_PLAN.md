@@ -1,4 +1,4 @@
-# Salon POS Implementation Plan
+# The Hair Cut Pos Implementation Plan
 
 ## Phase 1: Codebase Cleanup
 

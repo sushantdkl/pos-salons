@@ -1,4 +1,4 @@
-# Salon POS Application Flow
+# The Hair Cut Pos Application Flow
 
 ## Login Flow
 

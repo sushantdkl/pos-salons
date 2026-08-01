@@ -53,7 +53,7 @@ VALUES
 WITH staff_seed (username, full_name, role, salon_role, pin, email, assigned_services, commission_percentage, base_salary) AS (
   VALUES
     ('admin', 'Admin', 'admin', 'admin', '1111', 'admin@thehaircut.local', '', 0, 0),
-    ('kanchan', 'Kanchan', 'cashier', 'beautician', '2222', 'kanchan@thehaircut.local', 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading', 10, 0),
+    ('kanchan', 'Kanchan', 'beautician', 'beautician', '2222', 'kanchan@thehaircut.local', 'Normal Cleansing,Deep Cleansing,Wine Facial,Fruit Facial,Lotus Facial,Threading', 10, 0),
     ('raashid', 'Raashid', 'barber', 'barber', '3333', 'raashid@thehaircut.local', 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading', 10, 0),
     ('salman', 'Salman', 'barber', 'barber', '4444', 'salman@thehaircut.local', 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading', 10, 0),
     ('saajid', 'Saajid', 'barber', 'barber', '5555', 'saajid@thehaircut.local', 'Hair Cut,Hair Wash,Shaving,Head Massage,Threading', 10, 0)
@@ -246,7 +246,7 @@ UPDATE staff_profiles
 SET website_title = CASE
       WHEN website_title IS NOT NULL AND website_title <> '' THEN website_title
       WHEN salon_role = 'barber' THEN 'Barber / Hair Dresser'
-      WHEN salon_role = 'beautician' THEN 'Beautician / Cashier'
+      WHEN salon_role = 'beautician' THEN 'Beautician'
       ELSE display_name
     END,
     website_bio = COALESCE(NULLIF(website_bio, ''), assigned_services),

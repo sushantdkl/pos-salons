@@ -7,12 +7,16 @@ import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Savings deposits are no longer expense categories — they live in savings_deposits
+// and are recorded from the Savings page. See docs/migrations/2026-07-31-savings-deposits.sql.
 const EXPENSE_CATEGORIES = [
   'Staff Salary', 'Staff Commission', 'Product Purchase', 'Rent', 'Electricity',
   'Water', 'Internet', 'Maintenance', 'Marketing', 'Equipment', 'Cleaning', 'Other',
   'TEA_SNACKS', 'WATER_JAR', 'CLEANING', 'TRANSPORT', 'MAINTENANCE', 'PETTY_PURCHASE',
-  'OTHER_EXPENSE', 'DAILY_SAVING',
+  'OTHER_EXPENSE',
 ];
+
+const SAVINGS_CATEGORIES = ['DAILY_SAVING'];
 const PAYMENT_METHODS = ['cash', 'online', 'bank_transfer', 'mixed'];
 const PAYMENT_STATUSES = ['unpaid', 'partially_paid', 'paid'];
 
@@ -127,7 +131,7 @@ async function getStaffMonthMetrics(db, staffId, month) {
 }
 
 function buildFilters(searchParams) {
-  const clauses = ['e.deleted_at IS NULL'];
+  const clauses = ['e.deleted_at IS NULL', "COALESCE(e.record_type, 'EXPENSE') = 'EXPENSE'"];
   const params = [];
   const search = cleanText(searchParams.get('search'), '');
   if (search) {
@@ -223,7 +227,6 @@ async function getSummary(db) {
       COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as today,
       COALESCE(SUM(CASE WHEN expense_date >= ${currentWeekStartSql()} AND expense_date < ${currentWeekStartSql()} + INTERVAL '7 days' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as week,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as month,
-      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE AND COALESCE(record_type, 'EXPENSE') = 'CASH_TRANSFER' THEN amount ELSE 0 END), 0) as dailySaving,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
       COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
@@ -240,6 +243,11 @@ async function getSummary(db) {
     SELECT COALESCE(SUM(remaining_balance), 0) as total FROM salary_payments
     WHERE deleted_at IS NULL AND payment_status <> 'paid'
   `);
+  // Savings transfers are reported for context only — they are never added to expense totals.
+  const savingRow = await db.get(`
+    SELECT COALESCE(SUM(amount), 0) as total FROM savings_deposits
+    WHERE deleted_at IS NULL AND status = 'ACTIVE' AND deposit_date = CURRENT_DATE
+  `);
   const revenue = Number(revenueRow?.total || 0);
   return {
     totalExpensesToday: Number(expenseRow?.today || 0),
@@ -249,7 +257,7 @@ async function getSummary(db) {
     commissionPaidMonth: Number(expenseRow?.commissionPaid || 0),
     productPurchaseMonth: Number(expenseRow?.productPurchase || 0),
     otherExpensesMonth: Number(expenseRow?.otherExpenses || 0),
-    dailySavingToday: Number(expenseRow?.dailySaving || 0),
+    dailySavingToday: Number(savingRow?.total || 0),
     pendingSalaryBalance: Number(pendingRow?.total || 0),
     monthlyRevenue: revenue,
     netRevenueAfterExpenses: revenue - Number(expenseRow?.month || 0),
@@ -258,6 +266,9 @@ async function getSummary(db) {
 
 function validateCategory(category) {
   const value = cleanText(category, '');
+  if (SAVINGS_CATEGORIES.includes(value)) {
+    throw new Error('Savings deposits are recorded on the Savings page, not as an expense.');
+  }
   if (!EXPENSE_CATEGORIES.includes(value)) throw new Error('Valid expense category is required');
   return value;
 }
@@ -270,7 +281,7 @@ async function saveExpense(db, data, userId) {
   if (!title) throw new Error('Expense title is required');
   const expenseDate = cleanText(data.expenseDate || data.expense_date, today());
   const notes = cleanText(data.notes, '') || title;
-  const recordType = category === 'DAILY_SAVING' ? 'CASH_TRANSFER' : 'EXPENSE';
+  const recordType = 'EXPENSE';
   const values = [
     title, category, amount, payment.paymentMethod, payment.cash, payment.online,
     cleanText(data.paidBy || data.paid_by, ''), cleanText(data.paidTo || data.paid_to, ''),

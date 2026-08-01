@@ -125,6 +125,9 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   const [error, setError] = useState('');
   const [lastToken, setLastToken] = useState(null);
   const [customerLookup, setCustomerLookup] = useState({ status: '', message: '', customer: null });
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSearchState, setCustomerSearchState] = useState({ loading: false, results: [], message: '' });
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -166,6 +169,29 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
         message: 'New customer will be saved automatically after token is generated.',
         customer: null,
       });
+    }
+  };
+
+  const searchExistingCustomers = async (query) => {
+    const term = String(query || '').trim();
+    if (term.length < 2) {
+      setCustomerSearchState({ loading: false, results: [], message: '' });
+      return;
+    }
+    setCustomerSearchState({ loading: true, results: [], message: 'Searching customers...' });
+    const params = new URLSearchParams({ mode: 'customer_search', q: term });
+    try {
+      const response = await fetch(`/api/admin/tokens?${params.toString()}`, { headers: headers() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not search customers');
+      const results = data.customers || [];
+      setCustomerSearchState({
+        loading: false,
+        results,
+        message: results.length ? '' : 'No saved customers found.',
+      });
+    } catch (error) {
+      setCustomerSearchState({ loading: false, results: [], message: error.message || 'Could not search customers' });
     }
   };
 
@@ -215,6 +241,18 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
   }, [date, status]);
 
   useEffect(() => {
+    if (selectedCustomer) return undefined;
+    const term = String(customerSearch || '').trim();
+    if (term.length < 2) {
+      setCustomerSearchState({ loading: false, results: [], message: '' });
+      return undefined;
+    }
+    const timer = setTimeout(() => searchExistingCustomers(term), 350);
+    return () => clearTimeout(timer);
+  }, [customerSearch, selectedCustomer]);
+
+  useEffect(() => {
+    if (selectedCustomer) return undefined;
     const digits = String(form.customer_phone || '').replace(/\D/g, '');
     if (digits.length < 6) {
       setCustomerLookup({ status: '', message: '', customer: null });
@@ -222,7 +260,27 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     }
     const timer = setTimeout(() => lookupCustomerByPhone(form.customer_phone), 500);
     return () => clearTimeout(timer);
-  }, [form.customer_phone]);
+  }, [form.customer_phone, selectedCustomer]);
+
+  const selectExistingCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setCustomerSearch(customer.name || '');
+    setCustomerSearchState({ loading: false, results: [], message: '' });
+    setCustomerLookup({ status: 'found', message: `Selected saved customer: ${customer.name}`, customer });
+    setForm((current) => ({
+      ...current,
+      customer_name: customer.name || '',
+      customer_phone: customer.phone || '',
+    }));
+  };
+
+  const clearSelectedCustomer = () => {
+    setSelectedCustomer(null);
+    setCustomerSearch('');
+    setCustomerSearchState({ loading: false, results: [], message: '' });
+    setCustomerLookup({ status: '', message: '', customer: null });
+    setForm((current) => ({ ...current, customer_name: '', customer_phone: '' }));
+  };
 
   const createToken = async (shouldPrint = false) => {
     setError('');
@@ -240,7 +298,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     const response = await fetch('/api/admin/tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers() },
-      body: JSON.stringify({ ...form, should_print: shouldPrint }),
+      body: JSON.stringify({ ...form, customer_id: selectedCustomer?.id || null, should_print: shouldPrint }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -250,6 +308,9 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       return;
     }
     setLastToken(data.token);
+    setSelectedCustomer(null);
+    setCustomerSearch('');
+    setCustomerSearchState({ loading: false, results: [], message: '' });
     setForm({ customer_name: '', customer_phone: '', service_id: '', assigned_staff_id: '', notes: '' });
     setCustomerLookup({ status: '', message: '', customer: null });
     if (shouldPrint) printToken(data.token, printWindow);
@@ -348,16 +409,75 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
             </>
           ) : null}
 
-          <div className={`grid gap-6 ${canCreate ? 'xl:grid-cols-[380px_1fr]' : ''}`}>
+          <div className={`grid gap-6 ${canCreate ? 'xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]' : ''}`}>
             {canCreate ? (
               <section className="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold text-gray-950">New token</h2>
                 <div className="space-y-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Search saved customer
+                    </label>
+                    <input
+                      value={customerSearch}
+                      onChange={(event) => {
+                        setCustomerSearch(event.target.value);
+                        if (selectedCustomer) setSelectedCustomer(null);
+                      }}
+                      placeholder="Search by name or phone"
+                      className={inputClass}
+                      aria-label="Search existing customer by name or phone"
+                    />
+                    {selectedCustomer ? (
+                      <div className="mt-2 rounded-lg border border-green-200 bg-green-50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-green-900">{selectedCustomer.name}</p>
+                            <p className="mt-1 text-xs text-green-800">
+                              {selectedCustomer.phone || 'No phone'} - {selectedCustomer.totalVisits || 0} visits
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={clearSelectedCustomer}
+                            className="text-xs font-semibold text-green-800 underline-offset-2 hover:underline"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {!selectedCustomer && (customerSearchState.loading || customerSearchState.results.length || customerSearchState.message) ? (
+                      <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                        {customerSearchState.loading ? (
+                          <p className="px-3 py-2 text-xs font-medium text-gray-500">Searching customers...</p>
+                        ) : null}
+                        {customerSearchState.results.map((customer) => (
+                          <button
+                            key={customer.id}
+                            type="button"
+                            onClick={() => selectExistingCustomer(customer)}
+                            className="block w-full border-t border-gray-100 px-3 py-2 text-left first:border-t-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                          >
+                            <span className="block text-sm font-semibold text-gray-950">{customer.name}</span>
+                            <span className="mt-0.5 block text-xs text-gray-500">
+                              {customer.phone || 'No phone'} - {customer.totalVisits || 0} visits
+                              {customer.lastVisit ? ` - Last visit ${new Date(customer.lastVisit).toLocaleDateString()}` : ''}
+                            </span>
+                          </button>
+                        ))}
+                        {!customerSearchState.loading && customerSearchState.message ? (
+                          <p className="px-3 py-2 text-xs font-medium text-gray-500">{customerSearchState.message}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                   <input
                     value={form.customer_name}
                     onChange={(event) => setForm({ ...form, customer_name: event.target.value })}
                     placeholder="Customer name (optional)"
                     className={inputClass}
+                    disabled={Boolean(selectedCustomer)}
                   />
                   <input
                     value={form.customer_phone}
@@ -365,6 +485,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                     onBlur={() => lookupCustomerByPhone(form.customer_phone)}
                     placeholder="Phone (optional)"
                     className={inputClass}
+                    disabled={Boolean(selectedCustomer)}
                   />
                   {customerLookup.message ? (
                     <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${

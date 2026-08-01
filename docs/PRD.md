@@ -1,8 +1,8 @@
-# Salon POS Product Requirements Document
+# The Hair Cut Pos Product Requirements Document
 
 ## Project Overview
 
-Salon POS is an internal business management system and public website for The Hair Cut, a men's salon in Birendranagar-7, Surkhet. The POS supports fast billing, customer history, staff performance tracking, inventory control, reports, and manual reminders. The public site presents salon services, packages, staff, gallery, contact details, and WhatsApp appointment requests.
+The Hair Cut Pos is an internal business management system and public website for The Hair Cut, a men's salon in Birendranagar-7, Surkhet. The POS supports fast billing, customer history, staff performance tracking, inventory control, reports, and manual reminders. The public site presents salon services, packages, staff, gallery, contact details, and WhatsApp appointment requests.
 
 The product focuses on POS-side salon operations plus a lightweight public website. Full database-backed appointment scheduling remains out of scope for the current testing stage.
 
@@ -33,14 +33,14 @@ The product focuses on POS-side salon operations plus a lightweight public websi
 - Cashier: billing, customer lookup, customer creation, service/product selection, staff assignment, receipt generation, inventory viewing, and reminders.
 - Barber: personal dashboard for assigned work, completed services, revenue, commission, and recent customer service history.
 - Stylist: personal dashboard for assigned work, completed services, revenue, commission, and recent customer service history.
-- Beautician: personal dashboard for beauty services, completed services, revenue, commission, and recent customer service history. Kanchan is selectable as Beautician for beauty services while logging in as Cashier.
+- Beautician: personal dashboard for beauty services, completed services, revenue, commission, and recent customer service history. Kanchan is selectable as Beautician for beauty services.
 
 ## Launch Staff Configuration
 
 | Staff | Login Role | Service Role | PIN | Assigned Services |
 | --- | --- | --- | --- | --- |
 | Admin | Admin | Admin | 1111 | Full system access |
-| Kanchan | Cashier | Beautician | 2222 | Beauty services, beauty treatments, billing, customers, products, receipts, reminders |
+| Kanchan | Beautician | Beautician | 2222 | Beauty services, beauty treatments, customer history, and personal performance |
 | Raashid | Barber | Barber | 3333 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
 | Salman | Barber | Barber | 4444 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |
 | Saajid | Barber | Barber | 5555 | Hair Cut, Hair Wash, Shaving, Head Massage, Threading |

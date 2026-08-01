@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
-import { uploadWebsiteImage } from '@/lib/uploads/upload-image';
+import { deletePublicUploadUrl, uploadWebsiteImage } from '@/lib/uploads/upload-image';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,5 +30,18 @@ export async function POST(request) {
       { error: error.message || 'Image upload failed' },
       { status: error.status || 400 }
     );
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const db = Database.getInstance();
+    await ensureSalonSchema();
+    await requireRole(request, db, 'admin');
+    const { imageUrl } = await request.json();
+    await deletePublicUploadUrl(imageUrl);
+    return NextResponse.json({ message: 'Image removed' });
+  } catch {
+    return NextResponse.json({ error: 'Could not remove image' }, { status: 400 });
   }
 }

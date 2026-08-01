@@ -7,7 +7,7 @@ export function Dialog({ open, onOpenChange, children }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
@@ -15,7 +15,7 @@ export function Dialog({ open, onOpenChange, children }) {
       />
       
       {/* Content */}
-      <div className="relative z-50">
+      <div className="relative z-50 w-full max-w-[calc(100vw-24px)] sm:max-w-lg">
         {children}
       </div>
     </div>
@@ -30,7 +30,7 @@ export function DialogContent({
 }) {
   return (
     <div
-      className={`relative w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-lg animate-in fade-in-90 slide-in-from-bottom-10 ${className}`}
+      className={`relative max-h-[calc(100vh-24px)] w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 shadow-lg animate-in fade-in-90 slide-in-from-bottom-10 sm:p-6 ${className}`}
       {...props}
     >
       {onClose && (

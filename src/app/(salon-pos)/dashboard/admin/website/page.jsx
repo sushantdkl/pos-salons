@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Edit, Eye, ImagePlus, Plus, Save, Trash2, X } from 'lucide-react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { formatCurrency } from '@/lib/currency';
+import { formatUploadLimit, getUploadRule, validateImageFileForFolder } from '@/lib/uploads/upload-rules';
 
 const tabs = ['Hero', 'About', 'Services', 'Packages', 'Staff', 'Gallery', 'Contact', 'SEO'];
 const sectionMap = {
@@ -115,6 +116,30 @@ function authHeaders() {
   };
 }
 
+function collectUploadedUrls(payload) {
+  const urls = new Set();
+  const add = (value) => {
+    const url = String(value || '').trim();
+    if (url.startsWith('/uploads/website-assets/')) urls.add(url);
+  };
+  Object.values(payload?.sections || {}).forEach((section) => {
+    add(section?.imageUrl);
+    if (Array.isArray(section?.metadata?.galleryImages)) section.metadata.galleryImages.forEach(add);
+  });
+  [...(payload?.services || []), ...(payload?.packages || []), ...(payload?.staff || []), ...(payload?.gallery || [])].forEach((item) => {
+    add(item?.image || item?.imageUrl || item?.websiteImage);
+  });
+  return urls;
+}
+
+async function deleteUploadedUrl(imageUrl) {
+  await fetch('/api/admin/website-cms/upload', {
+    method: 'DELETE',
+    headers: headers(),
+    body: JSON.stringify({ imageUrl }),
+  });
+}
+
 function Field({ label, error, children }) {
   return (
     <label className="block">
@@ -176,8 +201,8 @@ function uploadFolderForSection(tab) {
 function CmsModal({ open, title, onClose, onSave, children, saveLabel = 'Save item' }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center sm:p-4">
+      <div className="flex max-h-[calc(100vh-24px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <h3 className="text-lg font-semibold text-gray-950">{title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Close">
@@ -185,7 +210,7 @@ function CmsModal({ open, title, onClose, onSave, children, saveLabel = 'Save it
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
-        <div className="flex gap-3 border-t border-gray-200 px-5 py-4">
+        <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
             Cancel
           </button>
@@ -234,6 +259,7 @@ function CmsListRow({ image, title, subtitle, description, meta, visible, featur
 export default function WebsiteCmsPage() {
   const [activeTab, setActiveTab] = useState('Hero');
   const [cms, setCms] = useState(null);
+  const [lastSavedCms, setLastSavedCms] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -244,8 +270,10 @@ export default function WebsiteCmsPage() {
     setError('');
     const response = await fetch('/api/admin/website-cms', { headers: headers() });
     const data = await response.json();
-    if (response.ok) setCms(data);
-    else setError(data.error || 'Could not load website CMS');
+    if (response.ok) {
+      setCms(data);
+      setLastSavedCms(data);
+    } else setError(data.error || 'Could not load website CMS');
     setLoading(false);
   };
 
@@ -300,6 +328,8 @@ export default function WebsiteCmsPage() {
   const uploadImage = async (folder, file) => {
     setMessage('');
     setError('');
+    const validationError = validateImageFileForFolder(file, folder);
+    if (validationError) throw new Error(validationError);
     const formData = new FormData();
     formData.append('folder', folder);
     formData.append('file', file);
@@ -337,8 +367,12 @@ export default function WebsiteCmsPage() {
     const data = await response.json();
     if (response.ok) {
       setCms(data.cms);
+      setLastSavedCms(data.cms);
       setMessage('Website CMS saved. Public website updated.');
     } else {
+      const savedUrls = collectUploadedUrls(lastSavedCms);
+      const currentUrls = collectUploadedUrls(cms);
+      await Promise.all(Array.from(currentUrls).filter((url) => !savedUrls.has(url)).map(deleteUploadedUrl));
       if (data.details?.tab) setActiveTab(data.details.tab);
       setError(data.message || data.error || 'Could not save website CMS. Please check the fields and try again.');
     }
@@ -594,6 +628,8 @@ function ImageUploadField({ label, value, folder, onChange, onUpload, error }) {
     setUploading(true);
     setLocalError('');
     try {
+      const validationError = validateImageFileForFolder(file, folder);
+      if (validationError) throw new Error(validationError);
       const uploadedUrl = await onUpload(folder, file);
       onChange(uploadedUrl);
     } catch (uploadError) {
@@ -627,6 +663,9 @@ function ImageUploadField({ label, value, folder, onChange, onUpload, error }) {
               </button>
             ) : null}
           </div>
+          <p className="text-xs font-medium text-gray-500">
+            JPEG, PNG, or WebP. Max {formatUploadLimit(getUploadRule(folder)?.maxSize || 0)}. Images are optimized before storage.
+          </p>
           {uploading ? <p className="text-sm font-semibold text-gray-600">Uploading image...</p> : null}
         </div>
       </Field>

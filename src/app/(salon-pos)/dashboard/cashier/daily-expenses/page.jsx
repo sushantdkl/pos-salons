@@ -12,7 +12,6 @@ const categoryLabels = {
   MAINTENANCE: 'Small maintenance',
   PETTY_PURCHASE: 'Petty cash purchase',
   OTHER_EXPENSE: 'Other daily expense',
-  DAILY_SAVING: 'Daily saving / cash transfer',
 };
 
 const emptyForm = {
@@ -93,7 +92,11 @@ export default function CashierDailyExpensesPage() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Daily Expenses</h1>
-          <p className="mt-1 text-sm text-gray-600">Record today&apos;s petty expenses and daily cash transfers.</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Record today&apos;s operating expenses. Bank and Sahakari deposits belong on the{' '}
+            <a href="/dashboard/cashier/savings" className="font-semibold text-gray-950 underline">Savings page</a> —
+            they are transfers, not expenses.
+          </p>
         </div>
 
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -104,7 +107,7 @@ export default function CashierDailyExpensesPage() {
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <Wallet className="mb-3 h-6 w-6 text-gray-700" />
-            <p className="text-sm text-gray-500">Daily saving / cash transfer</p>
+            <p className="text-sm text-gray-500">Today&apos;s savings transfers</p>
             <p className="mt-1 text-2xl font-semibold text-gray-950">{formatCurrency(data.summary?.todaySavings || 0)}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">

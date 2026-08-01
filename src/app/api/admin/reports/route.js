@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, periodDateFilter, reportsBillDateFilter } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import {
+  billCashSql,
+  billQrSql,
+  getFinancialSummary,
+  numeric,
+  paymentMethodLabel,
+  qrTypeLabel,
+} from '@/lib/reports/finance-summary';
 
-function numeric(value) {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+const PAID_BILL_STATUS_B = "LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')";
 
 export async function GET(request) {
   try {
@@ -15,39 +20,34 @@ export async function GET(request) {
     await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'today';
-    const { clause, params } = reportsBillDateFilter(
-      period,
-      searchParams.get('startDate'),
-      searchParams.get('endDate')
-    );
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    // One filter, one alias, used by every bill-level query in this route.
+    const { clause, params } = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    const billCash = billCashSql('b');
+    const billQr = billQrSql('b');
+
+    const financial = await getFinancialSummary(db, period, { startDate, endDate });
 
     const summary = await db.get(`
-      SELECT COALESCE(SUM(grand_total), 0) AS total_sales,
-             COUNT(*)::int AS total_bills,
-             COUNT(DISTINCT customer_id)::int AS unique_customers,
-             CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(grand_total), 0) / COUNT(*) ELSE 0 END AS avg_bill_value
-      FROM salon_bills
-      WHERE ${clause} AND status = 'paid'
+      SELECT COALESCE(SUM(b.grand_total), 0) AS total_sales,
+             COUNT(b.id)::int AS total_bills,
+             COUNT(DISTINCT b.customer_id)::int AS unique_customers,
+             CASE WHEN COUNT(b.id) > 0 THEN COALESCE(SUM(b.grand_total), 0) / COUNT(b.id) ELSE 0 END AS avg_bill_value
+      FROM salon_bills b
+      WHERE ${clause} AND ${PAID_BILL_STATUS_B}
     `, params);
 
     const paymentRows = await db.all(`
-      SELECT payment_method,
-             qr_type,
-             COUNT(*)::int as count,
-             COALESCE(SUM(grand_total), 0) as amount,
-             COALESCE(SUM(CASE
-               WHEN payment_method = 'split' THEN cash_amount
-               WHEN payment_method = 'cash' THEN grand_total
-               ELSE 0
-             END), 0) as cash_amount,
-             COALESCE(SUM(CASE
-               WHEN payment_method = 'split' THEN qr_amount
-               WHEN payment_method = 'online' THEN grand_total
-               ELSE 0
-             END), 0) as qr_amount
-      FROM salon_bills
-      WHERE ${clause} AND status = 'paid'
-      GROUP BY payment_method, qr_type
+      SELECT b.payment_method,
+             b.qr_type,
+             COUNT(b.id)::int as count,
+             COALESCE(SUM(b.grand_total), 0) as amount,
+             COALESCE(SUM(${billCash}), 0) as cash_amount,
+             COALESCE(SUM(${billQr}), 0) as qr_amount
+      FROM salon_bills b
+      WHERE ${clause} AND ${PAID_BILL_STATUS_B}
+      GROUP BY b.payment_method, b.qr_type
     `, params);
     const paymentMethods = {};
     const paymentSummary = {
@@ -73,17 +73,12 @@ export async function GET(request) {
       if (row.qr_type === 'BANK') paymentSummary.bankQrSales += numeric(row.qr_amount);
     });
 
-    const itemClause = periodDateFilter(
-      period,
-      searchParams.get('startDate'),
-      searchParams.get('endDate'),
-      BILL_DATE_EXPR_B
-    ).clause;
+    const itemClause = clause;
     const topServices = await db.all(`
       SELECT i.name, COUNT(*)::int as quantity, COALESCE(SUM(i.subtotal), 0) as revenue
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
-      WHERE ${itemClause} AND i.item_type = 'service'
+      WHERE ${itemClause} AND ${PAID_BILL_STATUS_B} AND i.item_type = 'service'
       GROUP BY i.name
       ORDER BY revenue DESC
       LIMIT 10
@@ -93,7 +88,7 @@ export async function GET(request) {
       SELECT i.name, COALESCE(SUM(i.quantity), 0) as quantity, COALESCE(SUM(i.subtotal), 0) as revenue
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
-      WHERE ${itemClause} AND i.item_type = 'product'
+      WHERE ${itemClause} AND ${PAID_BILL_STATUS_B} AND i.item_type = 'product'
       GROUP BY i.name
       ORDER BY revenue DESC
       LIMIT 10
@@ -106,33 +101,42 @@ export async function GET(request) {
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
       LEFT JOIN users u ON u.id = i.staff_id
-      WHERE ${itemClause} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
+      WHERE ${itemClause} AND ${PAID_BILL_STATUS_B} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
       GROUP BY i.staff_id, i.staff_name_snapshot, u.full_name
       ORDER BY revenue DESC
       LIMIT 10
     `, params);
 
     const transactions = await db.all(`
-      SELECT id,
-             bill_number,
-             customer_name,
-             customer_phone,
-             payment_method,
-             subtotal,
-             discount_amount,
-             tax,
-             service_charge,
-             grand_total,
-             amount_paid,
-             cash_amount,
-             qr_amount,
-             qr_type,
-             total_paid,
-             payment_status,
-             ${BILL_DATE_EXPR} as transaction_date
-      FROM salon_bills
-      WHERE ${clause} AND status = 'paid'
-      ORDER BY ${BILL_DATE_EXPR} DESC, id DESC
+      SELECT b.id,
+             b.bill_number,
+             b.customer_name,
+             b.customer_phone,
+             b.payment_method,
+             b.subtotal,
+             b.discount_amount,
+             b.discount_type,
+             b.notes,
+             b.tax,
+             b.service_charge,
+             b.grand_total,
+             b.amount_paid,
+             ${billCash} as cash_amount,
+             ${billQr} as qr_amount,
+             b.qr_type,
+             b.total_paid,
+             b.payment_status,
+             b.token_id,
+             b.is_printed,
+             b.status,
+             t.token_number,
+             COALESCE(u.full_name, u.username, '') as created_by_name,
+             ${BILL_DATE_EXPR_B} as transaction_date
+      FROM salon_bills b
+      LEFT JOIN walk_in_tokens t ON t.id = b.token_id
+      LEFT JOIN users u ON u.id = b.cashier_id
+      WHERE ${clause} AND ${PAID_BILL_STATUS_B}
+      ORDER BY ${BILL_DATE_EXPR_B} DESC, b.id DESC
       LIMIT 500
     `, params);
 
@@ -198,6 +202,8 @@ export async function GET(request) {
     ].filter(Boolean);
 
     return NextResponse.json({
+      period: financial.period,
+      financial,
       totalSales: numeric(summary.total_sales ?? summary.totalsales ?? summary.totalSales),
       totalBills: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
       totalOrders: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
@@ -217,8 +223,11 @@ export async function GET(request) {
         customerName: transaction.customer_name || 'Walk-in Customer',
         customerPhone: transaction.customer_phone || '',
         paymentMethod: transaction.payment_method || '',
+        paymentLabel: paymentMethodLabel(transaction.payment_method),
+        qrTypeLabel: qrTypeLabel(transaction.qr_type),
         subtotal: numeric(transaction.subtotal),
         discountAmount: numeric(transaction.discount_amount),
+        discountType: transaction.discount_type || 'amount',
         tax: numeric(transaction.tax),
         serviceCharge: numeric(transaction.service_charge),
         grandTotal: numeric(transaction.grand_total),
@@ -228,6 +237,12 @@ export async function GET(request) {
         qrType: transaction.qr_type || 'Not recorded',
         totalPaid: numeric(transaction.total_paid || transaction.amount_paid),
         paymentStatus: transaction.payment_status || 'paid',
+        status: transaction.status || 'paid',
+        tokenId: transaction.token_id || null,
+        tokenNumber: transaction.token_number || '',
+        isPrinted: Boolean(transaction.is_printed),
+        createdByName: transaction.created_by_name || '',
+        notes: transaction.notes || '',
         transactionDate: transaction.transaction_date,
         items: itemsByBill[String(transaction.id)] || [],
         assignedStaff: (itemsByBill[String(transaction.id)] || [])

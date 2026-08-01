@@ -11,7 +11,7 @@ export async function POST(request) {
       license_enabled: false,
       message: 'License enforcement is disabled for testing.',
       salon: {
-        salon_name: 'Salon POS',
+        salon_name: 'The Hair Cut Pos',
         plan_type: 'Testing',
       },
     });

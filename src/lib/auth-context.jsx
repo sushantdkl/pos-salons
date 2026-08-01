@@ -33,6 +33,16 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Clears the stored session without navigating. Used for background verification
+  // failures so that visiting a PUBLIC page (landing, services, etc.) with a stale
+  // token silently drops the session instead of bouncing the visitor to /login.
+  const clearSession = () => {
+    localStorage.removeItem('pos_token')
+    localStorage.removeItem('pos_user')
+    setToken(null)
+    setUser(null)
+  }
+
   const verifySession = async (storedToken, storedUser) => {
     try {
       const response = await fetch('/api/auth/verify', {
@@ -48,16 +58,17 @@ export function AuthProvider({ children }) {
           setToken(storedToken)
           setUser(storedUser)
         } else {
-          logout()
+          // Invalid/expired token: drop it, but never redirect from here.
+          // Protected pages guard themselves (dashboard-layout redirects to /login);
+          // public pages must keep rendering.
+          clearSession()
         }
       } else {
-        logout()
+        clearSession()
       }
     } catch (error) {
       console.error('Session verification failed:', error)
-      // Clear invalid session
-      localStorage.removeItem('pos_token')
-      localStorage.removeItem('pos_user')
+      clearSession()
     } finally {
       setLoading(false)
     }
@@ -107,10 +118,7 @@ export function AuthProvider({ children }) {
       }
     }
 
-    localStorage.removeItem('pos_token')
-    localStorage.removeItem('pos_user')
-    setToken(null)
-    setUser(null)
+    clearSession()
     router.push('/login')
   }
 

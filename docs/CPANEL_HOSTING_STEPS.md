@@ -1,6 +1,6 @@
-# The Hair Cut Salon POS - cPanel Hosting Steps
+# The Hair Cut Pos - cPanel Hosting Steps
 
-Use this guide to host the Salon POS on cPanel/SastoHost with cPanel PostgreSQL.
+Use this guide to host The Hair Cut Pos on cPanel/SastoHost with cPanel PostgreSQL.
 
 ## 1. Requirements
 
@@ -107,11 +107,11 @@ https://thehaircut.com.np/uploads/website-assets/
 From the project folder:
 
 ```bash
-npm install
+npm install --omit=dev
 npm run build
 ```
 
-If the build passes, start the app:
+If the build passes, cPanel/Passenger should start the app through the configured startup file. For a local smoke test only:
 
 ```bash
 npm run start
@@ -138,28 +138,68 @@ The app listens on `process.env.PORT` and binds to `127.0.0.1` by default for cP
 
 After setting environment variables:
 
-1. Run `npm install`.
-2. Run `npm run build`.
-3. Restart the Node.js app.
+1. Stop the cPanel Node.js application.
+2. Upload the fresh source and complete fresh `.next` folder.
+3. Run `npm install --omit=dev`.
+4. Run `npm run build` if building on cPanel.
+5. Restart the Node.js app from cPanel.
+6. Check `/api/health`, `/login`, and `stderr.log`.
 
-## 8. Default Testing Login
+If Passenger needs a manual restart trigger:
+
+```bash
+mkdir -p tmp
+touch tmp/restart.txt
+```
+
+Do not permanently run `npm run start` manually while Passenger is managing the app.
+
+Apply this one-time migration if it has not already been applied:
+
+```bash
+psql "$DATABASE_URL" -f docs/migrations/2026-07-21-normalize-usernames-for-passenger.sql
+```
+
+In phpPgAdmin, paste and execute the SQL file contents once.
+
+## 8. Health Check
+
+Use this endpoint after restarting Passenger:
+
+```txt
+https://your-domain.com/api/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "ok",
+  "app": "The Hair Cut Pos"
+}
+```
+
+If `/api/health` fails, check `stderr.log` before testing dashboard features.
+
+## 9. Default Testing Login
 
 Use these PINs during testing:
 
 | User | Role | PIN |
 | --- | --- | --- |
 | Admin | Admin | 1111 |
-| Kanchan | Cashier / Beautician | 2222 |
+| Kanchan | Beautician | 2222 |
 | Raashid | Barber | 3333 |
 | Salman | Barber | 4444 |
 | Saajid | Barber | 5555 |
 
-Disable demo PIN display before final commercial launch if needed.
+Create the dedicated Cashier account from **Admin > Staff Management** using the real cashier name and salon-approved PIN. Kanchan should remain Beautician-only.
 
-## 9. Post-Deployment QA
+## 10. Post-Deployment QA
 
 Verify:
 
+- `/api/health` returns `status: ok`.
 - Public website opens.
 - Services page opens.
 - Packages page opens.
@@ -183,11 +223,15 @@ Verify:
 - Inventory stock deduction works.
 - Expenses and salary pages work.
 
-## 10. Security Checklist
+## 11. Security Checklist
 
 Before final launch:
 
 - Use a strong `NEXTAUTH_SECRET`.
+- Keep `.env.local`, database passwords, logs, and `.git` out of uploads.
+- Upload a fresh `.next` build that matches the uploaded `package.json` and `package-lock.json`.
+- Do not upload local `node_modules`; install dependencies in the cPanel Node environment.
+- Do not run schema or seed SQL automatically from the application startup file.
 - Confirm admin APIs require login.
 - Confirm CMS APIs are admin-only.
 - Confirm billing APIs are admin/cashier-only.
@@ -198,7 +242,7 @@ Before final launch:
 - Confirm no `.env` files are inside `public_html`.
 - Confirm license remains disabled only for testing.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 Database connection fails:
 

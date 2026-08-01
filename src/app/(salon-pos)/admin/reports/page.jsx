@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
+  ArrowRight,
   Award,
   Calendar,
   Download,
@@ -12,6 +15,8 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
+import FinancialSummary from '@/modules/reports/components/financial-summary';
+import TransactionDetail from '@/modules/reports/components/transaction-detail';
 
 function numberValue(value) {
   const parsed = Number(value || 0);
@@ -87,10 +92,17 @@ function PaymentPie({ slices, total }) {
 }
 
 export default function ReportsPage() {
+  const searchParams = useSearchParams();
+  const queryPeriod = searchParams.get('period');
+  const normalizedQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('today');
-  const [customDates, setCustomDates] = useState({ start: '', end: '' });
+  const [period, setPeriod] = useState(['today', '3days', '7days', 'month', 'custom'].includes(normalizedQueryPeriod) ? normalizedQueryPeriod : 'today');
+  const [customDates, setCustomDates] = useState({
+    start: searchParams.get('startDate') || '',
+    end: searchParams.get('endDate') || '',
+  });
   const [reports, setReports] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   const fetchReports = async () => {
     try {
@@ -102,6 +114,7 @@ export default function ReportsPage() {
       }
 
       const response = await fetch(url, {
+        cache: 'no-store',
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -119,6 +132,13 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchReports();
   }, [period]);
+
+  useEffect(() => {
+    const nextPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
+    if (['today', '3days', '7days', 'month', 'custom'].includes(nextPeriod) && nextPeriod !== period) {
+      setPeriod(nextPeriod);
+    }
+  }, [queryPeriod, period]);
 
   const paymentSlices = useMemo(() => {
     const methods = reports?.paymentMethods || {};
@@ -150,7 +170,18 @@ export default function ReportsPage() {
       ['Exported At', new Date().toLocaleString()],
       [],
       ['Summary'],
-      ['Total Sales', money(reports?.totalSales)],
+      ['Gross Sales Before Discount', money(reports?.financial?.grossSalesBeforeDiscount)],
+      ['Total Discounts', money(reports?.financial?.totalDiscounts)],
+      ['Net Sales After Discount', money(reports?.financial?.netSalesAfterDiscount)],
+      ['Gross Cash Collected', money(reports?.financial?.grossCashCollected)],
+      ['Gross QR Collected', money(reports?.financial?.grossQrCollected)],
+      ['Gross Total Collected', money(reports?.financial?.grossTotalCollected)],
+      ['Operating Expenses', money(reports?.financial?.operatingExpenses)],
+      ['Salary Expenses', money(reports?.financial?.salaryExpenses)],
+      ['Savings Transfers', money(reports?.financial?.savingsTransfers)],
+      ['Net Cash in Hand', money(reports?.financial?.netCashInHand)],
+      ['Net Online Balance', money(reports?.financial?.netOnlineBalance)],
+      ['Net Available Balance', money(reports?.financial?.netAvailableBalance)],
       ['Total Bills', reports?.totalBills || 0],
       ['Average Bill Value', money(reports?.avgBillValue)],
       ['Unique Customers', reports?.uniqueCustomers || 0],
@@ -166,18 +197,24 @@ export default function ReportsPage() {
       ]),
       [],
       ['Transactions'],
-      ['Date', 'Invoice', 'Customer', 'Phone', 'Services / Assigned Staff', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'],
+      ['Date', 'Invoice', 'Customer', 'Phone', 'Services / Assigned Staff', 'Created By', 'Payment', 'Subtotal', 'Discount', 'Cash', 'QR', 'QR Type', 'Final Total', 'Token', 'Print Status', 'Status'],
       ...transactions.map((transaction) => [
         formatDateTime(transaction.transactionDate),
         transaction.billNumber,
         transaction.customerName,
         transaction.customerPhone,
         (transaction.assignedStaff || []).join('; '),
-        transaction.paymentMethod,
+        transaction.createdByName,
+        transaction.paymentLabel || transaction.paymentMethod,
+        money(transaction.subtotal),
+        money(transaction.discountAmount),
         money(transaction.cashAmount),
         money(transaction.qrAmount),
         qrTypeLabel(transaction.qrType),
         money(transaction.grandTotal),
+        transaction.tokenNumber || '',
+        transaction.isPrinted ? 'Printed' : 'Digital',
+        transaction.status || transaction.paymentStatus,
       ]),
     ];
     downloadCsv(`salon-report-${period}-${Date.now()}.csv`, rows);
@@ -208,7 +245,8 @@ export default function ReportsPage() {
         <div className="mb-6 flex flex-wrap gap-2">
           {[
             ['today', 'Today'],
-            ['week', 'This Week'],
+            ['3days', 'Last 3 Days'],
+            ['7days', 'Last 7 Days'],
             ['month', 'This Month'],
             ['custom', 'Custom Range'],
           ].map(([value, label]) => (
@@ -254,7 +292,7 @@ export default function ReportsPage() {
           <>
             <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
               {[
-                [DollarSign, 'green', `Rs ${money(reports.totalSales)}`, 'Total Sales Revenue'],
+                [DollarSign, 'green', `Rs ${money(reports.totalSales)}`, 'Net Sales After Discount'],
                 [ShoppingCart, 'blue', String(reports.totalBills || 0), 'Total Bills'],
                 [Target, 'amber', `Rs ${money(reports.avgBillValue)}`, 'Avg Bill Value'],
                 [Users, 'gray', String(reports.uniqueCustomers || 0), 'Customers'],
@@ -277,25 +315,36 @@ export default function ReportsPage() {
               })}
             </div>
 
+            <FinancialSummary financial={reports.financial} />
+
             <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-start gap-3 border-b border-gray-100 px-4 py-4 sm:px-6">
-                <div className="rounded-lg bg-gray-100 p-2">
-                  <Calendar className="h-5 w-5 text-gray-700" />
+              <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-gray-100 p-2">
+                    <Calendar className="h-5 w-5 text-gray-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-950 sm:text-lg">Transactions</h2>
+                    <p className="text-sm text-gray-500">Invoices in the selected period</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-base font-semibold text-gray-950 sm:text-lg">Transactions</h2>
-                  <p className="text-sm text-gray-500">Invoices in the selected period</p>
-                </div>
+                <Link
+                  href={`/admin/reports/transactions?period=${period === 'custom' ? 'today' : period}`}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 sm:ml-auto"
+                >
+                  View All
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[980px] w-full">
+                <table className="min-w-[1280px] w-full">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50/80">
-                      {['Date', 'Invoice', 'Customer', 'Services / Staff', 'Payment', 'Cash', 'QR', 'QR Type', 'Total'].map((heading) => (
+                      {['Date', 'Invoice', 'Customer', 'Services / Staff', 'Created By', 'Payment', 'Subtotal', 'Discount', 'Cash', 'QR', 'QR Type', 'Final Total', 'Token', 'Print', 'Status', 'View'].map((heading) => (
                         <th
                           key={heading}
                           className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-gray-600 sm:px-4 ${
-                            ['Cash', 'QR', 'Total'].includes(heading) ? 'text-right' : 'text-left'
+                            ['Subtotal', 'Cash', 'QR', 'Discount', 'Final Total'].includes(heading) ? 'text-right' : 'text-left'
                           }`}
                         >
                           {heading}
@@ -316,24 +365,41 @@ export default function ReportsPage() {
                           <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">
                             {(transaction.assignedStaff || []).length ? (
                               <div className="space-y-1">
-                                {transaction.assignedStaff.map((line) => (
-                                  <div key={`${transaction.id}-${line}`} className="text-xs font-medium text-gray-700">{line}</div>
+                                {/* A bill can repeat the same service and staff, so the index is
+                                    what makes these keys unique — the text alone is not. */}
+                                {transaction.assignedStaff.map((line, index) => (
+                                  <div key={`${transaction.id}-staff-${index}`} className="text-xs font-medium text-gray-700">{line}</div>
                                 ))}
                               </div>
                             ) : (
                               <span className="text-xs text-gray-400">No services</span>
                             )}
                           </td>
-                          <td className="px-3 py-3 text-sm capitalize text-gray-700 sm:px-4">{transaction.paymentMethod || '-'}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.createdByName || '-'}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.paymentLabel || transaction.paymentMethod || '-'}</td>
+                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.subtotal)}</td>
+                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.discountAmount)}</td>
                           <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.cashAmount)}</td>
                           <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.qrAmount)}</td>
                           <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{qrTypeLabel(transaction.qrType)}</td>
                           <td className="px-3 py-3 text-right text-sm font-semibold text-gray-950 sm:px-4">Rs {money(transaction.grandTotal)}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.tokenNumber || '-'}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.isPrinted ? 'Printed' : 'Digital'}</td>
+                          <td className="px-3 py-3 text-sm capitalize text-gray-700 sm:px-4">{transaction.status || transaction.paymentStatus || '-'}</td>
+                          <td className="px-3 py-3 text-sm sm:px-4">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTransaction(transaction)}
+                              className="font-semibold text-gray-950 hover:underline"
+                            >
+                              View
+                            </button>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-500">
                           No sales records found for this period.
                         </td>
                       </tr>
@@ -451,6 +517,8 @@ export default function ReportsPage() {
           </div>
         )}
       </div>
+
+      <TransactionDetail transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
     </div>
   );
 }

@@ -127,7 +127,7 @@ const LAUNCH_STAFF = [
   {
     username: 'kanchan',
     name: 'Kanchan',
-    role: 'cashier',
+    role: 'beautician',
     salonRole: 'beautician',
     pin: '2222',
     email: 'kanchan@thehaircut.local',
@@ -453,7 +453,7 @@ function seedWebsiteCmsData(db) {
     SET website_title = CASE
           WHEN website_title IS NOT NULL AND website_title <> '' THEN website_title
           WHEN salon_role = 'barber' THEN 'Barber / Hair Dresser'
-          WHEN salon_role = 'beautician' THEN 'Beautician / Cashier'
+          WHEN salon_role = 'beautician' THEN 'Beautician'
           ELSE display_name
         END,
         website_bio = COALESCE(NULLIF(website_bio, ''), assigned_services)
@@ -713,41 +713,8 @@ function cleanLegacyStaffIdentity(db) {
 
 export async function ensureSalonSchema() {
   // PostgreSQL base schema is applied via docs/postgresql-schema.sql before deployment.
-  // Runtime guard: usernames must be unique ignoring case.
-  try {
-    const Database = (await import('@/lib/db/index')).default;
-    const db = Database.getInstance();
-
-    // Rename later duplicates of the same username (case-insensitive), then normalize.
-    await db.run(`
-      UPDATE users
-      SET username = LOWER(TRIM(username)) || '_' || id::text
-      WHERE id IN (
-        SELECT id FROM (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY LOWER(TRIM(username))
-                   ORDER BY CASE WHEN LOWER(TRIM(username)) = 'admin' AND role = 'admin' THEN 0 ELSE 1 END, id ASC
-                 ) AS rn
-          FROM users
-        ) ranked
-        WHERE rn > 1
-      )
-    `);
-
-    await db.run(`
-      UPDATE users
-      SET username = LOWER(TRIM(username))
-      WHERE username IS DISTINCT FROM LOWER(TRIM(username))
-    `);
-
-    await db.run(`
-      CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uidx
-      ON users (LOWER(username))
-    `);
-  } catch {
-    // Keep going; create/update APIs still enforce uniqueness.
-  }
+  // Do not run PostgreSQL schema changes from normal API requests on cPanel.
+  // Apply docs/migrations/2026-07-21-normalize-usernames-for-passenger.sql once.
 }
 
 async function ensureSalonSchemaLegacySqlite(db) {

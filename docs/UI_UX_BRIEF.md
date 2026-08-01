@@ -1,4 +1,4 @@
-# Salon POS UI/UX Brief
+# The Hair Cut Pos UI/UX Brief
 
 ## Design System
 
@@ -70,17 +70,16 @@ Recommended admin sidebar:
 
 Cashier sidebar should focus on billing, customers, services, inventory, reminders, and logout. Barber, Stylist, and Beautician sidebars should focus on personal dashboard/performance and logout.
 
-## Demo Access UI
+## Staff Login UI
 
-During testing, the login screen includes a professional Demo Access section:
+The login screen shows only production-safe authentication controls:
 
-- Admin: PIN 1111.
-- Kanchan, Cashier / Beautician: PIN 2222.
-- Raashid, Barber: PIN 3333.
-- Salman, Barber: PIN 4444.
-- Saajid, Barber: PIN 5555.
+- Salon branding.
+- Active staff profile selection.
+- PIN input.
+- Sign-in, loading, and error states.
 
-This section must be easy to remove before production.
+PIN values must not be displayed in the browser UI.
 
 ## Mobile Responsiveness
 

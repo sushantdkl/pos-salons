@@ -1,6 +1,6 @@
 import Database from '@/lib/db/index';
 import { cleanText, ensureSalonSchema } from '@/lib/salon-schema';
-import { toPublicUploadUrl } from '@/lib/uploads/upload-image';
+import { deletePublicUploadUrl, toPublicUploadUrl } from '@/lib/uploads/upload-image';
 import { galleryItems } from '@/modules/public-site/data/gallery';
 import { publicPackages } from '@/modules/public-site/data/packages';
 import { salonInfo } from '@/modules/public-site/data/salon-info';
@@ -337,6 +337,39 @@ async function assertWebsiteCmsSchema(db) {
   }
 }
 
+async function collectCmsUploadUrls(db) {
+  const urls = new Set();
+  const sections = await db.all('SELECT image_url, metadata FROM website_content');
+  sections.forEach((section) => {
+    if (section.image_url) urls.add(toPublicUploadUrl(section.image_url));
+    const metadata = parseJson(section.metadata, {});
+    if (Array.isArray(metadata.galleryImages)) {
+      metadata.galleryImages.forEach((url) => urls.add(toPublicUploadUrl(url)));
+    }
+  });
+
+  const services = await db.all('SELECT image_url FROM website_services');
+  services.forEach((item) => item.image_url && urls.add(toPublicUploadUrl(item.image_url)));
+
+  const staff = await db.all('SELECT image_url FROM website_staff_profiles');
+  staff.forEach((item) => item.image_url && urls.add(toPublicUploadUrl(item.image_url)));
+
+  const gallery = await db.all('SELECT image_url FROM website_gallery_images');
+  gallery.forEach((item) => item.image_url && urls.add(toPublicUploadUrl(item.image_url)));
+
+  return urls;
+}
+
+async function deleteRemovedCmsUploads(previousUrls, currentUrls) {
+  const deleteJobs = [];
+  previousUrls.forEach((url) => {
+    if (url && url.startsWith('/uploads/website-assets/') && !currentUrls.has(url)) {
+      deleteJobs.push(deletePublicUploadUrl(url));
+    }
+  });
+  await Promise.all(deleteJobs);
+}
+
 function mapCategory(category) {
   if (category === 'Beard') return 'Beard';
   if (['Facial', 'Makeup', 'Spa'].includes(category)) return 'Beauty';
@@ -536,6 +569,7 @@ function normalizeSection(input, fallback) {
 export async function saveWebsiteCms(db, data, userId) {
   await ensureSalonSchema();
   await assertWebsiteCmsSchema(db);
+  const previousUploadUrls = await collectCmsUploadUrls(db);
   const defaults = sectionFallback();
   const sections = data.sections || {};
   for (const key of SECTION_KEYS) {
@@ -681,5 +715,7 @@ export async function saveWebsiteCms(db, data, userId) {
     'INSERT INTO action_logs (user_id, action, entity_type, details) VALUES (?, ?, ?, ?)',
     [userId, 'update', 'website_cms', 'Website CMS updated']
   );
+  const currentUploadUrls = await collectCmsUploadUrls(db);
+  await deleteRemovedCmsUploads(previousUploadUrls, currentUploadUrls);
   return getPublicWebsiteData({ includeHidden: true });
 }

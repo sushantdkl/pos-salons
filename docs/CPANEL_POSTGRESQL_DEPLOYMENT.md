@@ -1,6 +1,6 @@
 # cPanel PostgreSQL Deployment Guide
 
-This Salon POS uses PostgreSQL through the `DATABASE_URL` environment variable. It does not require provider-specific database connection variables.
+This The Hair Cut Pos uses PostgreSQL through the `DATABASE_URL` environment variable. It does not require provider-specific database connection variables.
 
 ## 1. Create PostgreSQL Database In cPanel
 
@@ -42,6 +42,8 @@ For an existing deployed database, run only migrations that have not been applie
 psql "$DATABASE_URL" -f docs/migrations/2026-06-23-add-salon-bill-payment-fields.sql
 psql "$DATABASE_URL" -f docs/migrations/2026-07-19-add-website-cms-tables.sql
 psql "$DATABASE_URL" -f docs/migrations/2026-07-21-final-pos-sync-enhancements.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-21-separate-cashier-beautician.sql
+psql "$DATABASE_URL" -f docs/migrations/2026-07-21-normalize-usernames-for-passenger.sql
 ```
 
 If `psql` is unavailable, run those SQL files once in phpPgAdmin.
@@ -51,10 +53,12 @@ Default testing PINs:
 | Staff | Role | PIN |
 | --- | --- | --- |
 | Admin | Admin | 1111 |
-| Kanchan | Cashier / Beautician | 2222 |
+| Kanchan | Beautician | 2222 |
 | Raashid | Barber | 3333 |
 | Salman | Barber | 4444 |
 | Saajid | Barber | 5555 |
+
+Create the dedicated real Cashier account from **Admin > Staff Management** after deployment. Use the actual cashier name and PIN chosen by the salon; do not reuse Kanchan as a cashier fallback.
 
 ## 3. cPanel Environment Variables
 
@@ -94,12 +98,11 @@ The folder must be writable by the Node.js app and publicly accessible from `NEX
 Use a Node.js version supported by Next.js 15. Recommended: Node 20+.
 
 ```bash
-npm install
+npm install --omit=dev
 npm run build
-npm run start
 ```
 
-The app starts through `server.js`, listens on `process.env.PORT || 3000`, and binds to `127.0.0.1` by default for cPanel's Node.js reverse proxy.
+The app starts through `server.js`, listens on `process.env.PORT || 3000`, and binds to `127.0.0.1` for cPanel's Node.js reverse proxy. Let Passenger start the app from cPanel; do not keep a manual `npm run start` process running beside Passenger.
 
 ## 6. Pre-Hosting QA
 
@@ -113,4 +116,5 @@ Verify before going live:
 - CMS uploads save into `UPLOAD_DIR` and load from `NEXT_PUBLIC_UPLOAD_BASE_URL`.
 - Admin routes and API routes require valid roles.
 - License remains disabled while `NEXT_PUBLIC_LICENSE_ENABLED=false`.
+- `/api/health` returns `{"status":"ok","app":"The Hair Cut Pos"}` after Passenger restart.
 - `npm run lint` and `npm run build` pass.

@@ -14,7 +14,7 @@ export async function GET() {
         activated: true,
         license: {
           license_key: 'LOCAL-DEVELOPMENT',
-          salon_name: 'Salon POS',
+          salon_name: 'The Hair Cut Pos',
           plan_type: 'development',
           expiry_date: null,
           grace_period_days: 0,
@@ -74,7 +74,7 @@ export async function GET() {
       activated: true,
       license: {
         license_key: license.license_key,
-        salon_name: license.salon_name || license.business_name || 'Salon POS',
+        salon_name: license.salon_name || license.business_name || 'The Hair Cut Pos',
         plan_type: license.plan_type,
         expiry_date: license.expiry_date,
         grace_period_days: license.grace_period_days || 5,

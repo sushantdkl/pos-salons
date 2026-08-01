@@ -200,12 +200,12 @@ export default function ServicesPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white">
-            <div className="border-b border-gray-200 p-6">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100vh-24px)] w-full max-w-2xl overflow-y-auto rounded-lg bg-white">
+            <div className="border-b border-gray-200 p-4 sm:p-6">
               <h2 className="text-2xl font-semibold text-gray-950">{editingService ? 'Edit Service' : 'Add Service'}</h2>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4 p-6">
+            <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
               {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
@@ -246,7 +246,7 @@ export default function ServicesPage() {
                 <input type="checkbox" checked={formData.is_active} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
                 Service is active
               </label>
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-lg border border-gray-300 px-4 py-3 font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" className="flex-1 rounded-lg bg-gray-950 px-4 py-3 font-medium text-white hover:bg-gray-800">
                   <Scissors className="mr-2 inline h-4 w-4" />

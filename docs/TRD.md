@@ -1,8 +1,8 @@
-# Salon POS Technical Requirements Document
+# The Hair Cut Pos Technical Requirements Document
 
 ## System Architecture
 
-Salon POS uses a modular Next.js architecture with route handlers for APIs, reusable UI components, and domain modules for business logic.
+The Hair Cut Pos uses a modular Next.js architecture with route handlers for APIs, reusable UI components, and domain modules for business logic.
 
 ```mermaid
 flowchart LR
@@ -85,12 +85,12 @@ sequenceDiagram
   Login-->>User: Redirect to role dashboard
 ```
 
-During testing, demo PINs are visible on the login screen. Production can keep the same hashing/session architecture while hiding demo credentials and strengthening account policies.
+The login screen lists active staff profiles but never displays PIN values. PIN verification remains server-side so production can strengthen account policies without changing the user flow.
 
 Launch demo PINs:
 
 - Admin: `1111`
-- Kanchan, Cashier / Beautician: `2222`
+- Kanchan, Beautician: `2222`
 - Raashid, Barber: `3333`
 - Salman, Barber: `4444`
 - Saajid, Barber: `5555`
@@ -103,7 +103,7 @@ Launch demo PINs:
 - Stylist: own performance dashboard and permitted service/customer views.
 - Beautician: own performance dashboard and permitted service/customer views.
 
-Kanchan is modeled with login role `cashier` and staff profile role `beautician`. This lets her access reception workflows while still receiving beauty-service performance, revenue, and commission attribution.
+Kanchan is modeled as Beautician-only. A dedicated Cashier account must be created through Admin > Staff Management with the real cashier name and salon-approved PIN.
 
 Protected routes are enforced by middleware/proxy checks and API-level `requireRole` checks.
 

@@ -28,7 +28,7 @@ export function getLicenseInfo() {
   if (!isLicenseEnabled()) {
     return {
       license_key: 'TESTING-DISABLED',
-      salon_name: 'Salon POS',
+      salon_name: 'The Hair Cut Pos',
       plan_type: 'Testing',
       expiry_date: '2099-12-31',
       grace_period_days: DEFAULT_GRACE_DAYS,
@@ -48,7 +48,7 @@ export async function verifyLicenseOnline() {
     return {
       valid: true,
       license_enabled: false,
-      salon_name: 'Salon POS',
+      salon_name: 'The Hair Cut Pos',
       plan_type: 'Testing',
       expiry_date: '2099-12-31',
       days_remaining: 9999,

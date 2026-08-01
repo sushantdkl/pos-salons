@@ -51,7 +51,7 @@ Open `http://localhost:3002/login`.
 | Username | PIN  | Role                  |
 | -------- | ---- | --------------------- |
 | admin    | 1111 | Admin                 |
-| kanchan  | 2222 | Cashier / Beautician  |
+| kanchan  | 2222 | Beautician            |
 | raashid  | 3333 | Barber                |
 | salman   | 4444 | Barber                |
 | saajid   | 5555 | Barber                |

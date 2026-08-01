@@ -15,7 +15,9 @@ export async function GET(request) {
       return NextResponse.json(await getAdminStaffAnalytics(db));
     }
 
-    if (user.role !== 'admin' && staffId !== user.id) {
+    // user.id arrives from Postgres as a string; compare numerically so a staff member
+    // can always open their own report.
+    if (user.role !== 'admin' && staffId !== Number(user.id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

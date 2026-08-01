@@ -6,6 +6,8 @@ import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Savings deposits are no longer expense categories — they live in savings_deposits
+// and are recorded from the Savings page. See docs/migrations/2026-07-31-savings-deposits.sql.
 const CASHIER_CATEGORIES = [
   'TEA_SNACKS',
   'WATER_JAR',
@@ -14,8 +16,9 @@ const CASHIER_CATEGORIES = [
   'MAINTENANCE',
   'PETTY_PURCHASE',
   'OTHER_EXPENSE',
-  'DAILY_SAVING',
 ];
+
+const SAVINGS_CATEGORIES = ['DAILY_SAVING'];
 
 const PAYMENT_METHODS = ['CASH', 'ONLINE', 'BANK'];
 
@@ -56,7 +59,7 @@ function mapExpense(row) {
 }
 
 async function getCashierExpenses(db, userId, searchParams) {
-  const clauses = ['deleted_at IS NULL', 'created_by = ?'];
+  const clauses = ["deleted_at IS NULL", "COALESCE(record_type, 'EXPENSE') = 'EXPENSE'", 'created_by = ?'];
   const params = [userId];
   const search = cleanText(searchParams.get('search'), '');
   if (search) {
@@ -82,17 +85,24 @@ async function getCashierSummary(db, userId) {
   const today = salonDateString();
   const row = await db.get(`
     SELECT
-      COALESCE(SUM(CASE WHEN record_type = 'EXPENSE' THEN amount ELSE 0 END), 0) as expenses,
-      COALESCE(SUM(CASE WHEN record_type = 'CASH_TRANSFER' THEN amount ELSE 0 END), 0) as savings,
+      COALESCE(SUM(amount), 0) as expenses,
       COUNT(*)::int as records
     FROM expenses
     WHERE deleted_at IS NULL
+      AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE'
       AND created_by = ?
       AND expense_date = ?::date
   `, [userId, today]);
+  // Savings are read from savings_deposits, never from the expenses table.
+  const savingsRow = await db.get(`
+    SELECT COALESCE(SUM(amount), 0) as savings
+    FROM savings_deposits
+    WHERE deleted_at IS NULL AND status = 'ACTIVE'
+      AND created_by = ? AND deposit_date = ?::date
+  `, [userId, today]);
   return {
     todayExpenses: Number(row?.expenses || 0),
-    todaySavings: Number(row?.savings || 0),
+    todaySavings: Number(savingsRow?.savings || 0),
     todayRecords: Number(row?.records || 0),
   };
 }
@@ -130,6 +140,9 @@ export async function POST(request) {
     const today = salonDateString();
 
     if (!title) throw new Error('Expense title is required');
+    if (SAVINGS_CATEGORIES.includes(category)) {
+      throw new Error('Savings deposits are recorded on the Savings page, not as a daily expense.');
+    }
     if (!CASHIER_CATEGORIES.includes(category)) throw new Error('Select a valid daily expense category');
     if (!PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Select a valid payment method');
     if (user.role !== 'admin' && expenseDate !== today) {
@@ -139,7 +152,7 @@ export async function POST(request) {
     }
 
     const amount = money(data.amount);
-    const recordType = category === 'DAILY_SAVING' ? 'CASH_TRANSFER' : 'EXPENSE';
+    const recordType = 'EXPENSE';
     const dbPayment = paymentToDb(paymentMethod);
     const cashAmount = dbPayment === 'cash' ? amount : 0;
     const onlineAmount = dbPayment === 'cash' ? 0 : amount;
@@ -168,8 +181,8 @@ export async function POST(request) {
       user.id,
     ]);
 
-    await logAction(db, user.id, 'create', recordType === 'CASH_TRANSFER' ? 'cash_transfer' : 'daily_expense', result.lastInsertRowid, title);
-    return NextResponse.json({ message: recordType === 'CASH_TRANSFER' ? 'Daily saving recorded' : 'Daily expense recorded', id: result.lastInsertRowid }, { status: 201 });
+    await logAction(db, user.id, 'create', 'daily_expense', result.lastInsertRowid, title);
+    return NextResponse.json({ message: 'Daily expense recorded', id: result.lastInsertRowid }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to save daily expense' }, { status: error.status || 400 });
   }

@@ -108,7 +108,7 @@ export async function proxy(request) {
         return NextResponse.json(
           {
             error: 'License expired',
-            message: 'Your Salon POS license has expired. Please contact your administrator to renew.',
+            message: 'Your The Hair Cut Pos license has expired. Please contact your administrator to renew.',
             expired: true,
           },
           { status: 403 }
