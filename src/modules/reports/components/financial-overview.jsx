@@ -251,9 +251,11 @@ function OutflowSummary({ financial, showSalary }) {
   const operating = num(financial.operatingExpenses);
   const salary = showSalary ? num(financial.salaryExpenses) : 0;
   const savings = num(financial.savingsTransfers);
-  const cashOut = num(financial.operatingExpensesCash) + (showSalary ? num(financial.salaryExpensesCash) : 0) + num(financial.savingsFromCash);
-  const onlineOut = num(financial.operatingExpensesOnline) + (showSalary ? num(financial.salaryExpensesOnline) : 0) + num(financial.savingsFromOnline);
-  const total = operating + salary + savings;
+  // Server-computed totals always include salary, whether or not this viewer may see the
+  // salary line, so a cashier and an admin read the same outflow figures.
+  const cashOut = num(financial.totalCashOut);
+  const onlineOut = num(financial.totalOnlineOut);
+  const total = num(financial.totalOutflows);
 
   return (
     <>
@@ -296,8 +298,8 @@ function AvailableBalance({ financial }) {
     <div className="mt-1.5 flex flex-col">
       <div className="flex items-center" style={{ padding: '12px 0', borderBottom: `1px solid ${DIVIDER}` }}>
         <span className="text-[12.5px]" style={{ color: TEXT }}>
-          Net Cash in Hand
-          <Tip text="Physical cash: gross cash collected, less cash expenses, cash salary payments and cash savings transfers. Online outflows never reduce it." />
+          Net Cash Collections
+          <Tip text="Cash MOVEMENT for this period: gross cash collected, less cash expenses, cash salary payments and cash savings transfers. It excludes the drawer's starting float — the physical drawer balance is Expected Cash in Drawer on Opening & Closing." />
         </span>
         <span className="ml-auto" style={{ fontFamily: MANROPE, fontSize: 14, fontWeight: 700, color: INK, ...TABULAR }}>
           {formatCurrency(financial.netCashInHand)}
@@ -315,7 +317,7 @@ function AvailableBalance({ financial }) {
       <div className="mt-3.5" style={{ padding: 16, borderRadius: 14, background: GREEN_CHIP, border: `1px solid ${GREEN_BORDER}` }}>
         <div style={{ ...EYEBROW, color: GREEN_DK }}>
           Net Available Balance
-          <Tip text="Net Cash in Hand plus Net Online Balance — everything the salon still holds for this period." />
+          <Tip text="Net Cash Collections plus Net Online Balance — everything this period added to the salon's accounts. It is a period movement, not a drawer balance." />
         </div>
         <div className="mt-1" style={{ fontFamily: MANROPE, fontSize: 24, fontWeight: 800, color: '#125C3C', letterSpacing: '-.02em', ...TABULAR }}>
           {formatCurrency(financial.netAvailableBalance)}
@@ -342,10 +344,8 @@ export default function FinancialOverview({
 
   const totals = useMemo(() => {
     if (!financial) return null;
-    const outflows =
-      num(financial.operatingExpenses)
-      + (showSalary ? num(financial.salaryExpenses) : 0)
-      + num(financial.savingsTransfers);
+    // Always the server total, which includes salary for every viewer.
+    const outflows = num(financial.totalOutflows);
     const grossCollected = num(financial.grossTotalCollected);
     return {
       netSales: num(financial.netSalesAfterDiscount),
@@ -354,7 +354,7 @@ export default function FinancialOverview({
       available: num(financial.netAvailableBalance),
       outflowRatio: grossCollected > 0 ? `${Math.round((outflows / grossCollected) * 100)}%` : '0%',
     };
-  }, [financial, showSalary]);
+  }, [financial]);
 
   const periodMeta = financial?.period || {};
   const periodLabel = periodMeta.label || '';
@@ -439,16 +439,16 @@ export default function FinancialOverview({
               label="Total Outflows"
               tip="Operating expenses plus salary payments plus savings transfers. Savings are transfers, not costs."
               amount={totals.outflows}
-              breakdown={`Expenses ${formatCurrency(num(financial.operatingExpenses) + (showSalary ? num(financial.salaryExpenses) : 0))} · Savings ${formatCurrency(financial.savingsTransfers)}`}
+              breakdown={`Expenses ${formatCurrency(num(financial.totalOutflows) - num(financial.savingsTransfers))} · Savings ${formatCurrency(financial.savingsTransfers)}`}
               footer={`${totals.outflowRatio} of gross collected`}
               icon={ReceiptText}
               tone="outflow"
             />
             <KpiCard
               label="Net Available"
-              tip="Net cash in hand plus net online balance — what the salon still holds."
+              tip="Net cash collections plus net online balance — what this period added to the salon's accounts."
               amount={totals.available}
-              breakdown={`Cash in Hand ${formatCurrency(financial.netCashInHand)} · Online ${formatCurrency(financial.netOnlineBalance)}`}
+              breakdown={`Cash ${formatCurrency(financial.netCashInHand)} · Online ${formatCurrency(financial.netOnlineBalance)}`}
               footer="After expenses and savings transfers"
               icon={Wallet}
               dark
@@ -539,7 +539,7 @@ export default function FinancialOverview({
           <MetricRow label="Operating Expenses" value={financial.operatingExpenses} />
           {showSalary ? <MetricRow label="Salary Expenses" value={financial.salaryExpenses} /> : null}
           <MetricRow label="Savings Transfers" value={financial.savingsTransfers} />
-          <MetricRow label="Net Cash in Hand" value={financial.netCashInHand} />
+          <MetricRow label="Net Cash Collections" value={financial.netCashInHand} />
           <MetricRow label="Net Online Balance" value={financial.netOnlineBalance} />
         </dl>
       ) : null}

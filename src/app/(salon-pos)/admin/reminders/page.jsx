@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, Search, Send } from 'lucide-react';
 import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
+import { buildReminderMessage, buildWhatsAppUrl, formatWhatsAppNumber, whatsAppBlockReason } from '@/lib/messaging/whatsapp';
 
 export default function RemindersPage() {
   const [customers, setCustomers] = useState([]);
@@ -35,17 +36,20 @@ export default function RemindersPage() {
     customer.phone?.includes(searchTerm)
   ), [customers, searchTerm]);
 
+  // wa.me needs the full international number. The URL is built by the shared helper so the
+  // country code can never be dropped again — a bare 10-digit link is rejected by WhatsApp.
   const sendReminder = (customer) => {
-    const phone = (customer.phone || '').replace(/[^\d]/g, '');
-    if (!phone) {
-      setError('Add a phone number before sending a reminder.');
+    const blocked = whatsAppBlockReason(customer.phone);
+    if (blocked) {
+      setError(`${customer.name}: ${blocked}. Update the customer record before sending a reminder.`);
       return;
     }
     setError('');
-    const servicePart = serviceName ? ` for ${serviceName}` : '';
-    const staffPart = staffName ? ` with ${staffName}` : '';
-    const message = `Namaste ${customer.name}, this is a friendly reminder from The Hair Cut${servicePart}${staffPart}. We look forward to seeing you.`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    const url = buildWhatsAppUrl(
+      customer.phone,
+      buildReminderMessage({ customerName: customer.name, serviceName, staffName })
+    );
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -78,12 +82,15 @@ export default function RemindersPage() {
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-950">{customer.name}</h2>
-                    <p className="mt-1 text-sm text-gray-600">{customer.phone || 'No phone saved'}</p>
+                    <p className="mt-1 text-sm text-gray-600">{formatWhatsAppNumber(customer.phone) || customer.phone || 'No phone saved'}</p>
+                    {whatsAppBlockReason(customer.phone) ? (
+                      <p className="mt-1 text-xs font-medium text-amber-700">{whatsAppBlockReason(customer.phone)}</p>
+                    ) : null}
                     {customer.favorite_services && <p className="mt-2 text-sm text-gray-500">Likes {customer.favorite_services}</p>}
                   </div>
                   <MessageCircle className="h-6 w-6 text-green-600" />
                 </div>
-                <button onClick={() => sendReminder(customer)} disabled={!customer.phone} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300">
+                <button onClick={() => sendReminder(customer)} disabled={Boolean(whatsAppBlockReason(customer.phone))} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300">
                   <Send className="h-4 w-4" />
                   Send WhatsApp Reminder
                 </button>

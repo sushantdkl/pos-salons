@@ -3,6 +3,12 @@ import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
+import { requireOpenSession } from '@/lib/business-day/service';
+import { salonDateString } from '@/lib/reports/dashboard-period';
+import { randomUUID } from 'node:crypto';
+import { normalizePaymentAllocations } from '@/lib/payments/allocations';
+import { PERMISSIONS, hasPermission, requirePermission } from '@/lib/auth/permissions';
+import { normalizeDocumentSettings } from '@/lib/documents/settings';
 
 function normalizeDiscount(type, value, subtotal) {
   const amount = Number(value || 0);
@@ -66,6 +72,17 @@ function normalizePayment(data, grandTotal) {
   };
 }
 
+/**
+ * A bill carries TWO independent attributions and they must never be conflated:
+ *
+ *   transaction_time / revenue_business_day_id -> when the SALE happened, i.e. whose revenue
+ *   business_day_id / store_session_id / payment_received_at -> where the CASH landed
+ *
+ * For an ordinary bill both point at the current business day. For a backdated Admin bill
+ * the service happened earlier, so its revenue belongs to that earlier business day (or to
+ * no business day at all, when the salon was not operating a Business Day back then) while
+ * its money is physically in today's drawer and must reconcile against today's session.
+ */
 function resolveTransactionAudit(data, user) {
   const now = new Date();
   const requested = cleanText(data.transaction_time || data.transactionTime, '');
@@ -74,6 +91,7 @@ function resolveTransactionAudit(data, user) {
       transactionTime: now.toISOString(),
       backdatedBy: null,
       backdatedReason: null,
+      isBackdated: false,
     };
   }
 
@@ -94,7 +112,36 @@ function resolveTransactionAudit(data, user) {
     transactionTime: selectedDate.toISOString(),
     backdatedBy: user.id,
     backdatedReason: reason,
+    // An explicit transaction time was supplied. Whether that makes the sale HISTORICAL is
+    // decided against the open business day, not the calendar — see below.
+    requestedTime: true,
   };
+}
+
+/**
+ * The business day that OWNS a sale.
+ *
+ * The comparison is against the OPEN BUSINESS DAY's date, never the calendar date: the two
+ * differ whenever a session runs past midnight or a business day is dated ahead of the
+ * calendar, and using the calendar there would push a historical sale onto the current
+ * operational day (or vice versa).
+ *
+ *   service date == current business date -> the current day owns it (a bill for today with
+ *                                            a chosen time is not a historical sale)
+ *   service date != current business date -> the business day for that date owns it, or NULL
+ *                                            when the salon ran no business day then. NULL
+ *                                            excludes it from every business-day revenue
+ *                                            figure and leaves it to the calendar reports on
+ *                                            its real date, which is where it belongs.
+ *
+ * The cash always stays with the session that physically received it.
+ */
+async function resolveRevenueBusinessDayId(tx, transactionAudit, currentBusinessDayId, currentBusinessDate) {
+  if (!transactionAudit.requestedTime) return currentBusinessDayId;
+  const saleDate = salonDateString(new Date(transactionAudit.transactionTime));
+  if (currentBusinessDate && saleDate === currentBusinessDate) return currentBusinessDayId;
+  const day = await tx.get('SELECT id FROM business_days WHERE business_date = ?::date LIMIT 1', [saleDate]);
+  return day?.id || null;
 }
 
 export async function GET(request) {
@@ -103,10 +150,11 @@ export async function GET(request) {
     await ensureSalonSchema();
     await requireRole(request, db, ['admin', 'cashier']);
     const bills = await db.all(`
-      SELECT b.*, COUNT(i.id)::int as item_count
+      SELECT b.*, u.full_name AS cashier_name, COUNT(i.id)::int as item_count
       FROM salon_bills b
       LEFT JOIN salon_bill_items i ON i.bill_id = b.id
-      GROUP BY b.id
+      LEFT JOIN users u ON u.id = b.cashier_id
+      GROUP BY b.id, u.full_name
       ORDER BY b.created_at DESC
       LIMIT 100
     `);
@@ -120,8 +168,21 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requirePermission(request, db, PERMISSIONS.BILLING_CREATE);
     const data = await request.json();
+    const idempotencyKey = cleanText(request.headers.get('idempotency-key') || data.idempotency_key, '') || randomUUID();
+    const existing = await db.get('SELECT * FROM salon_bills WHERE idempotency_key = ?', [idempotencyKey]);
+    if (existing) {
+      const items = await db.all('SELECT * FROM salon_bill_items WHERE bill_id = ? ORDER BY id', [existing.id]);
+      return NextResponse.json({ message: 'Bill already completed', bill: existing, items, duplicate: true }, { status: 200 });
+    }
+    // A bill is drawer money, so it may only be recorded while the store is open.
+    const { sessionId, businessDayId, session } = await requireOpenSession(db);
+    // The operational date of the open business day, normalised to 'YYYY-MM-DD'. node-postgres
+    // returns a DATE as a JS Date at LOCAL midnight, so its local Y/M/D is the intended date.
+    const currentBusinessDate = session?.business_date instanceof Date
+      ? `${session.business_date.getFullYear()}-${String(session.business_date.getMonth() + 1).padStart(2, '0')}-${String(session.business_date.getDate()).padStart(2, '0')}`
+      : String(session?.business_date || '').slice(0, 10) || null;
     const services = Array.isArray(data.services) ? data.services : [];
     const products = Array.isArray(data.products) ? data.products : [];
     const shouldPrint = Boolean(data.should_print);
@@ -215,7 +276,7 @@ export async function POST(request) {
 
       const productRows = [];
       for (const item of products) {
-        const product = await tx.get('SELECT * FROM salon_products WHERE id = ? AND status = ?', [item.id, 'active']);
+        const product = await tx.get('SELECT * FROM salon_products WHERE id = ? AND status = ? FOR UPDATE', [item.id, 'active']);
         if (!product) throw new Error(`Product unavailable: ${item.name || item.id}`);
         const quantity = Number(item.quantity || 1);
         if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Invalid quantity for ${product.name}`);
@@ -230,6 +291,7 @@ export async function POST(request) {
           staff_id: null,
           commission_percentage: 0,
           commission_amount: 0,
+          unit_cost_snapshot: Number(product.purchase_price || 0),
           previous_stock: product.current_stock,
           new_stock: product.current_stock - quantity,
         });
@@ -246,9 +308,27 @@ export async function POST(request) {
       const serviceCharge = Number(data.service_charge || 0);
       if (serviceCharge < 0) throw new Error('Service charge cannot be negative');
       const grandTotal = taxable + tax + serviceCharge;
-      const payment = normalizePayment(data, grandTotal);
+      const payment = normalizePaymentAllocations(data, grandTotal, { customerId });
+      if (payment.creditAmount > 0) {
+        if (!(await hasPermission(tx, user, PERMISSIONS.BILLING_CREDIT_CREATE))) {
+          const error = new Error('Credit billing is not permitted'); error.status = 403; throw error;
+        }
+        const customer = await tx.get('SELECT id, credit_limit FROM customers WHERE id = ? FOR UPDATE', [customerId]);
+        if (!customer) throw new Error('Credit requires an identified customer');
+        const balance = await tx.get('SELECT COALESCE(SUM(debit-credit),0) AS balance FROM customer_credit_ledger WHERE customer_id = ?', [customerId]);
+        const projected = Number(balance?.balance || 0) + payment.creditAmount;
+        if (projected > Number(customer.credit_limit || 0)) {
+          const canOverride = await hasPermission(tx, user, PERMISSIONS.BILLING_CREDIT_OVERRIDE);
+          if (!canOverride || !data.credit_override_reason) throw new Error('Customer credit limit would be exceeded');
+        }
+      }
 
-      const billNumber = `SALON-${Date.now()}`;
+      const sequence = await tx.get(`INSERT INTO document_sequences(document_type, next_value) VALUES ('salon_bill', 2) ON CONFLICT(document_type) DO UPDATE SET next_value=document_sequences.next_value + 1, updated_at=NOW() RETURNING next_value - 1 AS value`);
+      const billNumber = `SALON-${String(sequence.value).padStart(7, '0')}`;
+      const settingRows = await tx.all('SELECT setting_key, setting_value FROM system_settings');
+      const documentSnapshot = normalizeDocumentSettings(Object.fromEntries(settingRows.map((row) => [row.setting_key, row.setting_value])));
+      // Revenue day vs cash day. These differ only for a genuinely backdated Admin bill.
+      const revenueBusinessDayId = await resolveRevenueBusinessDayId(tx, transactionAudit, businessDayId, currentBusinessDate);
       const billResult = await tx.run(`
         INSERT INTO salon_bills (
           bill_number, customer_id, customer_name, customer_phone, subtotal,
@@ -256,8 +336,9 @@ export async function POST(request) {
           grand_total, payment_method, amount_paid, cash_amount, qr_amount,
           qr_type, total_paid, payment_status, cashier_id, token_id,
           transaction_time, is_printed, printed_at, printed_by,
-          backdated_by, backdated_reason, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?, ?, ?)
+          backdated_by, backdated_reason, notes, business_day_id, store_session_id,
+          revenue_business_day_id, payment_received_at, idempotency_key, credit_amount, document_snapshot
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?::jsonb)
       `, [
         billNumber,
         customerId,
@@ -273,10 +354,11 @@ export async function POST(request) {
         payment.paymentMethod,
         payment.amountTendered,
         payment.cashAmount,
-        payment.qrAmount,
-        payment.qrType,
-        payment.totalPaid,
-        payment.paymentStatus,
+        payment.onlineAmount,
+        ['ESEWA_PHONEPAY', 'BANK'].includes(payment.allocations.find((row) => row.method === 'online')?.provider)
+          ? payment.allocations.find((row) => row.method === 'online')?.provider : null,
+        payment.collectedAmount,
+        payment.creditAmount === grandTotal ? 'credit' : payment.creditAmount > 0 ? 'partial' : 'paid',
         user.id,
         tokenId,
         transactionAudit.transactionTime,
@@ -286,6 +368,14 @@ export async function POST(request) {
         transactionAudit.backdatedBy,
         transactionAudit.backdatedReason,
         cleanText(data.notes, null),
+        businessDayId,
+        sessionId,
+        revenueBusinessDayId,
+        // The money is taken now, whatever date the service carries.
+        new Date().toISOString(),
+        idempotencyKey,
+        payment.creditAmount,
+        JSON.stringify(documentSnapshot),
       ]);
 
       const billId = billResult.lastInsertRowid;
@@ -293,11 +383,11 @@ export async function POST(request) {
         await tx.run(`
           INSERT INTO salon_bill_items (
             bill_id, item_type, item_id, name, quantity, unit_price,
-            subtotal, staff_id, staff_name_snapshot, commission_percentage, commission_amount
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            subtotal, staff_id, staff_name_snapshot, commission_percentage, commission_amount, unit_cost_snapshot
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           billId, item.item_type, item.item_id, item.name, item.quantity, item.unit_price,
-          item.subtotal, item.staff_id, item.staff_name_snapshot || null, item.commission_percentage, item.commission_amount,
+          item.subtotal, item.staff_id, item.staff_name_snapshot || null, item.commission_percentage, item.commission_amount, item.unit_cost_snapshot ?? null,
         ]);
         if (item.item_type === 'product') {
           await tx.run('UPDATE salon_products SET current_stock = ?, updated_at = NOW() WHERE id = ?', [item.new_stock, item.item_id]);
@@ -305,6 +395,14 @@ export async function POST(request) {
             INSERT INTO inventory_movements (product_id, movement_type, quantity, previous_stock, new_stock, notes)
             VALUES (?, 'sale', ?, ?, ?, ?)
           `, [item.item_id, item.quantity, item.previous_stock, item.new_stock, billNumber]);
+        }
+      }
+
+      for (let index = 0; index < payment.allocations.length; index += 1) {
+        const allocation = payment.allocations[index];
+        const allocationResult = await tx.run(`INSERT INTO salon_payment_allocations (bill_id, method, amount, provider, reference_number, cash_tendered, change_amount, customer_id, business_day_id, store_session_id, created_by, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [billId, allocation.method, allocation.amount, allocation.provider, allocation.referenceNumber, allocation.cashTendered, allocation.change, allocation.method === 'credit' ? customerId : null, businessDayId, sessionId, user.id, `${idempotencyKey}:${index}`]);
+        if (allocation.method === 'credit') {
+          await tx.run(`INSERT INTO customer_credit_ledger(customer_id, bill_id, allocation_id, entry_type, debit, credit, note, business_day_id, created_by, idempotency_key) VALUES (?, ?, ?, 'credit_sale', ?, 0, ?, ?, ?, ?)`, [customerId, billId, allocationResult.lastInsertRowid, allocation.amount, cleanText(data.credit_note, 'Invoice credit'), businessDayId, user.id, `${idempotencyKey}:credit:${index}`]);
         }
       }
 
@@ -374,10 +472,13 @@ export async function POST(request) {
           payment_method: payment.paymentMethod,
           amount_paid: payment.amountTendered,
           cash_amount: payment.cashAmount,
-          qr_amount: payment.qrAmount,
-          qr_type: payment.qrType,
-          total_paid: payment.totalPaid,
-          payment_status: payment.paymentStatus,
+          qr_amount: payment.onlineAmount,
+          credit_amount: payment.creditAmount,
+          qr_type: payment.allocations.find((row) => row.method === 'online')?.provider || null,
+          total_paid: payment.collectedAmount,
+          payment_status: payment.creditAmount === grandTotal ? 'credit' : payment.creditAmount > 0 ? 'partial' : 'paid',
+          cashier_name: user.full_name || user.username || null,
+          document_snapshot: documentSnapshot,
           token_id: tokenId,
           token_number: linkedToken?.token_number || null,
           is_printed: shouldPrint,
@@ -407,6 +508,9 @@ export async function POST(request) {
       'Future transaction dates are not allowed',
       'Only Admin can set a historical transaction date.',
     ];
+    if (error.code === 'STORE_CLOSED') {
+      return NextResponse.json({ error: error.message, message: error.message, code: error.code, success: false }, { status: 409 });
+    }
     const isKnownBusinessError = knownMessages.includes(error.message) || /Assign staff|unavailable|Not enough stock|cannot|Invalid|exceed|less than/i.test(error.message || '');
     const message = isKnownBusinessError
       ? error.message

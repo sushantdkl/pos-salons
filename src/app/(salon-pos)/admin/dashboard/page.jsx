@@ -3,20 +3,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowRight,
   Banknote,
   CalendarDays,
+  CheckCircle2,
   DollarSign,
+  Hourglass,
   Package,
   Plus,
   RefreshCw,
+  ReceiptText,
   ShoppingCart,
+  Smartphone,
   Ticket,
   Users,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { getNepaliDateString } from '@/lib/time-utils';
 import FinancialOverview from '@/modules/reports/components/financial-overview';
+import StoreStatusBar from '@/components/store/store-status-bar';
 
 const PERIOD_OPTIONS = [
   { value: 'today', label: 'Today' },
@@ -27,6 +33,14 @@ const PERIOD_OPTIONS = [
 
 const CARD = 'rounded-2xl border border-[#ece7e1] bg-white shadow-[0_1px_2px_rgba(40,30,20,0.04)]';
 const BUTTON = 'inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] px-3.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b7a4fa] disabled:cursor-not-allowed disabled:opacity-60';
+const metricStyles = {
+  purple: 'bg-[#f3eafd] text-[#7c3aed]',
+  teal: 'bg-[#e8f7f2] text-[#0f9f7a]',
+  blue: 'bg-[#eaf5ff] text-[#1f8ad6]',
+  green: 'bg-[#eaf8ef] text-[#15803d]',
+  amber: 'bg-[#fff3df] text-[#c56a09]',
+  rose: 'bg-[#fff0f4] text-[#e11d48]',
+};
 
 function num(value) {
   const parsed = Number(value || 0);
@@ -232,34 +246,30 @@ function TokenQueue({ tokenStats, onManage }) {
     {
       title: 'Queue',
       rows: [
-        ['Waiting Now', tokenStats.waiting || 0],
-        ['Cancelled / No-show', num(tokenStats.cancelled) + num(tokenStats.noShow)],
+        { label: 'Waiting Now', value: tokenStats.waiting || 0, icon: Hourglass, tone: 'purple' },
       ],
     },
     {
       title: 'Generation',
       rows: [
-        ['Tokens Generated', tokenStats.generated || 0],
-        ['Digital Tokens', tokenStats.digitalTokens || 0],
-        ['Printed Tokens', tokenStats.printedTokens || 0],
+        { label: 'Tokens Generated', value: tokenStats.generated || 0, icon: Ticket, tone: 'amber' },
+        { label: 'Digital Tokens', value: tokenStats.digitalTokens || 0, icon: Smartphone, tone: 'blue' },
+        { label: 'Printed Tokens', value: tokenStats.printedTokens || 0, icon: ReceiptText, tone: 'purple' },
       ],
     },
     {
-      title: 'Conversion',
+      title: 'Conversions',
       rows: [
-        ['Converted to Bills', tokenStats.billed || 0],
-        [
-          'Conversion Rate',
-          num(tokenStats.generated) > 0 ? `${Math.round((num(tokenStats.billed) / num(tokenStats.generated)) * 100)}%` : '0%',
-        ],
+        { label: 'Tokens Converted to Bills', value: tokenStats.billed || 0, icon: CheckCircle2, tone: 'green' },
+        { label: 'Cancelled / No-show', value: num(tokenStats.cancelled) + num(tokenStats.noShow), icon: AlertTriangle, tone: 'rose' },
       ],
     },
     {
       title: 'Billing',
       rows: [
-        ['Digital Bills', tokenStats.digitalBills || 0],
-        ['Printed Bills', tokenStats.printedBills || 0],
-        ['Direct Bills', tokenStats.directBills || tokenStats.billsWithoutToken || 0],
+        { label: 'Digital Bills', value: tokenStats.digitalBills || 0, icon: Smartphone, tone: 'blue' },
+        { label: 'Printed Bills', value: tokenStats.printedBills || 0, icon: ReceiptText, tone: 'purple' },
+        { label: 'Direct Bills', value: tokenStats.directBills || tokenStats.billsWithoutToken || 0, icon: ReceiptText, tone: 'teal' },
       ],
     },
   ];
@@ -279,16 +289,26 @@ function TokenQueue({ tokenStats, onManage }) {
         </button>
       }
     >
-      <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4 sm:p-5">
+      <div className="grid gap-4 p-4 md:grid-cols-2 2xl:grid-cols-4 sm:p-5">
         {groups.map((group) => (
           <div key={group.title} className="space-y-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#9a938b]">{group.title}</p>
-            {group.rows.map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-3 rounded-xl border border-[#f0ece6] bg-[#fbfaf8] px-3 py-2.5">
-                <span className="text-[12.5px] font-medium text-[#5c554d]">{label}</span>
-                <span className="text-sm font-extrabold tabular-nums text-[#17140f]">{value}</span>
+            {group.rows.map((row) => {
+              const Icon = row.icon;
+              return (
+              <div key={row.label} className="min-h-[58px] rounded-xl border border-[#f0ece6] bg-[#fbfaf8] px-3 py-2.5">
+                <div className="flex h-full items-center gap-2.5">
+                  <span className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg ${metricStyles[row.tone] || metricStyles.purple}`}>
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11.5px] font-medium leading-snug text-[#706578]">{row.label}</p>
+                    <p className="mt-0.5 text-lg font-extrabold leading-none tabular-nums text-[#21182f]">{row.value}</p>
+                  </div>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>
@@ -549,7 +569,7 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const queryPeriod = searchParams.get('period');
   const normalizedQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-  const validPeriods = PERIOD_TABS.map((option) => option.value);
+  const validPeriods = useMemo(() => PERIOD_TABS.map((option) => option.value), []);
   const todayIso = getTodayIso();
   const [period, setPeriod] = useState(validPeriods.includes(normalizedQueryPeriod) ? normalizedQueryPeriod : 'today');
   const [customRange, setCustomRange] = useState({
@@ -599,8 +619,12 @@ export default function AdminDashboard() {
   }, [fetchStats]);
 
   useEffect(() => {
+    // Adopt a concrete period only when it arrives from an external URL change (e.g. a
+    // shared link or back/forward). Never yank the user off a Custom Range they are still
+    // filling in — that reversal was the source of the picker "flicker".
+    if (period === 'custom') return;
     const nextQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-    if (validPeriods.includes(nextQueryPeriod) && nextQueryPeriod !== period) {
+    if (nextQueryPeriod && nextQueryPeriod !== 'custom' && validPeriods.includes(nextQueryPeriod) && nextQueryPeriod !== period) {
       setPeriod(nextQueryPeriod);
     }
   }, [queryPeriod, period, validPeriods]);
@@ -641,6 +665,8 @@ export default function AdminDashboard() {
           onRefresh={() => fetchStats({ quiet: true })}
           onNavigate={router.push}
         />
+
+        <StoreStatusBar onChanged={() => fetchStats({ quiet: true })} role="admin" showManageLink />
 
         <PeriodBar
           period={period}

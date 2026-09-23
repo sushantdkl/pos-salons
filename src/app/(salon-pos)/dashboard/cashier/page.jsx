@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import FinancialOverview from '@/modules/reports/components/financial-overview';
+import StoreStatusBar from '@/components/store/store-status-bar';
 
 const CARD = 'rounded-2xl border border-[#ece7e1] bg-white shadow-[0_1px_2px_rgba(40,30,20,0.04)]';
 const PANEL_HEADER = 'border-b border-[#f0ece6] px-4 py-4 sm:px-5';
@@ -253,13 +254,13 @@ function EmptyState({ icon: Icon = CheckCircle2, title, description }) {
 
 function MiniStat({ label, value, icon: Icon, tone = 'purple' }) {
   return (
-    <div className="rounded-xl border border-[#f0ece6] bg-[#fbfaf8] px-3 py-2.5">
-      <div className="flex items-center gap-2.5">
+    <div className="min-h-[58px] rounded-xl border border-[#f0ece6] bg-[#fbfaf8] px-3 py-2.5">
+      <div className="flex h-full items-center gap-2.5">
         <span className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg ${metricStyles[tone] || metricStyles.purple}`}>
           {Icon ? <Icon className="h-5 w-5" /> : null}
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-[11.5px] font-medium text-[#706578]">{label}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11.5px] font-medium leading-snug text-[#706578]">{label}</p>
           <p className="mt-0.5 text-lg font-extrabold leading-none text-[#21182f]">{formatCount(value)}</p>
         </div>
       </div>
@@ -276,7 +277,7 @@ function TokenSummary({ rows }) {
   ];
 
   return (
-    <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4 sm:p-5">
+    <div className="grid gap-4 p-4 md:grid-cols-2 2xl:grid-cols-4 sm:p-5">
       {groups.map((group) => (
         <div key={group.title} className="space-y-2">
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#9a938b]">{group.title}</p>
@@ -679,7 +680,7 @@ export default function CashierDashboard() {
   const searchParams = useSearchParams();
   const queryPeriod = searchParams.get('period');
   const normalizedQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-  const validPeriods = PERIOD_TABS.map((option) => option.value);
+  const validPeriods = useMemo(() => PERIOD_TABS.map((option) => option.value), []);
   const todayIso = getTodayIso();
   const [period, setPeriod] = useState(validPeriods.includes(normalizedQueryPeriod) ? normalizedQueryPeriod : 'today');
   const [customRange, setCustomRange] = useState({
@@ -728,8 +729,11 @@ export default function CashierDashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
+    // Adopt a concrete period only from an external URL change. Never yank the user off a
+    // Custom Range selection they are still filling in — that reversal caused the flicker.
+    if (period === 'custom') return;
     const nextQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-    if (validPeriods.includes(nextQueryPeriod) && nextQueryPeriod !== period) {
+    if (nextQueryPeriod && nextQueryPeriod !== 'custom' && validPeriods.includes(nextQueryPeriod) && nextQueryPeriod !== period) {
       setPeriod(nextQueryPeriod);
     }
   }, [queryPeriod, period, validPeriods]);
@@ -802,6 +806,8 @@ export default function CashierDashboard() {
           onNavigate={router.push}
         />
 
+        <StoreStatusBar onChanged={() => loadDashboard({ quiet: true })} role="cashier" />
+
         <PeriodSelector
           value={period}
           onChange={changePeriod}
@@ -824,7 +830,7 @@ export default function CashierDashboard() {
         <section aria-label="Cashier period at a glance" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#ece7e1] bg-[#ece7e1] lg:grid-cols-4">
           {[
             [`${periodLabel} Net Sales`, formatCurrency(summary.netSalesAfterDiscount), 'text-[#17140f]'],
-            [`${periodLabel} Cash in Hand`, formatCurrency(summary.netCashInHand), 'text-[#1f7a52]'],
+            [`${periodLabel} Net Cash Collections`, formatCurrency(summary.netCashInHand), 'text-[#1f7a52]'],
             [`${periodLabel} Bills`, formatCount(summary.totalBills), 'text-[#17140f]'],
             [`${periodLabel} Customers`, formatCount(summary.customersServed), 'text-[#17140f]'],
           ].map(([label, value, tone]) => (

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
+import { mapApiError } from '@/lib/db/api-errors';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { salonDateString } from '@/lib/reports/dashboard-period';
+import { requireOpenSession } from '@/lib/business-day/service';
 import {
   DEPOSIT_SOURCE_ACCOUNTS,
   DEPOSIT_SOURCE_LABELS,
@@ -223,9 +225,11 @@ export async function GET(request) {
       sourceAccounts: DEPOSIT_SOURCE_ACCOUNTS.map((value) => ({ value, label: DEPOSIT_SOURCE_LABELS[value] })),
     });
   } catch (error) {
+    console.error('Savings deposits load failed:', error);
+    const mapped = mapApiError(error, 'Failed to load savings deposits');
     return NextResponse.json(
-      { error: error.message || 'Failed to load savings deposits' },
-      { status: error.status || 500 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status }
     );
   }
 }
@@ -237,6 +241,7 @@ export async function POST(request) {
     const user = await requireRole(request, db, ['admin', 'cashier']);
     const data = await request.json();
     const input = validateDepositInput(data);
+    const { sessionId, businessDayId } = await requireOpenSession(db);
 
     if (user.role !== 'admin' && input.depositDate !== salonDateString()) {
       const error = new Error('Cashier can only record same-day savings deposits');
@@ -251,11 +256,12 @@ export async function POST(request) {
       const result = await tx.run(`
         INSERT INTO savings_deposits (
           deposit_type, amount, source_account, institution_name, reference_number,
-          notes, deposit_date, status, created_by, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?::date, 'ACTIVE', ?, ?)
+          notes, deposit_date, status, created_by, updated_by, business_day_id, store_session_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?::date, 'ACTIVE', ?, ?, ?, ?)
       `, [
         input.depositType, input.amount, input.sourceAccount, input.institutionName || null,
         input.referenceNumber || null, input.notes || null, input.depositDate, user.id, user.id,
+        businessDayId, sessionId,
       ]);
       const depositId = result.lastInsertRowid;
       await logAction(tx, user.id, 'create', 'savings_deposit', depositId, `${input.depositType} ${input.amount}`);
@@ -264,9 +270,11 @@ export async function POST(request) {
 
     return NextResponse.json({ message: 'Savings deposit recorded', id }, { status: 201 });
   } catch (error) {
+    console.error('Savings deposit create failed:', error);
+    const mapped = mapApiError(error, 'Failed to record savings deposit');
     return NextResponse.json(
-      { error: error.message || 'Failed to record savings deposit' },
-      { status: error.status || 400 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
     );
   }
 }
@@ -309,9 +317,11 @@ export async function PUT(request) {
 
     return NextResponse.json({ message: 'Savings deposit updated', id });
   } catch (error) {
+    console.error('Savings deposit update failed:', error);
+    const mapped = mapApiError(error, 'Failed to update savings deposit');
     return NextResponse.json(
-      { error: error.message || 'Failed to update savings deposit' },
-      { status: error.status || 400 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
     );
   }
 }
@@ -341,9 +351,11 @@ export async function DELETE(request) {
     await logAction(db, user.id, 'cancel', 'savings_deposit', id, reason || 'Cancelled');
     return NextResponse.json({ message: 'Savings deposit cancelled' });
   } catch (error) {
+    console.error('Savings deposit cancel failed:', error);
+    const mapped = mapApiError(error, 'Failed to cancel savings deposit');
     return NextResponse.json(
-      { error: error.message || 'Failed to cancel savings deposit' },
-      { status: error.status || 400 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
     );
   }
 }

@@ -49,6 +49,14 @@ export function canAccessPath(role, pathname) {
     return ['admin', 'cashier'].includes(normalized);
   }
 
+  // The cashier report area. Admin keeps its own copy under /admin, so this is the
+  // cashier's route; the API enforces the same pair server-side.
+  if (pathname.startsWith('/cashier')) return ['admin', 'cashier'].includes(normalized);
+
+  // Opening & Closing is shared by the two roles that run the till; the store APIs
+  // enforce the same pair server-side.
+  if (pathname.startsWith('/store')) return ['admin', 'cashier'].includes(normalized);
+
   if (pathname.startsWith('/admin')) return normalized === 'admin';
 
   return true;

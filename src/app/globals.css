@@ -89,6 +89,8 @@
 @theme inline {
   --font-sans: 'Outfit', 'Geist', 'Geist Fallback', sans-serif;
   --font-serif: 'Cormorant Garamond', 'Playfair Display', serif;
+  --font-dashboard-heading: 'Manrope', system-ui, sans-serif;
+  --font-dashboard-body: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -167,4 +169,59 @@
 
 .pos-button-secondary {
   @apply bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors;
+}
+
+/* ---------------------------------------------------------------- printing */
+/* Report pages (Executive Summary, Business Days, Opening & Closing) print as
+   clean documents: chrome is hidden, panels keep their borders and financial
+   sections are kept off page breaks where the browser can honour it. */
+
+/* Print-only blocks never render on screen. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* The sidebar is fixed and reserves a left margin on desktop; both go away. */
+  .print-reset-offset {
+    margin-left: 0 !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* The Executive Summary sheet prints as the document itself: no page chrome, no outer
+     frame, and the two-column card grid preserved at print width. */
+  .exec-sheet {
+    max-width: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .exec-sheet .grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  @page {
+    margin: 12mm;
+  }
 }

@@ -81,7 +81,7 @@ export default function FinancialSummary({ financial, showSalary = true, classNa
         <Group
           title="Available"
           rows={[
-            ['Net Cash in Hand', financial.netCashInHand],
+            ['Net Cash Collections', financial.netCashInHand],
             ['Net Online Balance', financial.netOnlineBalance],
             ['Net Available Balance', financial.netAvailableBalance, true],
           ]}

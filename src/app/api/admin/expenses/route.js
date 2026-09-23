@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
+import { mapApiError } from '@/lib/db/api-errors';
 import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, currentWeekStartSql } from '@/lib/db/postgres-dates';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
+import { assertDrawerCashAvailable, requireOpenSession } from '@/lib/business-day/service';
+import {
+  applyAdvances,
+  cancelAdvance,
+  createAdvance,
+  getApplicationsForSalary,
+  getAdvanceTotals,
+  getOutstandingAdvance,
+  getOutstandingAdvanceByStaff,
+  getStaffAdvances,
+  planSettlement,
+  releaseApplications,
+} from '@/lib/payroll/salary-advances';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,6 +110,9 @@ function mapSalary(row) {
     bonus: Number(row.bonus || 0),
     deduction: Number(row.deduction || 0),
     totalPayable: Number(row.total_payable || 0),
+    advanceApplied: Number(row.advance_applied || 0),
+    // What was genuinely still owed in cash after the advance was absorbed.
+    remainingPayable: Math.max(0, Number(row.total_payable || 0) - Number(row.advance_applied || 0)),
     amountPaid: Number(row.amount_paid || 0),
     remainingBalance: Number(row.remaining_balance || 0),
     paymentMethod: row.payment_method,
@@ -273,7 +291,7 @@ function validateCategory(category) {
   return value;
 }
 
-async function saveExpense(db, data, userId) {
+async function saveExpense(db, data, userId, scope = {}) {
   const category = validateCategory(data.category);
   const amount = money(data.amount);
   const payment = normalizePayment(data.paymentMethod || data.payment_method, amount, data.cashAmount || data.cash_amount, data.onlineAmount || data.online_amount);
@@ -298,17 +316,26 @@ async function saveExpense(db, data, userId) {
     `, [...values, recordType, userId, Number(data.id)]);
     return Number(data.id);
   }
+  // Every cash payout in this module — expense, salary, commission and advance — is written
+  // through here, so one guard covers them all: cash cannot leave a drawer that does not hold
+  // it. Inside a transaction this sees the rows already inserted by the same settlement, so
+  // sequential payouts compound correctly. Updates are skipped (the row is already counted).
+  await assertDrawerCashAvailable(db, payment.cash, {
+    allowOverdraw: data.allowOverdraw === true,
+    label: category === 'Staff Salary' || category === 'Staff Commission' ? 'salary payment' : 'expense',
+  });
+
   const result = await db.run(`
     INSERT INTO expenses (
       title, category, amount, payment_method, cash_amount, online_amount,
       paid_by, paid_to, expense_date, notes, reference_number, attachment_url,
-      record_type, created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?, ?)
-  `, [...values, recordType, userId, userId]);
+      record_type, created_by, updated_by, business_day_id, store_session_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [...values, recordType, userId, userId, scope.businessDayId ?? null, scope.storeSessionId ?? null]);
   return result.lastInsertRowid;
 }
 
-async function saveSalary(db, data, userId) {
+async function saveSalary(db, data, userId, scope = {}) {
   const staffId = Number(data.staffId || data.staff_id || 0);
   if (!staffId) throw new Error('Select staff member');
   const staff = await db.get(`
@@ -326,44 +353,70 @@ async function saveSalary(db, data, userId) {
   const bonus = money(data.bonus);
   const deduction = money(data.deduction);
   const totalPayable = Math.max(0, baseSalary + commissionEarned + bonus - deduction);
+
   const amountPaid = money(data.amountPaid ?? data.amount_paid);
-  if (amountPaid > totalPayable) throw new Error('Amount paid cannot exceed total payable');
-  const remainingBalance = Math.max(0, totalPayable - amountPaid);
-  const paymentStatus = amountPaid <= 0 ? 'unpaid' : remainingBalance <= 0 ? 'paid' : 'partially_paid';
-  if (!PAYMENT_STATUSES.includes(paymentStatus)) throw new Error('Invalid payment status');
-  const payment = normalizePayment(data.paymentMethod || data.payment_method, amountPaid, data.cashAmount || data.cash_amount, data.onlineAmount || data.online_amount);
   const paymentDate = cleanText(data.paymentDate || data.payment_date, today());
   const notes = cleanText(data.notes, '');
 
   return db.transaction(async (tx) => {
     let salaryId = Number(data.id || 0) || null;
+
+    // Outstanding advances settle against this payroll BEFORE any cash changes hands.
+    // Re-saving an existing settlement first RELEASES the advances it previously consumed,
+    // so the same advance can never be absorbed twice. Both steps run inside this
+    // transaction, so a validation failure below rolls the release back.
+    if (salaryId) await releaseApplications(tx, salaryId);
+    const outstandingAdvance = await getOutstandingAdvance(tx, staffId);
+    const plan = planSettlement(totalPayable, outstandingAdvance);
+
+    // The advance was already paid and expensed, so only the REMAINING payable can be handed
+    // over now. This is also what stops an advance larger than the salary from becoming a
+    // negative payment: remainingPayable floors at zero and the excess advance simply stays
+    // outstanding for the next period.
+    if (amountPaid > plan.remainingPayable) {
+      // Carries a status so the reason reaches the admin instead of the generic fallback.
+      const error = new Error(
+        `Amount paid cannot exceed the remaining salary payable of Rs ${plan.remainingPayable.toFixed(2)} `
+        + `(gross Rs ${plan.grossPayable.toFixed(2)} less advance applied Rs ${plan.advanceApplied.toFixed(2)}).`
+      );
+      error.status = 400;
+      throw error;
+    }
+    const remainingBalance = Math.max(0, plan.remainingPayable - amountPaid);
+    // Fully absorbed by an advance counts as settled, even though no cash moved today.
+    const paymentStatus = remainingBalance <= 0 && (amountPaid > 0 || plan.advanceApplied > 0)
+      ? 'paid'
+      : amountPaid <= 0 ? 'unpaid' : 'partially_paid';
+    if (!PAYMENT_STATUSES.includes(paymentStatus)) throw new Error('Invalid payment status');
+    const payment = normalizePayment(data.paymentMethod || data.payment_method, amountPaid, data.cashAmount || data.cash_amount, data.onlineAmount || data.online_amount);
+
     if (salaryId) {
       await tx.run(`
         UPDATE salary_payments
         SET staff_id = ?, salary_month = ?, base_salary = ?, commission_earned = ?,
             services_completed = ?, revenue_generated = ?, bonus = ?, deduction = ?,
-            total_payable = ?, amount_paid = ?, remaining_balance = ?, payment_method = ?,
-            cash_amount = ?, online_amount = ?, payment_status = ?, payment_date = ?::date,
-            notes = ?, updated_by = ?, updated_at = NOW()
+            total_payable = ?, advance_applied = ?, amount_paid = ?, remaining_balance = ?,
+            payment_method = ?, cash_amount = ?, online_amount = ?, payment_status = ?,
+            payment_date = ?::date, notes = ?, updated_by = ?, updated_at = NOW()
         WHERE id = ? AND deleted_at IS NULL
       `, [
         staffId, salaryMonth, baseSalary, commissionEarned,
         metrics.servicesCompleted || 0, metrics.revenueGenerated || 0, bonus, deduction,
-        totalPayable, amountPaid, remainingBalance, payment.paymentMethod,
+        totalPayable, plan.advanceApplied, amountPaid, remainingBalance, payment.paymentMethod,
         payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, salaryId,
       ]);
     } else {
       const result = await tx.run(`
         INSERT INTO salary_payments (
           staff_id, salary_month, base_salary, commission_earned, services_completed,
-          revenue_generated, bonus, deduction, total_payable, amount_paid,
+          revenue_generated, bonus, deduction, total_payable, advance_applied, amount_paid,
           remaining_balance, payment_method, cash_amount, online_amount,
           payment_status, payment_date, notes, created_by, updated_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?)
       `, [
         staffId, salaryMonth, baseSalary, commissionEarned,
         metrics.servicesCompleted || 0, metrics.revenueGenerated || 0, bonus, deduction,
-        totalPayable, amountPaid, remainingBalance, payment.paymentMethod,
+        totalPayable, plan.advanceApplied, amountPaid, remainingBalance, payment.paymentMethod,
         payment.cash, payment.online, paymentStatus, paymentDate, notes, userId, userId,
       ]);
       salaryId = result.lastInsertRowid;
@@ -389,7 +442,7 @@ async function saveSalary(db, data, userId) {
         expenseDate: paymentDate,
         notes,
         referenceNumber: salaryReference,
-      }, userId);
+      }, userId, scope);
       let commissionExpenseId = null;
       const commissionPaid = Math.min(amountPaid, commissionEarned);
       if (commissionPaid > 0) {
@@ -405,9 +458,15 @@ async function saveSalary(db, data, userId) {
           expenseDate: paymentDate,
           notes,
           referenceNumber: commissionReference,
-        }, userId);
+        }, userId, scope);
       }
       await tx.run('UPDATE salary_payments SET expense_id = ?, updated_at = NOW() WHERE id = ?', [commissionExpenseId || salaryExpenseId, salaryId]);
+    }
+    // Consume the advances this settlement absorbed, oldest first, recording which advance
+    // funded it. The advance was already expensed when it was paid, so nothing extra is
+    // expensed here — that is what keeps salary expense recognised exactly once.
+    if (plan.advanceApplied > 0) {
+      await applyAdvances(tx, { staffId, salaryPaymentId: salaryId, amountToApply: plan.advanceApplied, userId });
     }
     await logAction(tx, userId, data.id ? 'update' : 'create', 'salary_payment', salaryId, `${staff.full_name} ${salaryMonth}`);
     return salaryId;
@@ -429,17 +488,43 @@ export async function GET(request) {
         ? await getStaffMonthMetrics(db, member.id, salaryMonth)
         : undefined,
     })));
+    // Payroll advances. `outstandingByStaff` drives the settlement preview on the list;
+    // `staffAdvances` is the per-staff ledger shown on the salary detail view.
+    const salaries = await getSalaries(db, searchParams);
+    const outstandingByStaff = await getOutstandingAdvanceByStaff(db);
+    const staffAdvances = staffId ? await getStaffAdvances(db, staffId) : [];
+    const advanceTotals = await getAdvanceTotals(db, {
+      startDate: cleanText(searchParams.get('from'), '') || null,
+      endDate: cleanText(searchParams.get('to'), '') || null,
+    });
+    // Which advances funded each settlement, so history never loses the link.
+    const salariesWithAdvances = await Promise.all(salaries.map(async (row) => ({
+      ...row,
+      advanceApplications: row.advanceApplied > 0 ? await getApplicationsForSalary(db, row.id) : [],
+    })));
+
     return NextResponse.json({
       summary: await getSummary(db),
       expenses: await getExpenses(db, searchParams),
-      salaries: await getSalaries(db, searchParams),
-      staff,
+      salaries: salariesWithAdvances,
+      staff: staff.map((member) => ({
+        ...member,
+        outstandingAdvance: outstandingByStaff[String(member.id)]?.outstanding || 0,
+        totalAdvanceGiven: outstandingByStaff[String(member.id)]?.totalGiven || 0,
+      })),
+      staffAdvances,
+      advanceTotals,
       categories: EXPENSE_CATEGORIES,
       paymentMethods: PAYMENT_METHODS,
       paymentStatuses: PAYMENT_STATUSES,
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to load expenses' }, { status: error.status || 500 });
+    console.error('Admin expenses load failed:', error);
+    const mapped = mapApiError(error, 'Failed to load expenses');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status }
+    );
   }
 }
 
@@ -447,17 +532,35 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
+    const permission = data.type === 'salary' ? PERMISSIONS.PAYROLL_PAYMENTS_CREATE : data.type === 'advance' ? PERMISSIONS.ADVANCES_CREATE : null;
+    const user = permission ? await requirePermission(request, db, permission) : await requireRole(request, db, 'admin');
+    const { sessionId, businessDayId } = await requireOpenSession(db);
+    const scope = { businessDayId, storeSessionId: sessionId };
     if (data.type === 'salary') {
-      const id = await saveSalary(db, data, user.id);
+      const id = await saveSalary(db, data, user.id, scope);
       return NextResponse.json({ message: 'Salary payment saved', id }, { status: 201 });
     }
-    const id = await saveExpense(db, data, user.id);
+    if (data.type === 'advance') {
+      const key = cleanText(request.headers.get('idempotency-key') || data.idempotencyKey, '');
+      if (!key) return NextResponse.json({ error: 'Idempotency-Key is required for an advance' }, { status: 400 });
+      const existing = await db.get('SELECT id FROM salary_advances WHERE idempotency_key=?', [key]);
+      if (existing) return NextResponse.json({ message: 'Advance salary already recorded', id: existing.id, duplicate: true });
+      data.idempotencyKey = key;
+      const result = await db.transaction(async (tx) => createAdvance(tx, data, user.id, scope, saveExpense));
+      await logAction(db, user.id, 'create', 'salary_advance', result.advanceId, `${result.staffName} ${result.amount}`);
+      return NextResponse.json({ message: 'Advance salary recorded', id: result.advanceId }, { status: 201 });
+    }
+    const id = await saveExpense(db, data, user.id, scope);
     await logAction(db, user.id, 'create', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense saved', id }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to save expense' }, { status: error.status || 400 });
+    console.error('Admin expense save failed:', error);
+    const mapped = mapApiError(error, 'Failed to save expense');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
+    );
   }
 }
 
@@ -465,8 +568,10 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
     const data = await request.json();
+    const user = data.type === 'salary'
+      ? await requirePermission(request, db, PERMISSIONS.PAYROLL_RECORDS_CORRECT)
+      : await requireRole(request, db, 'admin');
     if (data.type === 'salary') {
       const id = await saveSalary(db, data, user.id);
       return NextResponse.json({ message: 'Salary payment updated', id });
@@ -476,7 +581,12 @@ export async function PUT(request) {
     await logAction(db, user.id, 'update', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense updated', id });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to update expense' }, { status: error.status || 400 });
+    console.error('Admin expense update failed:', error);
+    const mapped = mapApiError(error, 'Failed to update expense');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
+    );
   }
 }
 
@@ -484,14 +594,27 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id') || 0);
     const type = cleanText(searchParams.get('type'), 'expense');
+    const user = ['salary','advance'].includes(type)
+      ? await requirePermission(request, db, PERMISSIONS.PAYROLL_RECORDS_DELETE)
+      : await requireRole(request, db, 'admin');
     if (!id) return NextResponse.json({ error: 'Record ID is required' }, { status: 400 });
+    if (type === 'advance') {
+      // Deleting a salary settlement releases its advance applications first, so an advance
+      // is only cancellable while nothing has been deducted from it.
+      const reason = cleanText(searchParams.get('reason'), '');
+      const result = await db.transaction(async (tx) => cancelAdvance(tx, { advanceId: id, reason, userId: user.id }));
+      await logAction(db, user.id, 'cancel', 'salary_advance', id, `Cancelled ${result.amount}`);
+      return NextResponse.json({ message: 'Advance cancelled and the payment reversed' });
+    }
     if (type === 'salary') {
       const salary = await db.get('SELECT staff_id, salary_month FROM salary_payments WHERE id = ?', [id]);
-      await db.run('UPDATE salary_payments SET deleted_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?', [user.id, id]);
+      // Return any advance this settlement absorbed to OUTSTANDING; otherwise deleting the
+      // settlement would silently consume the advance forever.
+      await db.transaction(async (tx) => releaseApplications(tx, id));
+      await db.run('UPDATE salary_payments SET deleted_at = NOW(), updated_by = ?, updated_at = NOW(), advance_applied = 0 WHERE id = ?', [user.id, id]);
       if (salary) {
         await db.run(`
           UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW()
@@ -504,6 +627,11 @@ export async function DELETE(request) {
     await logAction(db, user.id, 'delete', type === 'salary' ? 'salary_payment' : 'expense', id, 'Soft deleted');
     return NextResponse.json({ message: 'Record deleted' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to delete record' }, { status: error.status || 400 });
+    console.error('Admin expense delete failed:', error);
+    const mapped = mapApiError(error, 'Failed to delete record');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
+    );
   }
 }

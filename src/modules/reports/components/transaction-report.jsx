@@ -45,7 +45,9 @@ export default function TransactionReport({ basePath, backPath, title }) {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    if (queryPeriod !== period) setPeriod(queryPeriod);
+    // Never override a Custom Range the user is still filling in (prevents picker flicker).
+    if (period === 'custom') return;
+    if (queryPeriod !== 'custom' && queryPeriod !== period) setPeriod(queryPeriod);
   }, [queryPeriod, period]);
 
   // A custom period only carries its dates through to the fetch.

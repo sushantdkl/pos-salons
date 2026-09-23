@@ -151,7 +151,7 @@ export default function StaffPerformanceDashboard({ title, accent = 'text-indigo
               <MetricCard title="Total Services" value={report.totals?.services || 0} icon={Scissors} />
               <MetricCard title="Total Revenue" value={formatCurrency(report.totals?.revenue || 0)} icon={TrendingUp} />
               <MetricCard title="Total Commission" value={formatCurrency(report.totals?.commission || 0)} icon={Award} />
-              <MetricCard title="Cash in Hand" value={formatCurrency(report.totals?.cashCollected || 0)} icon={Banknote} sub="Cash collected from this staff's services" />
+              <MetricCard title="Cash Collected" value={formatCurrency(report.totals?.cashCollected || 0)} icon={Banknote} sub="Cash collected from this staff's services" />
               <MetricCard title="QR Collected" value={formatCurrency(report.totals?.qrCollected || 0)} icon={Smartphone} sub="Online / QR from this staff's services" />
               <MetricCard title="Total Customers" value={report.totals?.customers || 0} icon={Users} />
             </div>

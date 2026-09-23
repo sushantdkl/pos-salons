@@ -1,0 +1,2 @@
+import { test, expect } from '@playwright/test';
+test('public application loads without exposing employee contact details',async({page})=>{await page.goto('/');await expect(page.locator('body')).toBeVisible();const response=await page.request.get('/api/users/active');if(response.ok()){const body=await response.json();for(const user of body.users||[]){expect(user).not.toHaveProperty('email');expect(user).not.toHaveProperty('phone');}}});

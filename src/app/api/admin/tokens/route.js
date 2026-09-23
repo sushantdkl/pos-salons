@@ -4,6 +4,7 @@ import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
+import { requireOpenSession } from '@/lib/business-day/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -300,6 +301,7 @@ export async function POST(request) {
     const db = Database.getInstance();
     await ensureSalonSchema();
     const user = await requireRole(request, db, ['admin', 'cashier']);
+    const { sessionId, businessDayId } = await requireOpenSession(db);
     const data = await request.json();
     const serviceId = Number(data.service_id || 0);
     const staffId = Number(data.assigned_staff_id || 0) || null;
@@ -340,8 +342,8 @@ export async function POST(request) {
           token_number, token_date, customer_id, customer_name, customer_phone,
           service_id, package_id, assigned_staff_id, people_ahead,
           estimated_wait_minutes_min, estimated_wait_minutes_max, created_by,
-          is_printed, printed_at, printed_by, notes
-        ) VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          is_printed, printed_at, printed_by, notes, business_day_id, store_session_id
+        ) VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         tokenNumber,
         today(),
@@ -359,6 +361,8 @@ export async function POST(request) {
         shouldPrint ? new Date().toISOString() : null,
         shouldPrint ? user.id : null,
         cleanText(data.notes, null),
+        businessDayId,
+        sessionId,
       ]);
       await logAction(tx, user.id, shouldPrint ? 'create_printed' : 'create', 'walk_in_token', result.lastInsertRowid, tokenNumber);
       return tx.get(`${tokenSelectSql()} WHERE t.id = ?`, [result.lastInsertRowid]);
@@ -366,7 +370,10 @@ export async function POST(request) {
 
     return NextResponse.json({ token: mapToken(created), message: 'Token generated successfully' }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to create token' }, { status: 400 });
+    return NextResponse.json(
+      { error: error.message || 'Failed to create token', code: error.code },
+      { status: error.status || 400 }
+    );
   }
 }
 

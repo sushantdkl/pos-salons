@@ -94,7 +94,11 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    if (!['admin', 'cashier'].includes(user.role)) {
+    // Only an admin may see the management record (username, email, phone, base_salary,
+    // commission_percentage, commission_earned). A cashier needs the staff list to assign
+    // work while billing, so it gets the same operational subset as the service roles —
+    // payroll and commission figures never reach it.
+    if (user.role !== 'admin') {
       const serviceStaff = await db.all(`
         SELECT u.id,
                COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name,

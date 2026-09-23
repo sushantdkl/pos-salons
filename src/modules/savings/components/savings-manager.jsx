@@ -245,7 +245,7 @@ export default function SavingsManager({ title, description }) {
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2 text-gray-600">
               <Wallet className="h-4 w-4" />
-              <p className="text-xs font-semibold uppercase tracking-wide">Net Cash in Hand (This Month)</p>
+              <p className="text-xs font-semibold uppercase tracking-wide">Net Cash Collections (This Month)</p>
             </div>
             <p className="mt-2 text-xl font-semibold text-gray-950">{formatCurrency(totals.month?.netCashInHand)}</p>
           </div>

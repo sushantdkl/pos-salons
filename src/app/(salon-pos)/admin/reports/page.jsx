@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -133,12 +133,18 @@ export default function ReportsPage() {
     fetchReports();
   }, [period]);
 
+  // Adopt the period from the URL only when the URL itself actually changes (shared link,
+  // browser back/forward) — never in response to a local tab click. This is what stops the
+  // Custom Range picker from being reverted and flickering.
+  const lastQueryPeriod = useRef(queryPeriod);
   useEffect(() => {
+    if (queryPeriod === lastQueryPeriod.current) return;
+    lastQueryPeriod.current = queryPeriod;
     const nextPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-    if (['today', '3days', '7days', 'month', 'custom'].includes(nextPeriod) && nextPeriod !== period) {
+    if (nextPeriod && ['today', '3days', '7days', 'month', 'custom'].includes(nextPeriod)) {
       setPeriod(nextPeriod);
     }
-  }, [queryPeriod, period]);
+  }, [queryPeriod]);
 
   const paymentSlices = useMemo(() => {
     const methods = reports?.paymentMethods || {};
@@ -179,7 +185,7 @@ export default function ReportsPage() {
       ['Operating Expenses', money(reports?.financial?.operatingExpenses)],
       ['Salary Expenses', money(reports?.financial?.salaryExpenses)],
       ['Savings Transfers', money(reports?.financial?.savingsTransfers)],
-      ['Net Cash in Hand', money(reports?.financial?.netCashInHand)],
+      ['Net Cash Collections', money(reports?.financial?.netCashInHand)],
       ['Net Online Balance', money(reports?.financial?.netOnlineBalance)],
       ['Net Available Balance', money(reports?.financial?.netAvailableBalance)],
       ['Total Bills', reports?.totalBills || 0],
@@ -232,14 +238,10 @@ export default function ReportsPage() {
             <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Reports & Analytics</h1>
             <p className="mt-1 text-sm text-gray-600">Sales and performance insights</p>
           </div>
-          <button
-            type="button"
-            onClick={exportReport}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 sm:w-auto"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/admin/reports/compare" className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800">Compare reports <ArrowRight className="h-4 w-4" /></Link>
+            <button type="button" onClick={exportReport} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 sm:w-auto"><Download className="h-4 w-4" />Export CSV</button>
+          </div>
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">

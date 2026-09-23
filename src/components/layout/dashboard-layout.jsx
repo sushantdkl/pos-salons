@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Users, FileText, Settings, DollarSign, ReceiptText,
-  LogOut, Menu, X, LayoutDashboard, Warehouse, Scissors, MessageCircle, Globe, PiggyBank
+  LogOut, Menu, X, LayoutDashboard, Warehouse, Scissors, MessageCircle, Globe, PiggyBank, CalendarDays,
+  ClipboardList, DoorOpen, ShieldCheck, ChevronDown, Printer, ChartNoAxesCombined, HandCoins,
+  PackageSearch, BadgeDollarSign, WalletCards, Scale, GitCompareArrows
 } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -13,6 +16,18 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
 const DESKTOP_MQ = '(min-width: 1024px)';
 let authInitialized = false;
+
+const reportMenuItems = [
+  { icon: ChartNoAxesCombined, label: 'Business Overview', href: '/admin/reports' },
+  { icon: ReceiptText, label: 'Sales & Invoices', href: '/admin/reports/center/sales' },
+  { icon: Scissors, label: 'Services Report', href: '/admin/reports/center/services' },
+  { icon: PackageSearch, label: 'Products & Retail', href: '/admin/reports/center/products' },
+  { icon: WalletCards, label: 'Payment Reconciliation', href: '/admin/reports/center/payments' },
+  { icon: HandCoins, label: 'Customer Credit', href: '/admin/reports/center/credit' },
+  { icon: BadgeDollarSign, label: 'Expenses Report', href: '/admin/reports/center/expenses' },
+  { icon: Scale, label: 'Salary Advances', href: '/admin/reports/center/advances' },
+  { icon: GitCompareArrows, label: 'Compare Reports', href: '/admin/reports/compare' },
+];
 
 function isDesktopViewport() {
   if (typeof window === 'undefined') return true;
@@ -36,6 +51,7 @@ export default function AdminLayout({ children }) {
   const [userName, setUserName] = useState('');
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(() => pathname.startsWith('/admin/reports'));
 
   const closeMobileSidebar = () => setSidebarOpen(false);
 
@@ -137,6 +153,10 @@ export default function AdminLayout({ children }) {
     }
   }, [pathname]);
 
+  useEffect(() => {
+    if (pathname.startsWith('/admin/reports')) setReportsOpen(true);
+  }, [pathname]);
+
   useLayoutEffect(() => {
     restoreSidebarScroll();
   }, [pathname]);
@@ -192,6 +212,9 @@ export default function AdminLayout({ children }) {
     { roles: ['barber'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/barber', color: 'text-gray-600', isDashboard: true },
     { roles: ['stylist'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/stylist', color: 'text-gray-600', isDashboard: true },
     { roles: ['beautician'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/beautician', color: 'text-gray-600', isDashboard: true },
+    { roles: ['admin'], icon: ClipboardList, label: 'Executive Summary', href: '/admin/executive-summary', color: 'text-[#6b46e5]' },
+    { roles: ['cashier'], icon: ClipboardList, label: 'Executive Summary', href: '/cashier/executive-summary', color: 'text-[#6b46e5]' },
+    { roles: ['admin', 'cashier'], icon: DoorOpen, label: 'Opening & Closing', href: '/store/opening-closing', color: 'text-emerald-700' },
     { roles: ['admin'], icon: Scissors, label: 'Tokens', href: '/dashboard/admin/tokens', color: 'text-amber-700' },
     { roles: ['cashier'], icon: Scissors, label: 'Tokens', href: '/dashboard/cashier/tokens', color: 'text-amber-700' },
     { roles: ['barber'], icon: Scissors, label: 'Queue', href: '/dashboard/barber/queue', color: 'text-amber-700' },
@@ -199,17 +222,22 @@ export default function AdminLayout({ children }) {
     { roles: ['beautician'], icon: Scissors, label: 'Queue', href: '/dashboard/beautician/queue', color: 'text-amber-700' },
     { roles: ['admin', 'cashier'], icon: DollarSign, label: 'Billing', href: '/admin/billing', color: 'text-teal-600' },
     { roles: ['cashier'], icon: ReceiptText, label: 'Daily Expenses', href: '/dashboard/cashier/daily-expenses', color: 'text-emerald-700' },
+    { roles: ['cashier'], icon: DollarSign, label: 'Salary Advance', href: '/cashier/advances', color: 'text-amber-700' },
+    { roles: ['admin', 'cashier'], icon: ReceiptText, label: 'Credit Collection', href: '/cashier/credit', color: 'text-violet-700' },
     { roles: ['cashier'], icon: PiggyBank, label: 'Savings', href: '/dashboard/cashier/savings', color: 'text-emerald-700' },
     { roles: ['admin', 'cashier'], icon: Scissors, label: 'Services', href: '/admin/products', color: 'text-blue-600' },
     { roles: ['admin', 'cashier'], icon: Warehouse, label: 'Inventory', href: '/admin/stock', color: 'text-indigo-600' },
     { roles: ['admin'], icon: Users, label: 'Staff', href: '/admin/employees', color: 'text-green-600' },
     { roles: ['admin', 'cashier'], icon: Users, label: 'Customers', href: '/admin/customers', color: 'text-pink-600' },
-    { roles: ['admin'], icon: FileText, label: 'Reports', href: '/admin/reports', color: 'text-purple-600' },
+    { roles: ['admin'], icon: FileText, label: 'Reports', href: '/admin/reports', color: 'text-purple-600', children: reportMenuItems },
+    { roles: ['admin'], icon: CalendarDays, label: 'Business Days', href: '/dashboard/admin/business-days', color: 'text-purple-600' },
     { roles: ['admin'], icon: Users, label: 'Performance', href: '/dashboard/admin/staff-performance', color: 'text-amber-700' },
     { roles: ['admin'], icon: DollarSign, label: 'Expenses & Salary', href: '/dashboard/admin/expenses', color: 'text-emerald-700' },
     { roles: ['admin'], icon: PiggyBank, label: 'Savings', href: '/admin/savings', color: 'text-emerald-700' },
     { roles: ['admin'], icon: Globe, label: 'Website CMS', href: '/dashboard/admin/website', color: 'text-blue-700' },
     { roles: ['admin', 'cashier'], icon: MessageCircle, label: 'Reminders', href: '/admin/reminders', color: 'text-green-600' },
+    { roles: ['admin'], icon: ShieldCheck, label: 'Staff Permissions', href: '/admin/permissions', color: 'text-blue-700' },
+    { roles: ['admin'], icon: Printer, label: 'Printer', href: '/admin/printer', color: 'text-violet-700' },
     { roles: ['admin'], icon: Settings, label: 'Settings', href: '/admin/settings', color: 'text-gray-600' },
   ];
   const menuItems = allMenuItems.filter((item) => !item.roles || item.roles.includes(currentRole));
@@ -218,7 +246,7 @@ export default function AdminLayout({ children }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F7F5F2]">
         <div className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-4 border-[#6B46E5]" />
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-[#DED3FB] border-t-[#6B46E5]" />
           <p className="text-[#7A736B]">Loading...</p>
         </div>
       </div>
@@ -229,12 +257,16 @@ export default function AdminLayout({ children }) {
   const desktopWidthClass = desktopCollapsed ? 'lg:w-20' : 'lg:w-64';
   const contentMarginClass = desktopCollapsed ? 'lg:ml-20' : 'lg:ml-64';
 
-  const brandMark = (
-    <div
-      className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-[#6B46E5] text-white"
-      style={{ fontFamily: "'Manrope', system-ui, sans-serif", fontWeight: 800, fontSize: 13 }}
-    >
-      H
+  const renderBrandMark = () => (
+    <div className="relative flex h-9 w-9 flex-none overflow-hidden rounded-[10px] border border-[#ECE7E1] bg-white shadow-sm">
+      <Image
+        src="/assets/logo.jpg"
+        alt="The Hair Cut POS logo"
+        fill
+        sizes="36px"
+        className="object-cover"
+        priority
+      />
     </div>
   );
   const userInitial = (userName || currentRole || 'U').trim().charAt(0).toUpperCase();
@@ -251,14 +283,16 @@ export default function AdminLayout({ children }) {
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[min(18rem,88vw)] flex-col border-r border-[#ECE7E1] bg-white transition-transform duration-300 ease-out lg:translate-x-0 ${desktopWidthClass} ${
+        aria-hidden={!isDesktop && !sidebarOpen ? 'true' : undefined}
+        inert={!isDesktop && !sidebarOpen ? '' : undefined}
+        className={`print-hide fixed inset-y-0 left-0 z-50 flex h-full w-[min(18rem,88vw)] flex-col border-r border-[#ECE7E1] bg-white transition-transform duration-300 ease-out lg:translate-x-0 ${desktopWidthClass} ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#F0ECE6] px-3 py-3.5 sm:px-4">
           {showExpanded ? (
             <div className="flex min-w-0 items-center gap-2.5">
-              {brandMark}
+              {renderBrandMark()}
               <div className="flex min-w-0 flex-col">
                 <span
                   className="truncate text-[14px] font-extrabold text-[#1A1714]"
@@ -287,10 +321,53 @@ export default function AdminLayout({ children }) {
         >
           {menuItems.map((item) => {
             const isActive = isNavigationItemActive(pathname, item.href, item.isDashboard);
+            if (item.children && showExpanded) {
+              return (
+                <div key={item.href} className={`overflow-hidden rounded-[14px] ${isActive ? 'bg-[#EEF0FF]' : 'bg-transparent'}`}>
+                  <button
+                    type="button"
+                    aria-expanded={reportsOpen}
+                    onClick={() => setReportsOpen((current) => !current)}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#6B46E5]/25 ${
+                      isActive ? 'bg-[#DCE2FF] text-[#17140f]' : 'text-[#3a342d] hover:bg-[#E5E9FF]'
+                    }`}
+                  >
+                    <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-[#5433C9]' : item.color}`} />
+                    <span className="flex-1 text-sm font-bold">{item.label}</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {reportsOpen ? (
+                    <div className="space-y-0.5 px-1.5 pb-2 pt-1">
+                      {item.children.map((child) => {
+                        const childActive = pathname === child.href;
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            aria-current={childActive ? 'page' : undefined}
+                            onClick={() => {
+                              saveSidebarScroll();
+                              if (!isDesktopViewport()) closeMobileSidebar();
+                            }}
+                            className={`flex min-h-10 items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#6B46E5]/25 ${
+                              childActive ? 'bg-[#CED7FF] font-semibold text-[#17140f]' : 'font-medium text-[#37375A] hover:bg-white/70'
+                            }`}
+                          >
+                            <child.icon className="h-[18px] w-[18px] shrink-0 text-[#5E5CE6]" />
+                            <span className="leading-snug">{child.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-label={!showExpanded ? item.label : undefined}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={() => {
                   saveSidebarScroll();
@@ -329,6 +406,7 @@ export default function AdminLayout({ children }) {
           ) : null}
           <button
             type="button"
+            aria-label="Logout"
             onClick={() => setLogoutOpen(true)}
             className={`flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[#8A837B] transition-colors hover:bg-[#FDF2F1] hover:text-[#B23A2E] ${
               showExpanded ? '' : 'justify-center px-2'
@@ -340,8 +418,8 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
-      <div className={`min-h-screen min-w-0 transition-[margin] duration-300 ${contentMarginClass}`}>
-        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-[#ECE7E1] bg-white px-3 py-3 sm:px-4 lg:hidden">
+      <div className={`print-reset-offset min-h-screen min-w-0 transition-[margin] duration-300 ${contentMarginClass}`}>
+        <div className="print-hide sticky top-0 z-30 flex items-center gap-3 border-b border-[#ECE7E1] bg-white px-3 py-3 sm:px-4 lg:hidden">
           <button
             type="button"
             onClick={toggleSidebar}
@@ -352,7 +430,7 @@ export default function AdminLayout({ children }) {
             Menu
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            {brandMark}
+            {renderBrandMark()}
             <div className="min-w-0">
               <h2
                 className="truncate text-[15px] font-extrabold text-[#1A1714]"

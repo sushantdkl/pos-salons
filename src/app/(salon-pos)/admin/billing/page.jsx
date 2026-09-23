@@ -1,12 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckCircle2, CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { buildCustomerReceiptHtml } from '@/lib/documents/customer-receipt';
 import { PHONE_ERROR_MESSAGE, isValidPhone, sanitizePhoneInput } from '@/lib/validation/phone';
 import { activeServiceStaffFilter, staffForService as filterStaffForService } from '@/lib/staff/service-staff';
 
@@ -18,168 +19,9 @@ function paymentLabel(method) {
     cash: 'Cash',
     card: 'Card',
     online: 'Online QR',
+    credit: 'Customer Credit',
     split: 'Split',
   }[method] || method || '-';
-}
-
-function qrTypeLabel(type) {
-  return {
-    ESEWA_PHONEPAY: 'Esewa / PhonePay',
-    BANK: 'Bank QR',
-  }[type] || '';
-}
-
-function paymentBreakdownRows(bill) {
-  if (bill.payment_method !== 'split') {
-    if (bill.payment_method === 'cash' && Number(bill.amount_paid || 0) > 0) {
-      const change = Math.max(0, Number(bill.amount_paid || 0) - Number(bill.grand_total || 0));
-      return `
-        <tr><td>Cash received</td><td style="text-align:right">${formatCurrency(bill.amount_paid || 0)}</td></tr>
-        ${change > 0 ? `<tr><td>Change</td><td style="text-align:right">${formatCurrency(change)}</td></tr>` : ''}
-      `;
-    }
-    if (bill.payment_method === 'online') {
-      return `<tr><td>QR type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type) || 'Not recorded'}</td></tr>`;
-    }
-    return '';
-  }
-  return `
-    <tr><td>Cash paid</td><td style="text-align:right">${formatCurrency(bill.cash_amount || 0)}</td></tr>
-    <tr><td>QR paid</td><td style="text-align:right">${formatCurrency(bill.qr_amount || 0)}</td></tr>
-    <tr><td>QR type</td><td style="text-align:right">${qrTypeLabel(bill.qr_type)}</td></tr>
-  `;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
-function buildReceiptHtml(billData, salon = {}) {
-  const bill = billData.bill;
-  const salonName = escapeHtml(salon.salon_name || 'The Hair Cut');
-  const address = escapeHtml(salon.salon_address || '');
-  const phone = escapeHtml(salon.salon_phone || '');
-  const email = escapeHtml(salon.salon_email || '');
-  const vat = escapeHtml(salon.vat_number || '');
-  const footer = escapeHtml(salon.receipt_footer || 'Thank you for visiting. Please visit again.');
-  const billDate = new Date(bill.transaction_time || bill.created_at || Date.now()).toLocaleString();
-  const customerPhone = bill.customer_phone ? `<div>${escapeHtml(bill.customer_phone)}</div>` : '';
-  const itemRows = (billData.items || []).map((item) => `
-    <tr>
-      <td>
-        <div class="item-name">${escapeHtml(item.name)}</div>
-        <div class="item-meta">Qty ${Number(item.quantity || 1)} x ${formatCurrency(item.unit_price ?? (Number(item.subtotal || 0) / Number(item.quantity || 1)))}</div>
-        ${item.staff_name_snapshot ? `<div class="item-meta">Staff: ${escapeHtml(item.staff_name_snapshot)}</div>` : ''}
-      </td>
-      <td class="right">${formatCurrency(item.subtotal)}</td>
-    </tr>
-  `).join('');
-
-  const discountRow = Number(bill.discount_amount || 0) > 0
-    ? `<tr><td>Discount</td><td class="right">-${formatCurrency(bill.discount_amount)}</td></tr>`
-    : '';
-  const taxRow = Number(bill.tax || 0) > 0
-    ? `<tr><td>Tax${bill.tax_percent ? ` (${bill.tax_percent}%)` : ''}</td><td class="right">${formatCurrency(bill.tax)}</td></tr>`
-    : '';
-  const serviceChargeRow = Number(bill.service_charge || 0) > 0
-    ? `<tr><td>Service charge</td><td class="right">${formatCurrency(bill.service_charge)}</td></tr>`
-    : '';
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeHtml(bill.bill_number)}</title>
-  <style>
-    @page { size: 80mm auto; margin: 0; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: "Courier New", Courier, monospace;
-      width: 76mm;
-      margin: 0 auto;
-      padding: 10px 8px 14px;
-      color: #111;
-      font-size: 12px;
-      line-height: 1.35;
-      background: #fff;
-    }
-    .brand { text-align: center; margin-bottom: 8px; }
-    .brand h1 {
-      margin: 0;
-      font-size: 18px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .muted { color: #444; font-size: 11px; }
-    .divider {
-      border: 0;
-      border-top: 1px dashed #222;
-      margin: 8px 0;
-    }
-    .meta, .customer { text-align: center; }
-    .customer { margin-top: 4px; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 3px 0; vertical-align: top; }
-    .right { text-align: right; white-space: nowrap; }
-    .item-name { font-weight: bold; }
-    .item-meta { color: #555; font-size: 10px; }
-    .totals td { padding-top: 4px; }
-    .grand td {
-      border-top: 1px dashed #222;
-      padding-top: 6px;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 10px;
-      font-size: 11px;
-    }
-    .token {
-      text-align: center;
-      margin: 4px 0 0;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <div class="brand">
-    <h1>${salonName}</h1>
-    ${address ? `<div class="muted">${address}</div>` : ''}
-    ${phone ? `<div class="muted">Tel: ${phone}</div>` : ''}
-    ${email ? `<div class="muted">${email}</div>` : ''}
-    ${vat ? `<div class="muted">VAT/PAN: ${vat}</div>` : ''}
-  </div>
-  <hr class="divider" />
-  <div class="meta">
-    <div><strong>${escapeHtml(bill.bill_number)}</strong></div>
-    <div class="muted">${escapeHtml(billDate)}</div>
-  </div>
-  <div class="customer">${escapeHtml(bill.customer_name || 'Walk-in Customer')}</div>
-  ${customerPhone}
-  ${bill.token_number ? `<div class="token">Token #${escapeHtml(bill.token_number)}</div>` : ''}
-  <hr class="divider" />
-  <table>
-    ${itemRows}
-  </table>
-  <hr class="divider" />
-  <table class="totals">
-    <tr><td>Subtotal</td><td class="right">${formatCurrency(bill.subtotal)}</td></tr>
-    ${discountRow}
-    ${taxRow}
-    ${serviceChargeRow}
-    <tr class="grand"><td>TOTAL</td><td class="right">${formatCurrency(bill.grand_total)}</td></tr>
-    <tr><td>Payment</td><td class="right">${escapeHtml(paymentLabel(bill.payment_method))}</td></tr>
-    ${paymentBreakdownRows(bill)}
-  </table>
-  <hr class="divider" />
-  <div class="footer">${footer}</div>
-</body>
-</html>`;
 }
 
 function qrConfigForType(type, paymentQr) {
@@ -219,6 +61,7 @@ function BillingContent() {
   const [amountPaid, setAmountPaid] = useState('');
   const [splitCashAmount, setSplitCashAmount] = useState('');
   const [splitQrAmount, setSplitQrAmount] = useState('');
+  const [splitCreditAmount, setSplitCreditAmount] = useState('');
   const [splitQrType, setSplitQrType] = useState('');
   const [onlineQrType, setOnlineQrType] = useState('');
   const [splitQrEdited, setSplitQrEdited] = useState(false);
@@ -236,9 +79,12 @@ function BillingContent() {
     salon_email: '',
     vat_number: '',
     receipt_footer: 'Thank you for visiting. Please visit again.',
+    receipt_paper_size: '80',
+    receipt_title: 'Customer Receipt',
   });
   const [qrModal, setQrModal] = useState(null);
   const [processingBill, setProcessingBill] = useState(false);
+  const idempotencyKey = useRef(null);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
   const isWalkIn = !customer.id;
@@ -274,6 +120,8 @@ function BillingContent() {
         salon_email: settings.salon_email || '',
         vat_number: settings.vat_number || '',
         receipt_footer: settings.receipt_footer || 'Thank you for visiting. Please visit again.',
+        receipt_paper_size: settings.receipt_paper_size || '80',
+        receipt_title: settings.receipt_title || 'Customer Receipt',
       });
     }
   };
@@ -293,6 +141,7 @@ function BillingContent() {
         setPaymentMethod(parsed.paymentMethod || 'cash');
         setSplitCashAmount(parsed.splitCashAmount || '');
         setSplitQrAmount(parsed.splitQrAmount || '');
+        setSplitCreditAmount(parsed.splitCreditAmount || '');
         setSplitQrType(parsed.splitQrType || '');
         setOnlineQrType(parsed.onlineQrType || '');
       } catch {}
@@ -309,10 +158,11 @@ function BillingContent() {
       paymentMethod,
       splitCashAmount,
       splitQrAmount,
+      splitCreditAmount,
       splitQrType,
       onlineQrType,
     }));
-  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod, splitCashAmount, splitQrAmount, splitQrType, onlineQrType]);
+  }, [cartServices, cartProducts, customer, discountType, discountValue, paymentMethod, splitCashAmount, splitQrAmount, splitCreditAmount, splitQrType, onlineQrType]);
 
   const filteredServices = useMemo(() => services.filter((service) =>
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -332,14 +182,14 @@ function BillingContent() {
   const total = subtotal - safeDiscount + tax;
   const change = Number(amountPaid || total) - total;
   const cartCount = cartServices.length + cartProducts.length;
-  const splitTotal = Number(splitCashAmount || 0) + Number(splitQrAmount || 0);
+  const splitTotal = Number(splitCashAmount || 0) + Number(splitQrAmount || 0) + Number(splitCreditAmount || 0);
   const splitBalance = total - splitTotal;
 
   useEffect(() => {
     if (paymentMethod !== 'split' || splitQrEdited) return;
     const cash = Math.max(0, Number(splitCashAmount || 0));
-    setSplitQrAmount(Math.max(0, total - cash).toFixed(2));
-  }, [paymentMethod, splitCashAmount, splitQrEdited, total]);
+    setSplitQrAmount(Math.max(0, total - cash - Number(splitCreditAmount || 0)).toFixed(2));
+  }, [paymentMethod, splitCashAmount, splitCreditAmount, splitQrEdited, total]);
 
   const setWalkInCustomer = () => {
     setCustomer(walkInCustomer);
@@ -441,6 +291,7 @@ function BillingContent() {
     setAmountPaid('');
     setSplitCashAmount('');
     setSplitQrAmount('');
+    setSplitCreditAmount('');
     setSplitQrType('');
     setSplitQrEdited(false);
     setError('');
@@ -473,32 +324,43 @@ function BillingContent() {
       setError('Select a QR type for online payment.');
       return;
     }
+    if (paymentMethod === 'credit' && !customer.id) {
+      setError('Select an existing customer before using credit.');
+      return;
+    }
     if (paymentMethod === 'split') {
       const cash = Number(splitCashAmount || 0);
       const qr = Number(splitQrAmount || 0);
-      if (cash < 0 || qr < 0) {
+      const credit = Number(splitCreditAmount || 0);
+      if (cash < 0 || qr < 0 || credit < 0) {
         setError('Split payment amounts cannot be negative.');
         return;
       }
-      if (cash > total || qr > total) {
+      if (cash > total || qr > total || credit > total) {
         setError('Split payment amounts cannot exceed the bill total.');
         return;
       }
-      if (!splitQrType) {
+      if (qr > 0 && !splitQrType) {
         setError('Select a QR type for split payment.');
         return;
       }
-      if (Math.abs((cash + qr) - total) > 0.01) {
-        setError('Cash amount and QR amount must equal the total payable.');
+      if (credit > 0 && !customer.id) {
+        setError('Select an existing customer before allocating credit.');
+        return;
+      }
+      if (Math.abs((cash + qr + credit) - total) > 0.001) {
+        setError('Cash, online, and credit allocations must equal the exact total.');
         return;
       }
     }
 
     setProcessingBill(true);
-    const response = await fetch('/api/admin/billing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers() },
-      body: JSON.stringify({
+    if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
+    try {
+      const response = await fetch('/api/admin/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey.current, ...headers() },
+        body: JSON.stringify({
         customer_id: customer.id || null,
         customer,
         services: cartServices.map((service) => ({ id: service.id, staff_id: service.staff_id })),
@@ -512,25 +374,38 @@ function BillingContent() {
         cash_amount: paymentMethod === 'split' ? Number(splitCashAmount || 0) : undefined,
         qr_amount: paymentMethod === 'split' ? Number(splitQrAmount || 0) : undefined,
         qr_type: paymentMethod === 'online' ? onlineQrType : paymentMethod === 'split' ? splitQrType : undefined,
+        allocations: paymentMethod === 'credit'
+          ? [{ method: 'credit', amount: total }]
+          : paymentMethod === 'split'
+            ? [
+                { method: 'cash', amount: Number(splitCashAmount || 0), cashTendered: Number(splitCashAmount || 0) },
+                { method: 'online', amount: Number(splitQrAmount || 0), provider: splitQrType },
+                { method: 'credit', amount: Number(splitCreditAmount || 0) },
+              ].filter((entry) => entry.amount > 0)
+            : undefined,
         should_print: false,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.message || data.error || 'Unable to complete the bill. No transaction was saved. Please try again.');
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.message || data.error || 'Unable to complete the bill. No transaction was saved. Please try again.');
+        return;
+      }
+      setLastBill(data);
+      setSuccessBill(data);
+      clearCart();
+      setCustomer(walkInCustomer);
+      setSelectedToken(null);
+      setTaxPercent('');
+      localStorage.removeItem(draftKey);
+      idempotencyKey.current = null;
+      fetchData();
+      router.refresh();
+    } catch {
+      setError('Connection interrupted. The request can be retried safely without creating a duplicate bill.');
+    } finally {
       setProcessingBill(false);
-      return;
     }
-    setLastBill(data);
-    setSuccessBill(data);
-    clearCart();
-    setCustomer(walkInCustomer);
-    setSelectedToken(null);
-    setTaxPercent('');
-    localStorage.removeItem(draftKey);
-    fetchData();
-    router.refresh();
-    setProcessingBill(false);
   };
 
   const closeSuccessBill = () => setSuccessBill(null);
@@ -538,7 +413,7 @@ function BillingContent() {
   const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=360,height=720')) => {
     if (!billData?.bill || !printWindow) return;
     printWindow.document.open();
-    printWindow.document.write(buildReceiptHtml(billData, salonInfo));
+    printWindow.document.write(buildCustomerReceiptHtml(billData, salonInfo));
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => {
@@ -913,8 +788,8 @@ function BillingContent() {
                   ) : null}
                   {paymentMethod === 'split' ? (
                     <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
-                      <p className="mb-2 text-sm font-semibold text-amber-950">Split payment: Cash + QR</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <p className="mb-2 text-sm font-semibold text-amber-950">Split payment allocation</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
                         <label className="text-xs font-semibold text-gray-700">
                           Cash Amount
                           <input
@@ -925,7 +800,7 @@ function BillingContent() {
                               setSplitCashAmount(event.target.value);
                               if (!splitQrEdited) {
                                 const cash = Number(event.target.value || 0);
-                                setSplitQrAmount(Math.max(0, total - cash).toFixed(2));
+                                setSplitQrAmount(Math.max(0, total - cash - Number(splitCreditAmount || 0)).toFixed(2));
                               }
                             }}
                             placeholder="0.00"
@@ -945,6 +820,10 @@ function BillingContent() {
                             placeholder={formatCurrency(total)}
                             className={`${inputClass} mt-1`}
                           />
+                        </label>
+                        <label className="text-xs font-semibold text-gray-700">
+                          Credit Amount
+                          <input type="number" min="0" value={splitCreditAmount} onChange={(event) => setSplitCreditAmount(event.target.value)} placeholder="0.00" className={`${inputClass} mt-1`} />
                         </label>
                       </div>
                       <label className="mt-2 block text-xs font-semibold text-gray-700">
@@ -1006,6 +885,7 @@ function BillingContent() {
                       ['cash', Wallet, 'Cash'],
                       ['card', CreditCard, 'Card'],
                       ['online', MessageCircle, 'Online'],
+                      ['credit', User, 'Credit'],
                       ['split', Receipt, 'Split'],
                     ].map(([method, Icon, label]) => (
                       <button
@@ -1037,6 +917,11 @@ function BillingContent() {
                       {amountPaid && change >= 0 ? (
                         <p className="mt-1.5 text-sm font-semibold text-green-700">Change: {formatCurrency(change)}</p>
                       ) : null}
+                    </div>
+                  ) : null}
+                  {paymentMethod === 'credit' ? (
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+                      {customer.id ? `Credit will be recorded against ${customer.name}. The server enforces the customer credit limit.` : 'Select an existing customer to use credit.'}
                     </div>
                   ) : null}
 

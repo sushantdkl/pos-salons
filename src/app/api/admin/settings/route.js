@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
+import { DOCUMENT_DEFAULTS, SETTING_KEYS, normalizeDocumentSettings } from '@/lib/documents/settings';
 
 const DEFAULT_KEYS = [
   'vat_percentage',
@@ -123,11 +124,29 @@ export async function GET(request) {
           bank_account_number: settings.bank_account_number || '',
           show_esewa_phonepay_qr: settings.show_esewa_phonepay_qr !== 'false',
           show_bank_qr: settings.show_bank_qr !== 'false',
+          calendar_system: settings.calendar_system || 'AD',
+          receipt_paper_size: settings.receipt_paper_size || '80',
+          receipt_title: settings.receipt_title || 'Customer Receipt',
+          receipt_invoice_label: settings.receipt_invoice_label || 'Invoice',
+          receipt_quantity_label: settings.receipt_quantity_label || 'Qty',
+          receipt_item_label: settings.receipt_item_label || 'Item',
+          receipt_rate_label: settings.receipt_rate_label || 'Rate',
+          receipt_amount_label: settings.receipt_amount_label || 'Amount',
+          receipt_show_salon_name: settings.receipt_show_salon_name !== 'false',
+          receipt_show_address: settings.receipt_show_address !== 'false',
+          receipt_show_phone: settings.receipt_show_phone !== 'false',
+          receipt_show_pan_vat: settings.receipt_show_pan_vat !== 'false',
+          receipt_show_date_time: settings.receipt_show_date_time !== 'false',
+          receipt_show_customer: settings.receipt_show_customer !== 'false',
+          receipt_show_stylist: settings.receipt_show_stylist !== 'false',
+          receipt_show_payment: settings.receipt_show_payment !== 'false',
+          receipt_show_tax: settings.receipt_show_tax !== 'false',
+          receipt_show_discount: settings.receipt_show_discount !== 'false',
         },
       });
     }
 
-    return NextResponse.json({ settings });
+    return NextResponse.json({ settings: normalizeDocumentSettings({ ...DOCUMENT_DEFAULTS, ...settings }) });
   } catch (error) {
     console.error('Get settings error:', error);
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: error.status || 500 });
@@ -144,6 +163,18 @@ export async function PUT(request) {
     }
 
     for (const [key, value] of Object.entries(data)) {
+      if (!SETTING_KEYS.has(key)) {
+        return NextResponse.json({ error: `Unsupported setting: ${key}` }, { status: 400 });
+      }
+      if (key === 'calendar_system' && !['AD', 'BS'].includes(String(value).toUpperCase())) {
+        return NextResponse.json({ error: 'Calendar must be AD or BS' }, { status: 400 });
+      }
+      if (key === 'receipt_paper_size' && !['58', '80'].includes(String(value))) {
+        return NextResponse.json({ error: 'Receipt paper must be 58 mm or 80 mm' }, { status: 400 });
+      }
+      if (key === 'advance_ceiling_percent' && value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0 || Number(value) > 100)) {
+        return NextResponse.json({ error: 'Advance ceiling must be greater than 0 and no more than 100' }, { status: 400 });
+      }
       const settingValue = key === 'salon_phone' ? phoneOrNull(value) || '' : value;
       await db.run(`
         INSERT INTO system_settings (setting_key, setting_value, updated_at)

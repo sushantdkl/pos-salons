@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { mapApiError } from '@/lib/db/api-errors';
 import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getDashboardTransactions, getSalonDashboardSummary, PAID_BILL_STATUS_SQL } from '@/lib/reports/dashboard-summary';
 import { getSalesSeries } from '@/lib/reports/finance-summary';
 import { isValidCustomRange, resolveDashboardPeriod } from '@/lib/reports/dashboard-period';
+import { getCurrentBusinessDay } from '@/lib/business-day/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,10 +30,15 @@ export async function GET(request) {
     const period = requestedPeriod === 'custom' && !useCustom ? 'today' : requestedPeriod;
     const startDate = useCustom ? rawStart : null;
     const endDate = useCustom ? rawEnd : null;
-    const range = { startDate, endDate };
+    // Only "today" is scoped to the current Business Day; other periods stay calendar-based.
+    const currentDay = period === 'today' ? await getCurrentBusinessDay(db) : null;
+    const businessDayId = currentDay?.id || null;
+    const range = { startDate, endDate, businessDayId };
 
     const dashboard = await getSalonDashboardSummary(db, period, range);
-    const itemFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    const itemFilter = businessDayId
+      ? { clause: 'b.business_day_id = ?', params: [businessDayId] }
+      : periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
 
     const totalServicesRow = await db.get('SELECT COUNT(*)::int as count FROM salon_services WHERE is_active = TRUE');
     const totalStaffRow = await db.get('SELECT COUNT(*)::int as count FROM users WHERE is_active = TRUE');
@@ -44,7 +51,7 @@ export async function GET(request) {
       WHERE i.item_type = 'service' AND ${PAID_BILL_STATUS_SQL} AND ${itemFilter.clause}
     `, itemFilter.params);
 
-    const billFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    const billFilter = itemFilter;
     const topCustomers = await db.all(`
       SELECT b.customer_name as name, COALESCE(SUM(b.grand_total), 0) as total_spent, COUNT(DISTINCT b.id)::int as visits
       FROM salon_bills b
@@ -135,10 +142,11 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error('Admin dashboard error:', error);
+    console.error('Admin dashboard summary failed:', error);
+    const mapped = mapApiError(error, 'Unable to load the dashboard summary.');
     return NextResponse.json(
-      { error: 'Failed to fetch dashboard stats' },
-      { status: error.status || 500 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status }
     );
   }
 }

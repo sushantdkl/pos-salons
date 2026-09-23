@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DollarSign, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -20,6 +20,20 @@ const emptyExpense = {
   referenceNumber: '',
   attachmentUrl: '',
 };
+// Advance salary: money paid to staff before the month is settled. It books an ordinary
+// salary expense straight away, and the later settlement deducts it — see
+// src/lib/payroll/salary-advances.js for why that recognises the expense exactly once.
+const emptyAdvance = {
+  staffId: '',
+  amount: '',
+  paymentMethod: 'cash',
+  cashAmount: '',
+  onlineAmount: '',
+  paymentDate: new Date().toISOString().slice(0, 10),
+  referenceNumber: '',
+  note: '',
+};
+
 const emptySalary = {
   staffId: '',
   salaryMonth: new Date().toISOString().slice(0, 7),
@@ -64,10 +78,13 @@ function Textarea(props) {
 }
 
 export default function AdminExpensesPage() {
+  const advanceIdempotencyKey = useRef(null);
   const [activeTab, setActiveTab] = useState('Overview');
   const [data, setData] = useState(null);
   const [expenseForm, setExpenseForm] = useState(emptyExpense);
   const [salaryForm, setSalaryForm] = useState(emptySalary);
+  const [advanceForm, setAdvanceForm] = useState(emptyAdvance);
+  const [advanceOpen, setAdvanceOpen] = useState(false);
   const [filters, setFilters] = useState({ search: '', category: 'all', paymentMethod: 'all', paymentStatus: 'all', staffId: '', salaryMonth: '', from: '', to: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,8 +137,72 @@ export default function AdminExpensesPage() {
   }, [selectedStaff?.id, salaryForm.salaryMonth]);
 
   const totalPayable = Math.max(0, Number(salaryForm.baseSalary || 0) + Number(salaryForm.commissionEarned || 0) + Number(salaryForm.bonus || 0) - Number(salaryForm.deduction || 0));
-  const remainingBalance = Math.max(0, totalPayable - Number(salaryForm.amountPaid || 0));
-  const paymentStatus = Number(salaryForm.amountPaid || 0) <= 0 ? 'unpaid' : remainingBalance <= 0 ? 'paid' : 'partially_paid';
+  // Outstanding advances are absorbed before any cash is handed over. An advance larger than
+  // the salary is capped here too, so the preview can never show a negative amount payable.
+  const outstandingAdvance = Number(selectedStaff?.outstandingAdvance || 0);
+  const advanceApplied = Math.min(outstandingAdvance, totalPayable);
+  const remainingPayable = Math.max(0, totalPayable - advanceApplied);
+  const advanceCarriedForward = Math.max(0, outstandingAdvance - advanceApplied);
+  const remainingBalance = Math.max(0, remainingPayable - Number(salaryForm.amountPaid || 0));
+  const paymentStatus = remainingBalance <= 0 && (Number(salaryForm.amountPaid || 0) > 0 || advanceApplied > 0)
+    ? 'paid'
+    : Number(salaryForm.amountPaid || 0) <= 0 ? 'unpaid' : 'partially_paid';
+  const staffAdvances = data?.staffAdvances || [];
+
+  const cancelAdvance = async (advance) => {
+    const reason = window.prompt('Reason for cancelling this advance (required):', '');
+    if (reason === null) return;
+    if (!reason.trim()) { setError('A reason is required to cancel an advance.'); return; }
+    setActionLoading(true);
+    setMessage('');
+    setError('');
+    const response = await fetch(`/api/admin/expenses?id=${advance.id}&type=advance&reason=${encodeURIComponent(reason.trim())}`, {
+      method: 'DELETE', headers: headers(),
+    });
+    const payload = await response.json();
+    if (response.ok) {
+      setMessage(payload.message || 'Advance cancelled.');
+      fetchData();
+    } else {
+      setError(payload.error || 'Could not cancel the advance');
+    }
+    setActionLoading(false);
+  };
+
+  const saveAdvance = async () => {
+    setSaving(true);
+    setMessage('');
+    setError('');
+    if (!advanceIdempotencyKey.current) advanceIdempotencyKey.current = crypto.randomUUID();
+    const response = await fetch('/api/admin/expenses', {
+      method: 'POST',
+      headers: { ...headers(), 'Idempotency-Key': advanceIdempotencyKey.current },
+      body: JSON.stringify({
+        type: 'advance',
+        staffId: advanceForm.staffId,
+        amount: advanceForm.amount,
+        paymentMethod: advanceForm.paymentMethod,
+        cashAmount: advanceForm.cashAmount,
+        onlineAmount: advanceForm.onlineAmount,
+        paymentDate: advanceForm.paymentDate,
+        referenceNumber: advanceForm.referenceNumber,
+        note: advanceForm.note,
+        idempotencyKey: advanceIdempotencyKey.current,
+        sourceIdentifier: `ADMIN-ADV-${advanceIdempotencyKey.current}`,
+      }),
+    });
+    const payload = await response.json();
+    if (response.ok) {
+      advanceIdempotencyKey.current = null;
+      setMessage(payload.message || 'Advance salary recorded.');
+      setAdvanceForm({ ...emptyAdvance, staffId: advanceForm.staffId, paymentDate: advanceForm.paymentDate });
+      setAdvanceOpen(false);
+      fetchData();
+    } else {
+      setError(payload.error || 'Could not record the advance');
+    }
+    setSaving(false);
+  };
 
   const saveExpense = async () => {
     setSaving(true);
@@ -215,9 +296,30 @@ export default function AdminExpensesPage() {
         ) : null}
         {activeTab === 'Salary Payments' ? (
           <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-            <SalaryForm form={salaryForm} setForm={setSalaryForm} staff={data?.staff || []} totalPayable={totalPayable} remainingBalance={remainingBalance} paymentStatus={paymentStatus} saving={saving} onSave={saveSalary} />
+            <SalaryForm
+              form={salaryForm} setForm={setSalaryForm} staff={data?.staff || []}
+              totalPayable={totalPayable} remainingBalance={remainingBalance} paymentStatus={paymentStatus}
+              saving={saving} onSave={saveSalary}
+              advances={staffAdvances} outstandingAdvance={outstandingAdvance}
+              advanceApplied={advanceApplied} remainingPayable={remainingPayable}
+              advanceCarriedForward={advanceCarriedForward}
+              onGiveAdvance={() => { setAdvanceForm((f) => ({ ...f, staffId: salaryForm.staffId })); setAdvanceOpen(true); }}
+              onCancelAdvance={cancelAdvance}
+            />
             <SalaryTable salaries={data?.salaries || []} onEdit={setSalaryForm} onDelete={(record) => setConfirmAction({ type: 'salary', record })} />
           </div>
+        ) : null}
+
+        {advanceOpen ? (
+          <AdvanceDialog
+            form={advanceForm}
+            setForm={setAdvanceForm}
+            staff={data?.staff || []}
+            outstandingAdvance={outstandingAdvance}
+            saving={saving}
+            onCancel={() => setAdvanceOpen(false)}
+            onSave={saveAdvance}
+          />
         ) : null}
         {activeTab === 'Reports' ? (
           <Reports filters={filters} setFilters={setFilters} categories={data?.categories || []} paymentMethods={data?.paymentMethods || []} paymentStatuses={data?.paymentStatuses || []} staff={data?.staff || []} expenses={data?.expenses || []} salaries={data?.salaries || []} />
@@ -282,7 +384,7 @@ function ExpenseForm({ form, setForm, categories, paymentMethods, saving, onSave
   );
 }
 
-function SalaryForm({ form, setForm, staff, totalPayable, remainingBalance, paymentStatus, saving, onSave }) {
+function SalaryForm({ form, setForm, staff, totalPayable, remainingBalance, paymentStatus, saving, onSave, advances = [], outstandingAdvance = 0, advanceApplied = 0, remainingPayable = 0, advanceCarriedForward = 0, onGiveAdvance, onCancelAdvance }) {
   const update = (patch) => setForm((current) => ({ ...current, ...patch }));
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -292,12 +394,67 @@ function SalaryForm({ form, setForm, staff, totalPayable, remainingBalance, paym
         <Field label="Salary month"><Input type="month" value={form.salaryMonth} onChange={(event) => update({ salaryMonth: event.target.value })} /></Field>
         <div className="grid gap-3 md:grid-cols-2"><Field label="Base salary"><Input type="number" min="0" value={form.baseSalary} onChange={(event) => update({ baseSalary: event.target.value })} placeholder="e.g. 25000" /></Field><Field label="Commission earned"><Input type="number" min="0" value={form.commissionEarned} onChange={(event) => update({ commissionEarned: event.target.value })} placeholder="e.g. 1500" /></Field></div>
         <div className="grid gap-3 md:grid-cols-2"><Field label="Bonus"><Input type="number" min="0" value={form.bonus} onChange={(event) => update({ bonus: event.target.value })} placeholder="e.g. 500" /></Field><Field label="Deduction"><Input type="number" min="0" value={form.deduction} onChange={(event) => update({ deduction: event.target.value })} placeholder="e.g. 200" /></Field></div>
+        {/* Settlement breakdown. The gross figure is never overwritten — the advance is shown
+            as its own deduction line so the two stay distinguishable. */}
         <div className="rounded-lg bg-gray-50 p-4 text-sm">
-          <div className="flex justify-between"><span>Total payable</span><strong>{formatCurrency(totalPayable)}</strong></div>
-          <div className="mt-2 flex justify-between"><span>Remaining balance</span><strong>{formatCurrency(remainingBalance)}</strong></div>
+          <div className="flex justify-between"><span>Gross salary</span><strong>{formatCurrency(totalPayable)}</strong></div>
+          {advanceApplied > 0 ? (
+            <div className="mt-2 flex justify-between text-amber-700"><span>Advance deduction</span><strong>- {formatCurrency(advanceApplied)}</strong></div>
+          ) : null}
+          <div className="mt-2 flex justify-between border-t border-gray-200 pt-2"><span>Remaining salary payable</span><strong>{formatCurrency(remainingPayable)}</strong></div>
+          <div className="mt-2 flex justify-between"><span>Balance after this payment</span><strong>{formatCurrency(remainingBalance)}</strong></div>
           <div className="mt-2 flex justify-between"><span>Status</span><strong>{paymentStatus.replace('_', ' ')}</strong></div>
+          {advanceCarriedForward > 0 ? (
+            <p className="mt-2 text-xs text-amber-700">
+              Advance exceeds this salary. {formatCurrency(advanceCarriedForward)} stays outstanding and carries to the next period — no negative payment is created.
+            </p>
+          ) : null}
+          {outstandingAdvance > 0 ? (
+            <p className="mt-2 text-xs text-gray-500">
+              The advance was already paid and expensed when it was given, so only the remaining amount is paid now.
+            </p>
+          ) : null}
         </div>
-        <Field label="Amount paid"><Input type="number" min="0" value={form.amountPaid} onChange={(event) => update({ amountPaid: event.target.value })} placeholder="e.g. 25000" /></Field>
+
+        {/* Per-staff advance ledger */}
+        {form.staffId ? (
+          <div className="rounded-lg border border-gray-200 p-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-gray-900">Advances</span>
+              <button type="button" onClick={onGiveAdvance} className="rounded border border-gray-300 px-3 py-1.5 text-xs font-semibold hover:bg-gray-50">
+                Give Advance Salary
+              </button>
+            </div>
+            {advances.length === 0 ? (
+              <p className="mt-2 text-xs text-gray-500">No advances recorded for this staff member.</p>
+            ) : (
+              <div className="mt-2 space-y-1">
+                {advances.map((advance) => (
+                  <div key={advance.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 text-gray-600">
+                      {String(advance.paymentDate).slice(0, 10)} · {advance.paymentMethod.replace('_', ' ')}
+                      {advance.appliedAmount > 0 ? ` · applied ${formatCurrency(advance.appliedAmount)}` : ''}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="font-semibold">{formatCurrency(advance.amount)}</span>
+                      {advance.appliedAmount > 0 ? (
+                        <span className="text-[10px] text-gray-400" title="Already deducted from a salary payment — edit that payment first to release it.">locked</span>
+                      ) : (
+                        <button type="button" onClick={() => onCancelAdvance(advance)} className="rounded border border-red-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50">
+                          Cancel
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-gray-200 pt-1 text-xs font-semibold">
+                  <span>Total advance outstanding</span><span>{formatCurrency(outstandingAdvance)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+        <Field label="Amount to pay now"><Input type="number" min="0" max={remainingPayable || undefined} value={form.amountPaid} onChange={(event) => update({ amountPaid: event.target.value })} placeholder={String(remainingPayable || 0)} /></Field>
         <Field label="Payment method"><Select value={form.paymentMethod} onChange={(event) => update({ paymentMethod: event.target.value })}><option value="cash">cash</option><option value="online">online</option><option value="bank_transfer">bank transfer</option><option value="mixed">mixed</option></Select></Field>
         {form.paymentMethod === 'mixed' ? <div className="grid gap-3 md:grid-cols-2"><Field label="Cash paid"><Input type="number" min="0" value={form.cashAmount} onChange={(event) => update({ cashAmount: event.target.value })} placeholder="e.g. 10000" /></Field><Field label="Online paid"><Input type="number" min="0" value={form.onlineAmount} onChange={(event) => update({ onlineAmount: event.target.value })} placeholder="e.g. 15000" /></Field></div> : null}
         <Field label="Payment date"><Input type="date" value={form.paymentDate} onChange={(event) => update({ paymentDate: event.target.value })} /></Field>
@@ -325,16 +482,81 @@ function ExpenseTable({ expenses, onEdit, onDelete }) {
   );
 }
 
+/**
+ * Give Advance Salary. Admin-only (the API enforces it too). Recording an advance books an
+ * ordinary salary expense immediately, so the cash or online balance — and Expected Cash in
+ * Drawer when paid in cash — move through the existing shared logic, not a second code path.
+ */
+function AdvanceDialog({ form, setForm, staff, outstandingAdvance, saving, onCancel, onSave }) {
+  const update = (patch) => setForm((current) => ({ ...current, ...patch }));
+  const member = staff.find((s) => String(s.id) === String(form.staffId));
+  const newTotal = Number(outstandingAdvance || 0) + Number(form.amount || 0);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className="border-b border-gray-200 px-5 py-4">
+          <h2 className="text-base font-bold text-gray-950">Give Advance Salary</h2>
+          <p className="mt-0.5 text-xs text-gray-500">Paid now and deducted from the next salary settlement.</p>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <Field label="Staff">
+            <Select value={form.staffId} onChange={(event) => update({ staffId: event.target.value })}>
+              <option value="">Select staff</option>
+              {staff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
+            </Select>
+          </Field>
+          {member ? (
+            <div className="rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="flex justify-between"><span>Monthly salary</span><strong>{formatCurrency(member.baseSalary)}</strong></div>
+              <div className="mt-1 flex justify-between"><span>Advance already given</span><strong>{formatCurrency(outstandingAdvance)}</strong></div>
+              <div className="mt-1 flex justify-between border-t border-gray-200 pt-1"><span>Total advance outstanding</span><strong>{formatCurrency(newTotal)}</strong></div>
+            </div>
+          ) : null}
+          <Field label="Advance amount"><Input type="number" min="0" value={form.amount} onChange={(event) => update({ amount: event.target.value })} placeholder="e.g. 5000" /></Field>
+          <Field label="Payment method">
+            <Select value={form.paymentMethod} onChange={(event) => update({ paymentMethod: event.target.value })}>
+              <option value="cash">cash</option>
+              <option value="online">online</option>
+              <option value="bank_transfer">bank transfer</option>
+              <option value="mixed">mixed</option>
+            </Select>
+          </Field>
+          {form.paymentMethod === 'mixed' ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Cash paid"><Input type="number" min="0" value={form.cashAmount} onChange={(event) => update({ cashAmount: event.target.value })} /></Field>
+              <Field label="Online paid"><Input type="number" min="0" value={form.onlineAmount} onChange={(event) => update({ onlineAmount: event.target.value })} /></Field>
+            </div>
+          ) : null}
+          <Field label="Payment date"><Input type="date" value={form.paymentDate} onChange={(event) => update({ paymentDate: event.target.value })} /></Field>
+          <Field label="Reference number (optional)"><Input value={form.referenceNumber} onChange={(event) => update({ referenceNumber: event.target.value })} /></Field>
+          <Field label="Reason / note (optional)"><Textarea rows={2} value={form.note} onChange={(event) => update({ note: event.target.value })} /></Field>
+          <p className="text-xs text-gray-500">
+            Cash advances reduce the drawer; online advances reduce the online balance. The
+            amount is deducted from this staff member&apos;s next salary settlement, so the salary
+            expense is still recognised only once.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
+          <button type="button" onClick={onCancel} disabled={saving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold">Cancel</button>
+          <button type="button" onClick={onSave} disabled={saving || !form.staffId || !Number(form.amount)} className="rounded-lg bg-gray-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {saving ? 'Saving...' : 'Pay Advance'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SalaryTable({ salaries, onEdit, onDelete }) {
   return (
     <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-4"><h2 className="text-xl font-semibold text-gray-950">Salary Payments</h2></div>
       <div className="overflow-x-auto">
         <table className="min-w-[720px] w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Staff</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Payable</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead>
+          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Staff</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Gross</th><th className="px-4 py-3">Advance</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="min-h-10 rounded border border-gray-300 px-3 py-2">Edit</button><button onClick={() => onDelete(salary)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-red-200 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
-            {!salaries.length ? <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No salary payments found.</td></tr> : null}
+            {salaries.map((salary) => <tr key={salary.id}><td className="px-4 py-3 font-medium">{salary.staffName}</td><td className="px-4 py-3">{salary.salaryMonth}</td><td className="px-4 py-3">{formatCurrency(salary.totalPayable)}</td><td className="px-4 py-3 text-amber-700">{salary.advanceApplied > 0 ? `- ${formatCurrency(salary.advanceApplied)}` : '-'}</td><td className="px-4 py-3">{formatCurrency(salary.amountPaid)}</td><td className="px-4 py-3">{formatCurrency(salary.remainingBalance)}</td><td className="px-4 py-3">{salary.paymentStatus.replace('_', ' ')}</td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => onEdit(salary)} className="min-h-10 rounded border border-gray-300 px-3 py-2">Edit</button><button onClick={() => onDelete(salary)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-red-200 text-red-700"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}
+            {!salaries.length ? <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">No salary payments found.</td></tr> : null}
           </tbody>
         </table>
       </div>

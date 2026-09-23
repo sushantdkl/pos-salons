@@ -111,7 +111,7 @@ function StaffDetail({ staff, selectedPeriod, maxRevenue }) {
         <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Services</p><p className="font-semibold text-gray-950">{metric.servicesCompleted || 0}</p></div>
         <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Customers</p><p className="font-semibold text-gray-950">{metric.customersServed || 0}</p></div>
         <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Revenue</p><p className="font-semibold text-gray-950">{formatCurrency(metric.revenue || 0)}</p></div>
-        <div className="rounded-lg bg-emerald-50 p-3"><p className="text-xs text-emerald-700">Cash in Hand</p><p className="font-semibold text-emerald-900">{formatCurrency(metric.cashCollected || 0)}</p></div>
+        <div className="rounded-lg bg-emerald-50 p-3"><p className="text-xs text-emerald-700">Cash Collected</p><p className="font-semibold text-emerald-900">{formatCurrency(metric.cashCollected || 0)}</p></div>
         <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">QR Collected</p><p className="font-semibold text-gray-950">{formatCurrency(metric.qrCollected || 0)}</p></div>
         <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Commission</p><p className="font-semibold text-gray-950">{formatCurrency(metric.commission || 0)}</p></div>
       </div>
@@ -235,7 +235,7 @@ export default function AdminStaffPerformancePage() {
 
         <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard title={`${periodLabels[selectedPeriod]} Revenue`} value={formatCurrency(totals.revenue || 0)} helper="Service revenue only" icon={TrendingUp} tone="green" />
-          <MetricCard title="Cash in Hand" value={formatCurrency(totals.cashCollected || 0)} helper="Cash collected from staff services" icon={Banknote} tone="green" />
+          <MetricCard title="Cash Collected" value={formatCurrency(totals.cashCollected || 0)} helper="Cash collected from staff services" icon={Banknote} tone="green" />
           <MetricCard title="QR Collected" value={formatCurrency(totals.qrCollected || 0)} helper="Online / QR from staff services" icon={Smartphone} tone="blue" />
           <MetricCard title="Services Completed" value={totals.servicesCompleted || 0} helper="Paid service lines" icon={Scissors} tone="blue" />
           <MetricCard title="Commission Earned" value={formatCurrency(totals.commission || 0)} helper="Calculated from bill items" icon={Award} tone="amber" />
@@ -316,7 +316,7 @@ export default function AdminStaffPerformancePage() {
                   <th className="px-5 py-3 text-right">Services</th>
                   <th className="px-5 py-3 text-right">Customers</th>
                   <th className="px-5 py-3 text-right">Revenue</th>
-                  <th className="px-5 py-3 text-right">Cash in Hand</th>
+                  <th className="px-5 py-3 text-right">Cash Collected</th>
                   <th className="px-5 py-3 text-right">QR</th>
                   <th className="px-5 py-3 text-right">Commission</th>
                   <th className="px-5 py-3 text-right">Share</th>
