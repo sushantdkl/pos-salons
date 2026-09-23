@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { normalizePaymentAllocations } from '@/lib/payments/allocations';
 import { PERMISSIONS, hasPermission, requirePermission } from '@/lib/auth/permissions';
 import { normalizeDocumentSettings } from '@/lib/documents/settings';
+import { linkAppointmentToBill } from '@/lib/appointments/service';
 
 function normalizeDiscount(type, value, subtotal) {
   const amount = Number(value || 0);
@@ -455,6 +456,11 @@ export async function POST(request) {
         }
       }
 
+      // Settling an appointment: linked inside this transaction, so a bill is never saved
+      // without its link (or twice for the same appointment — the paid-bill index guards it).
+      const appointmentId = Number(data.appointment_id || data.appointmentId || 0) || null;
+      if (appointmentId) await linkAppointmentToBill(tx, appointmentId, billId, user.id);
+
       return {
         bill: {
           id: billId,
@@ -510,6 +516,14 @@ export async function POST(request) {
     ];
     if (error.code === 'STORE_CLOSED') {
       return NextResponse.json({ error: error.message, message: error.message, code: error.code, success: false }, { status: 409 });
+    }
+    // Appointment link: already billed / cancelled / missing, or the paid-bill unique index.
+    if (error.code === 'APPOINTMENT_ALREADY_BILLED' || error.constraint === 'ux_salon_bills_appointment_paid') {
+      const message = error.code === 'APPOINTMENT_ALREADY_BILLED' ? error.message : 'This appointment is already billed.';
+      return NextResponse.json({ error: message, message, code: 'APPOINTMENT_ALREADY_BILLED', success: false }, { status: 409 });
+    }
+    if (/appointment/i.test(error.message || '') && error.status && error.status < 500) {
+      return NextResponse.json({ error: error.message, message: error.message, success: false }, { status: error.status });
     }
     const isKnownBusinessError = knownMessages.includes(error.message) || /Assign staff|unavailable|Not enough stock|cannot|Invalid|exceed|less than/i.test(error.message || '');
     const message = isKnownBusinessError

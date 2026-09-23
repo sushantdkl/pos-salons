@@ -35,9 +35,18 @@ export function canAccessPath(role, pathname) {
   if (pathname.startsWith('/dashboard/beautician/queue')) return normalized === 'beautician';
   if (pathname.startsWith('/dashboard/beautician')) return normalized === 'beautician';
 
-  if (pathname.startsWith('/admin/employees') || pathname.startsWith('/admin/reports') || pathname.startsWith('/admin/settings')) {
+  if (
+    pathname.startsWith('/admin/employees') ||
+    pathname.startsWith('/admin/reports') ||
+    pathname.startsWith('/admin/settings') ||
+    pathname.startsWith('/admin/appointments/settings')
+  ) {
     return normalized === 'admin';
   }
+
+  // Front desk runs appointments; service staff see only their own schedule.
+  if (pathname.startsWith('/admin/appointments')) return ['admin', 'cashier'].includes(normalized);
+  if (pathname.startsWith('/appointments/my')) return ['barber', 'stylist', 'beautician'].includes(normalized);
 
   if (
     pathname.startsWith('/admin/billing') ||

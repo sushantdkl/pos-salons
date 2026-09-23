@@ -123,6 +123,21 @@ if (otherStaff) {
 const cashierPerf = await get(cashier, '/api/admin/staff-performance');
 record('cashier denied staff performance', cashierPerf.status === 403, `status ${cashierPerf.status}`);
 
+// Health: public, reports state only, and says every migration is applied.
+const health = await get(null, '/api/health');
+record('health reports ok with no pending migrations', health.status === 200 && health.json?.status === 'ok' && health.json?.migrations?.pending === 0, JSON.stringify(health.json));
+record('health exposes no migration names or credentials', !/\.sql|password|postgres:\/\//i.test(JSON.stringify(health.json)));
+
+// Login brute-force lockout: only this probe username is locked, real users are not.
+const probe = `qa_lockout_probe_${Date.now()}`;
+let lastStatus = 0;
+for (let attempt = 0; attempt < 9; attempt += 1) {
+  const response = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: probe, password: 'wrong' }) });
+  lastStatus = response.status;
+}
+record('repeated wrong PINs lock the username', lastStatus === 429, `status ${lastStatus}`);
+record('lockout does not affect other users', Boolean(await login('qa_cashier')));
+
 const failed = results.filter((row) => !row.ok);
 for (const row of results) console.log(`${row.ok ? 'PASS' : 'FAIL'}  ${row.label}  ${row.detail}`);
 console.log(`\n${results.length - failed.length}/${results.length} permission checks passed`);

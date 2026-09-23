@@ -6,6 +6,7 @@ import { getDashboardTransactions, getSalonDashboardSummary, PAID_BILL_STATUS_SQ
 import { getSalesSeries, revenueScope } from '@/lib/reports/finance-summary';
 import { isValidCustomRange, resolveDashboardPeriod } from '@/lib/reports/dashboard-period';
 import { getCurrentBusinessDay, getStoreStatus } from '@/lib/business-day/service';
+import { getFrontDeskNow } from '@/lib/reports/front-desk';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,20 +74,7 @@ export async function GET(request) {
 
     // "Right now" widgets: the live store state and who is waiting in the queue.
     const store = await getStoreStatus(db);
-    const queue = businessDayId
-      ? await db.all(`
-        SELECT wt.id, wt.token_number, wt.customer_name, wt.created_at,
-               s.name AS service_name,
-               COALESCE(NULLIF(sp.display_name, ''), u.full_name) AS staff_name
-        FROM walk_in_tokens wt
-        LEFT JOIN salon_services s ON s.id = wt.service_id
-        LEFT JOIN users u ON u.id = wt.assigned_staff_id
-        LEFT JOIN staff_profiles sp ON sp.user_id = wt.assigned_staff_id
-        WHERE wt.business_day_id = ? AND wt.status = 'WAITING'
-        ORDER BY wt.created_at ASC, wt.id ASC
-        LIMIT 12
-      `, [businessDayId])
-      : [];
+    const frontDesk = await getFrontDeskNow(db, businessDayId);
     const salesSeries = await getSalesSeries(db, period, range);
     const totalCustomers = Number(totalCustomersRow?.count || 0);
     const repeatCustomers = Number(repeatCustomersRow?.count || 0);
@@ -157,14 +145,7 @@ export async function GET(request) {
         staffActivity: dashboard.staffActivity,
         alerts: dashboard.alerts,
         store,
-        queue: queue.map((token) => ({
-          id: token.id,
-          tokenNumber: token.token_number,
-          customerName: token.customer_name || 'Walk-in',
-          serviceName: token.service_name || null,
-          staffName: token.staff_name || null,
-          createdAt: token.created_at,
-        })),
+        ...frontDesk,
       },
     });
   } catch (error) {

@@ -30,6 +30,8 @@ const PAGES = {
     '/admin/billing',
     '/dashboard/admin/tokens',
     '/admin/reports',
+    '/admin/appointments',
+    '/admin/appointments/settings',
   ],
   cashier: [
     '/dashboard/cashier',
@@ -37,6 +39,14 @@ const PAGES = {
     '/store/opening-closing',
     '/admin/billing',
     '/dashboard/cashier/tokens',
+    '/admin/appointments',
+    '/dashboard/cashier/daily-expenses',
+    '/cashier/credit',
+    '/cashier/advances',
+  ],
+  barber: [
+    '/dashboard/barber',
+    '/appointments/my',
   ],
 };
 
@@ -57,7 +67,7 @@ if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch();
 
 for (const [role, pages] of Object.entries(PAGES)) {
-  const session = await login(role === 'admin' ? 'qa_admin' : 'qa_cashier');
+  const session = await login(`qa_${role}`);
   for (const width of WIDTHS) {
     const context = await browser.newContext({ viewport: { width, height: width < 768 ? 800 : 900 } });
     await context.addInitScript(({ token, user }) => {
@@ -173,7 +183,7 @@ for (const [role, pages] of Object.entries(PAGES)) {
       const text = await page.evaluate(() => document.body.innerText);
       record(`${route} @${width} shows the scenario's data`, /9,200\.00/.test(text), 'expected Rs 9,200.00 net sales');
       if (route.includes('analytics')) {
-        for (const tab of ['Overview', 'Sales & Money', 'Services', 'Customers', 'Staff', 'Products & Inventory', 'Tokens / Front Desk', 'Controls & Activity']) {
+        for (const tab of ['Overview', 'Sales & Money', 'Services', 'Customers', 'Staff', 'Products & Inventory', 'Tokens / Front Desk', 'Appointments', 'Controls & Activity']) {
           errors.length = 0;
           await page.getByRole('tab', { name: tab, exact: true }).click();
           await page.waitForTimeout(500);
@@ -195,6 +205,22 @@ for (const [role, pages] of Object.entries(PAGES)) {
     }
     await context.close();
   }
+}
+
+// Public website booking page (no sidebar) at every width.
+for (const width of WIDTHS) {
+  const context = await browser.newContext({ viewport: { width, height: 900 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message.slice(0, 200)));
+  await page.goto(`${BASE}/book-appointment`, { waitUntil: 'networkidle', timeout: 90000 });
+  await page.waitForTimeout(800);
+  const metrics = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, text: document.body.innerText }));
+  record(`public /book-appointment @${width} no overflow`, metrics.scrollWidth <= metrics.clientWidth + 1, `${metrics.scrollWidth}>${metrics.clientWidth}`);
+  record(`public /book-appointment @${width} online booking form`, /online booking/i.test(metrics.text) && /services/i.test(metrics.text), metrics.text.slice(0, 80));
+  record(`public /book-appointment @${width} no page errors`, errors.length === 0, errors.join(' | '));
+  if (SHOTS && SHOT_WIDTHS.has(width)) await page.screenshot({ path: path.join(SHOTS, `public_book-appointment_${width}.png`), fullPage: true });
+  await context.close();
 }
 
 await browser.close();

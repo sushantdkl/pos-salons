@@ -83,6 +83,7 @@ export async function proxy(request) {
     pathname.startsWith('/api/license/') ||
     pathname.startsWith('/api/auth/login') ||
     pathname.startsWith('/api/users/active') ||
+    pathname.startsWith('/api/public/') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
     pathname === '/favicon.ico'

@@ -5,7 +5,8 @@ import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getDashboardTransactions, getSalonDashboardSummary } from '@/lib/reports/dashboard-summary';
 import { isValidCustomRange, resolveDashboardPeriod } from '@/lib/reports/dashboard-period';
 import { getSalesSeries, SALARY_EXPENSE_CATEGORIES } from '@/lib/reports/finance-summary';
-import { getCurrentBusinessDay } from '@/lib/business-day/service';
+import { getCurrentBusinessDay, getStoreStatus } from '@/lib/business-day/service';
+import { getFrontDeskNow } from '@/lib/reports/front-desk';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,7 +55,14 @@ export async function GET(request) {
       ? dashboard.recentExpenses
       : dashboard.recentExpenses.filter((row) => !SALARY_EXPENSE_CATEGORIES.includes(row.category));
 
+    // "Right now" widgets shared with the admin dashboard: store state, live queue and the
+    // rest of today's appointments. None of these carry payroll figures.
+    const store = await getStoreStatus(db);
+    const frontDesk = await getFrontDeskNow(db, businessDayId);
+
     return NextResponse.json({
+      store,
+      ...frontDesk,
       user: {
         id: user.id,
         name: user.full_name || user.username,

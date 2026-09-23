@@ -2,82 +2,16 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
-import { PHONE_ERROR_MESSAGE, normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
+import { normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
 import { requireOpenSession } from '@/lib/business-day/service';
+import { createWalkInToken, mapToken, tokenDate, tokenSelectSql } from '@/lib/tokens/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SERVICE_ROLES = SERVICE_STAFF_ROLES;
 const TOKEN_STATUSES = ['WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW'];
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function tokenSelectSql() {
-  return `
-    SELECT t.*, s.name as service_name, s.price as service_price, s.duration_minutes,
-           s.is_package, s.package_items,
-           COALESCE(st.full_name, sp.display_name) as staff_name,
-           sp.salon_role as staff_role,
-           COALESCE(cb.full_name, '') as created_by_name,
-           COALESCE(pb.full_name, '') as printed_by_name,
-           b.bill_number,
-           b.grand_total as bill_total
-    FROM walk_in_tokens t
-    JOIN salon_services s ON s.id = t.service_id
-    LEFT JOIN users st ON st.id = t.assigned_staff_id
-    LEFT JOIN staff_profiles sp ON sp.user_id = t.assigned_staff_id
-    LEFT JOIN users cb ON cb.id = t.created_by
-    LEFT JOIN users pb ON pb.id = t.printed_by
-    LEFT JOIN salon_bills b ON b.id = t.invoice_id
-  `;
-}
-
-function estimateDuration(service) {
-  const base = Number(service.duration_minutes || 20);
-  const min = Math.max(5, Math.round(base * 0.75));
-  const max = Math.max(min, Math.round(base * 1.15));
-  return { min, max };
-}
-
-async function calculateQueue(db, staffId) {
-  const staffClause = staffId ? 'AND assigned_staff_id = ?' : '';
-  const params = staffId ? [today(), staffId] : [today()];
-  const rows = await db.all(`
-    SELECT s.duration_minutes
-    FROM walk_in_tokens t
-    JOIN salon_services s ON s.id = t.service_id
-    WHERE t.token_date = ?::date AND t.status = 'WAITING' ${staffClause}
-    ORDER BY t.created_at ASC, t.id ASC
-  `, params);
-
-  const wait = rows.reduce((sum, row) => {
-    const duration = estimateDuration(row);
-    return { min: sum.min + duration.min, max: sum.max + duration.max };
-  }, { min: 0, max: 0 });
-
-  return { peopleAhead: rows.length, min: wait.min, max: wait.max };
-}
-
-async function nextTokenNumber(db) {
-  const row = await db.get(
-    'SELECT COUNT(*)::int as count FROM walk_in_tokens WHERE token_date = ?::date',
-    [today()]
-  );
-  return `TKN-${String(Number(row?.count || 0) + 1).padStart(3, '0')}`;
-}
-
-function mapToken(token) {
-  return {
-    ...token,
-    is_printed: Boolean(token.is_printed),
-    wait_label: `${token.estimated_wait_minutes_min || 0}-${token.estimated_wait_minutes_max || 0} min`,
-    status_label: String(token.status || '').replace('_', ' '),
-  };
-}
 
 async function customerLookup(db, phone) {
   const customerPhone = normalizeCustomerPhone(phone);
@@ -92,27 +26,13 @@ async function customerLookup(db, phone) {
   `, [customerPhone]);
 }
 
-async function findOrCreateCustomerForToken(tx, { name, phone }) {
-  const customerPhone = normalizeCustomerPhone(phone);
-  const customerName = cleanText(name, '');
-  if (!customerPhone) return null;
-  const existing = await tx.get('SELECT * FROM customers WHERE phone = ?', [customerPhone]);
-  if (existing) return existing;
-  const fallbackName = customerName || `Customer ${customerPhone}`;
-  const result = await tx.run(
-    'INSERT INTO customers (name, phone, notes) VALUES (?, ?, ?)',
-    [fallbackName, customerPhone, 'Created from walk-in token']
-  );
-  return tx.get('SELECT * FROM customers WHERE id = ?', [result.lastInsertRowid]);
-}
-
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
     const user = await requireRole(request, db, ['admin', 'cashier', ...SERVICE_ROLES]);
     const { searchParams } = new URL(request.url);
-    const date = searchParams.get('date') || today();
+    const date = searchParams.get('date') || tokenDate();
     const mode = searchParams.get('mode') || 'queue';
     const status = searchParams.get('status') || '';
     const staffId = Number(searchParams.get('staffId') || 0);
@@ -308,65 +228,18 @@ export async function POST(request) {
     const shouldPrint = Boolean(data.should_print);
     if (!serviceId) return NextResponse.json({ error: 'Select a service or package' }, { status: 400 });
 
-    const created = await db.transaction(async (tx) => {
-      const service = await tx.get('SELECT * FROM salon_services WHERE id = ? AND is_active = TRUE', [serviceId]);
-      if (!service) throw new Error('Selected service is unavailable');
-      if (staffId) {
-        const staff = await tx.get(`
-          SELECT u.id
-          FROM users u
-          JOIN staff_profiles sp ON sp.user_id = u.id
-          WHERE u.id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
-        `, [staffId]);
-        if (!staff) throw new Error('Assigned staff is unavailable');
-      }
-
-      let customerId = Number(data.customer_id || 0) || null;
-      const enteredCustomerName = cleanText(data.customer_name, '');
-      const hasPhoneInput = String(data.customer_phone || '').trim();
-      const customerPhone = hasPhoneInput ? normalizeCustomerPhone(data.customer_phone) : null;
-      if (hasPhoneInput && !customerPhone) throw new Error(PHONE_ERROR_MESSAGE);
-      let tokenCustomer = null;
-      if (!customerId) {
-        tokenCustomer = await findOrCreateCustomerForToken(tx, { name: enteredCustomerName, phone: customerPhone });
-        customerId = tokenCustomer?.id || null;
-      } else {
-        tokenCustomer = await tx.get('SELECT * FROM customers WHERE id = ?', [customerId]);
-      }
-      const customerName = enteredCustomerName || tokenCustomer?.name || null;
-
-      const queue = await calculateQueue(tx, staffId);
-      const tokenNumber = await nextTokenNumber(tx);
-      const result = await tx.run(`
-        INSERT INTO walk_in_tokens (
-          token_number, token_date, customer_id, customer_name, customer_phone,
-          service_id, package_id, assigned_staff_id, people_ahead,
-          estimated_wait_minutes_min, estimated_wait_minutes_max, created_by,
-          is_printed, printed_at, printed_by, notes, business_day_id, store_session_id
-        ) VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        tokenNumber,
-        today(),
-        customerId,
-        customerName,
-        customerPhone,
-        service.id,
-        service.is_package ? service.id : null,
-        staffId,
-        queue.peopleAhead,
-        queue.min,
-        queue.max,
-        user.id,
-        shouldPrint,
-        shouldPrint ? new Date().toISOString() : null,
-        shouldPrint ? user.id : null,
-        cleanText(data.notes, null),
-        businessDayId,
-        sessionId,
-      ]);
-      await logAction(tx, user.id, shouldPrint ? 'create_printed' : 'create', 'walk_in_token', result.lastInsertRowid, tokenNumber);
-      return tx.get(`${tokenSelectSql()} WHERE t.id = ?`, [result.lastInsertRowid]);
-    });
+    const created = await db.transaction((tx) => createWalkInToken(tx, {
+      serviceId,
+      staffId,
+      customerId: data.customer_id,
+      customerName: data.customer_name,
+      customerPhone: data.customer_phone,
+      notes: data.notes,
+      shouldPrint,
+      userId: user.id,
+      sessionId,
+      businessDayId,
+    }));
 
     return NextResponse.json({ token: mapToken(created), message: 'Token generated successfully' }, { status: 201 });
   } catch (error) {

@@ -30,6 +30,8 @@ const TRANSACTIONAL_TABLES = [
   'salon_bill_items', 'salon_bills', 'walk_in_tokens',
   'expenses', 'savings_deposits', 'inventory_movements',
   'store_sessions', 'business_days',
+  'appointment_waitlist', 'appointment_events', 'appointment_services', 'appointments',
+  'staff_time_off', 'staff_working_hours',
 ];
 
 const client = new pg.Client({ connectionString: url });
@@ -37,7 +39,7 @@ await client.connect();
 try {
   await client.query('BEGIN');
   await client.query(`TRUNCATE ${TRANSACTIONAL_TABLES.join(', ')} RESTART IDENTITY CASCADE`);
-  await client.query(`UPDATE document_sequences SET next_value = 1 WHERE document_type = 'salon_bill'`);
+  await client.query(`UPDATE document_sequences SET next_value = 1 WHERE document_type IN ('salon_bill', 'appointment')`);
 
   const hash = bcrypt.hashSync(QA_PASSWORD, 10);
   const upsertUser = async (username, fullName, role) => {
@@ -85,8 +87,11 @@ try {
   }
 
   await client.query(`
-    INSERT INTO system_settings (setting_key, setting_value) VALUES ('advance_ceiling_percent', '50')
-    ON CONFLICT (setting_key) DO UPDATE SET setting_value = '50'
+    INSERT INTO system_settings (setting_key, setting_value) VALUES
+      ('advance_ceiling_percent', '50'), ('salon_open_time', '09:00'), ('salon_close_time', '20:00'),
+      ('appointment_slot_minutes', '15'), ('online_booking_enabled', 'true'),
+      ('online_booking_instant_confirm', 'false'), ('online_booking_max_days_ahead', '30')
+    ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value
   `);
 
   await client.query('COMMIT');

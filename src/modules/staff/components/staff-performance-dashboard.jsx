@@ -1,205 +1,170 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Award, Banknote, CalendarDays, Scissors, Smartphone, TrendingUp, Users } from 'lucide-react';
-import { formatCurrency } from '@/lib/currency';
+/**
+ * STAFF HOME (barber / stylist / beautician) — the same ERP layout as admin and cashier.
+ * /api/admin/staff-performance returns only the signed-in staff member's own figures;
+ * /api/appointments returns only their own bookings (without customer phone numbers).
+ */
 
-function MetricCard({ title, value, icon: Icon, sub }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <Icon className="mb-3 h-6 w-6 text-gray-700" />
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-950">{value}</p>
-      {sub && <p className="mt-1 text-xs text-gray-500">{sub}</p>}
-    </div>
-  );
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { ArrowRight, CalendarClock, Scissors } from 'lucide-react';
+import {
+  count, EmptyState, ErpButton, ErpPage, FinancialTable, MetricCard, MetricGroup, money, PageHeader, SectionHeading, StatusBadge,
+} from '@/components/erp';
+import { erpFetch } from '@/components/erp/use-report';
+
+const PERIODS = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['custom', 'Custom']];
+const APPOINTMENT_LABEL = { PENDING: ['Pending', 'cash'], CONFIRMED: ['Confirmed', 'online'], CHECKED_IN: ['Arrived', 'ledger'], IN_SERVICE: ['In service', 'hrm'], COMPLETED: ['Completed', 'inflow'], CANCELLED: ['Cancelled', 'neutral'], NO_SHOW: ['No show', 'outflow'] };
+
+function nepalToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+}
+function dateTime(value) {
+  return value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 }
 
-export default function StaffPerformanceDashboard({ title, accent = 'text-indigo-600' }) {
+export default function StaffPerformanceDashboard({ title }) {
   const [data, setData] = useState(null);
+  const [appointments, setAppointments] = useState([]);
   const [period, setPeriod] = useState('today');
   const [customDates, setCustomDates] = useState({ start: '', end: '' });
 
   useEffect(() => {
-    async function load() {
-      const token = localStorage.getItem('pos_token');
-      let url = `/api/admin/staff-performance?period=${period}`;
-      if (period === 'custom' && customDates.start && customDates.end) {
-        url += `&startDate=${customDates.start}&endDate=${customDates.end}`;
-      } else if (period === 'custom') {
-        return;
-      }
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) setData(await response.json());
+    let url = `/api/admin/staff-performance?period=${period}`;
+    if (period === 'custom') {
+      if (!customDates.start || !customDates.end) return;
+      url += `&startDate=${customDates.start}&endDate=${customDates.end}`;
     }
-    load();
+    erpFetch(url).then(setData).catch(() => setData((current) => current));
   }, [period, customDates.start, customDates.end]);
+
+  useEffect(() => {
+    const today = nepalToday();
+    erpFetch(`/api/appointments?from=${today}&to=${today}`).then((payload) => setAppointments(payload.appointments || [])).catch(() => setAppointments([]));
+  }, []);
 
   const today = data?.metrics?.today || {};
   const week = data?.metrics?.week || {};
   const month = data?.metrics?.month || {};
   const summary = data?.summary || {};
   const report = data?.report || { rows: [], totals: {} };
+  const upcoming = appointments.filter((item) => !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(item.status));
 
   return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-6">
-            <h1 className="text-3xl font-semibold text-gray-950">{title}</h1>
-            <p className="mt-1 text-sm text-gray-600">Daily service activity, revenue, customers, and commission.</p>
+    <ErpPage>
+      <PageHeader icon={Scissors} iconTone="ops" title={title} subtitle="Your services, customers, revenue and commission." />
+      <div className="space-y-5">
+        <div>
+          <SectionHeading title="Today" />
+          <MetricGroup columns={4}>
+            <MetricCard label="Services completed" value={count(today.servicesCompleted)} tone="ops" emphasis />
+            <MetricCard label="Customers served" value={count(today.customersServed)} tone="ops" />
+            <MetricCard label="Revenue generated" value={money(today.revenue)} tone="inflow" />
+            <MetricCard label="Commission earned" value={money(today.commission)} tone="hrm" />
+          </MetricGroup>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="min-w-0">
+            <SectionHeading title="My appointments today" action={<Link href="/appointments/my" className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 hover:underline">Week <ArrowRight className="h-3.5 w-3.5" /></Link>} />
+            {upcoming.length ? (
+              <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                {upcoming.map((item) => (
+                  <li key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="w-12 shrink-0 text-sm font-extrabold tabular-nums">{item.startTime}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-stone-900">{item.customerName}</p>
+                      <p className="truncate text-xs text-stone-500">{item.services.map((service) => service.name).join(', ')}</p>
+                    </div>
+                    <StatusBadge status={item.status} label={APPOINTMENT_LABEL[item.status][0]} tone={APPOINTMENT_LABEL[item.status][1]} />
+                  </li>
+                ))}
+              </ul>
+            ) : <EmptyState icon={CalendarClock} title="No more appointments today" />}
           </div>
+          <div className="min-w-0">
+            <SectionHeading title="Week & month" />
+            <MetricGroup columns={2}>
+              <MetricCard label="This week" value={money(week.revenue)} tone="inflow" sub={`${count(week.servicesCompleted)} services · ${money(week.commission)} commission`} />
+              <MetricCard label="This month" value={money(month.revenue)} tone="inflow" sub={`${count(month.servicesCompleted)} services · ${money(month.commission)} commission`} />
+              <MetricCard label="Avg services / day" value={(summary.averageServicesPerDay || 0).toFixed(1)} tone="neutral" />
+              <MetricCard label="Avg revenue / day" value={money(summary.averageRevenuePerDay)} tone="neutral" />
+            </MetricGroup>
+          </div>
+        </div>
 
-          <section className="mb-6">
-            <h2 className={`mb-3 text-lg font-semibold ${accent}`}>Today</h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard title="Services Completed" value={today.servicesCompleted || 0} icon={Scissors} />
-              <MetricCard title="Customers Served" value={today.customersServed || 0} icon={Users} />
-              <MetricCard title="Revenue Generated" value={formatCurrency(today.revenue || 0)} icon={TrendingUp} />
-              <MetricCard title="Commission Earned" value={formatCurrency(today.commission || 0)} icon={Award} />
-            </div>
-          </section>
+        <div className="min-w-0">
+          <SectionHeading title="Recent services" />
+          <FinancialTable
+            caption="Recent services"
+            rows={data?.recentServices || []}
+            rowKey={(row, index) => `${row.invoice}-${index}`}
+            empty="No completed services yet."
+            columns={[
+              { key: 'customer', label: 'Customer', render: (row) => row.customerName || 'Walk-in Customer' },
+              { key: 'service', label: 'Service', render: (row) => row.serviceName },
+              { key: 'invoice', label: 'Invoice', render: (row) => row.invoice },
+              { key: 'date', label: 'Date', render: (row) => dateTime(row.date) },
+            ]}
+          />
+        </div>
 
-          <section className="mb-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-950"><CalendarDays className="h-5 w-5" /> This Week</h2>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <MetricCard title="Services" value={week.servicesCompleted || 0} icon={Scissors} />
-                <MetricCard title="Revenue" value={formatCurrency(week.revenue || 0)} icon={TrendingUp} />
-                <MetricCard title="Commission" value={formatCurrency(week.commission || 0)} icon={Award} />
-              </div>
-            </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-950"><CalendarDays className="h-5 w-5" /> This Month</h2>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <MetricCard title="Services" value={month.servicesCompleted || 0} icon={Scissors} />
-                <MetricCard title="Revenue" value={formatCurrency(month.revenue || 0)} icon={TrendingUp} />
-                <MetricCard title="Commission" value={formatCurrency(month.commission || 0)} icon={Award} />
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-200 p-5">
-                <h2 className="text-lg font-semibold text-gray-950">Recent Services</h2>
-              </div>
-              <table className="w-full">
-                <thead className="bg-gray-50 text-left text-sm text-gray-600">
-                  <tr>
-                    <th className="px-5 py-3">Customer</th>
-                    <th className="px-5 py-3">Service</th>
-                    <th className="px-5 py-3">Invoice</th>
-                    <th className="px-5 py-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data?.recentServices || []).map((item, index) => (
-                    <tr key={`${item.invoice}-${index}`}>
-                      <td className="px-5 py-3 text-gray-950">{item.customerName || 'Walk-in Customer'}</td>
-                      <td className="px-5 py-3 text-gray-700">{item.serviceName}</td>
-                      <td className="px-5 py-3 text-gray-700">{item.invoice}</td>
-                      <td className="px-5 py-3 text-gray-500">{new Date(item.date).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!data?.recentServices?.length && <div className="p-8 text-center text-gray-500">No completed services yet.</div>}
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-950">Performance Summary</h2>
-              <div className="mt-4 space-y-3">
-                <MetricCard title="Avg Services / Day" value={(summary.averageServicesPerDay || 0).toFixed(1)} icon={Scissors} />
-                <MetricCard title="Avg Revenue / Day" value={formatCurrency(summary.averageRevenuePerDay || 0)} icon={TrendingUp} />
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-gray-100 p-5 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-950">Service Report</h2>
-                <p className="text-sm text-gray-500">Only your completed service items are included.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ['today', 'Today'],
-                  ['week', 'This Week'],
-                  ['month', 'This Month'],
-                  ['custom', 'Custom'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setPeriod(value)}
-                    className={`rounded-lg px-3 py-2 text-sm font-semibold ${period === value ? 'bg-gray-950 text-white' : 'border border-gray-300 bg-white text-gray-700'}`}
-                  >
-                    {label}
-                  </button>
+        <div className="min-w-0">
+          <SectionHeading
+            title="Service report"
+            note="Only your completed service items are included."
+            action={(
+              <div className="flex flex-wrap gap-1">
+                {PERIODS.map(([value, label]) => (
+                  <ErpButton key={value} variant={period === value ? 'primary' : 'secondary'} onClick={() => setPeriod(value)}>{label}</ErpButton>
                 ))}
               </div>
+            )}
+          />
+          {period === 'custom' ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <input type="date" aria-label="From" value={customDates.start} onChange={(event) => setCustomDates({ ...customDates, start: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
+              <input type="date" aria-label="To" value={customDates.end} onChange={(event) => setCustomDates({ ...customDates, end: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
             </div>
-            {period === 'custom' ? (
-              <div className="flex flex-col gap-2 border-b border-gray-100 p-4 sm:flex-row">
-                <input type="date" value={customDates.start} onChange={(event) => setCustomDates({ ...customDates, start: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input type="date" value={customDates.end} onChange={(event) => setCustomDates({ ...customDates, end: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              </div>
+          ) : null}
+          <div className="mb-3">
+            <MetricGroup columns={6}>
+              <MetricCard label="Services" value={count(report.totals?.services)} tone="ops" />
+              <MetricCard label="Revenue" value={money(report.totals?.revenue)} tone="inflow" />
+              <MetricCard label="Commission" value={money(report.totals?.commission)} tone="hrm" />
+              <MetricCard label="Cash collected" value={money(report.totals?.cashCollected)} tone="cash" />
+              <MetricCard label="QR collected" value={money(report.totals?.qrCollected)} tone="online" />
+              <MetricCard label="Customers" value={count(report.totals?.customers)} tone="neutral" />
+            </MetricGroup>
+          </div>
+          <FinancialTable
+            caption="Service report"
+            rows={report.rows || []}
+            rowKey={(row, index) => `${row.invoice}-${index}`}
+            empty="No services recorded for this period."
+            columns={[
+              { key: 'date', label: 'Date', render: (row) => dateTime(row.date) },
+              { key: 'invoice', label: 'Invoice', render: (row) => row.invoice },
+              { key: 'customer', label: 'Customer', render: (row) => row.customerName || 'Walk-in Customer' },
+              { key: 'service', label: 'Service', render: (row) => row.serviceName },
+              { key: 'amount', label: 'Amount', align: 'right', render: (row) => money(row.amount) },
+              { key: 'cash', label: 'Cash', align: 'right', render: (row) => money(row.cash) },
+              { key: 'qr', label: 'QR', align: 'right', render: (row) => money(row.qr) },
+              { key: 'commission', label: 'Commission', align: 'right', render: (row) => money(row.commission) },
+            ]}
+            footer={report.rows?.length ? (
+              <tr>
+                <td className="px-3 py-2.5 text-sm" colSpan={4}>Totals · {count(report.totals?.services)} services</td>
+                <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(report.totals?.revenue)}</td>
+                <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(report.totals?.cashCollected)}</td>
+                <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(report.totals?.qrCollected)}</td>
+                <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(report.totals?.commission)}</td>
+              </tr>
             ) : null}
-            <div className="grid gap-3 border-b border-gray-100 p-4 sm:grid-cols-2 xl:grid-cols-3">
-              <MetricCard title="Total Services" value={report.totals?.services || 0} icon={Scissors} />
-              <MetricCard title="Total Revenue" value={formatCurrency(report.totals?.revenue || 0)} icon={TrendingUp} />
-              <MetricCard title="Total Commission" value={formatCurrency(report.totals?.commission || 0)} icon={Award} />
-              <MetricCard title="Cash Collected" value={formatCurrency(report.totals?.cashCollected || 0)} icon={Banknote} sub="Cash collected from this staff's services" />
-              <MetricCard title="QR Collected" value={formatCurrency(report.totals?.qrCollected || 0)} icon={Smartphone} sub="Online / QR from this staff's services" />
-              <MetricCard title="Total Customers" value={report.totals?.customers || 0} icon={Users} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[920px] w-full">
-                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-5 py-3">Date</th>
-                    <th className="px-5 py-3">Invoice</th>
-                    <th className="px-5 py-3">Customer</th>
-                    <th className="px-5 py-3">Service</th>
-                    <th className="px-5 py-3 text-right">Amount</th>
-                    <th className="px-5 py-3 text-right">Cash</th>
-                    <th className="px-5 py-3 text-right">QR</th>
-                    <th className="px-5 py-3 text-right">Commission</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {report.rows?.length ? report.rows.map((row, index) => (
-                    <tr key={`${row.invoice}-${index}`}>
-                      <td className="px-5 py-3 text-sm text-gray-500">{new Date(row.date).toLocaleString()}</td>
-                      <td className="px-5 py-3 text-sm text-gray-700">{row.invoice}</td>
-                      <td className="px-5 py-3 text-sm text-gray-950">{row.customerName || 'Walk-in Customer'}</td>
-                      <td className="px-5 py-3 text-sm text-gray-700">{row.serviceName}</td>
-                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950 tabular-nums">{formatCurrency(row.amount || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm text-gray-700 tabular-nums">{formatCurrency(row.cash || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm text-gray-700 tabular-nums">{formatCurrency(row.qr || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm font-semibold text-gray-950 tabular-nums">{formatCurrency(row.commission || 0)}</td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">No services have been recorded for this staff member yet.</td></tr>
-                  )}
-                </tbody>
-                {report.rows?.length ? (
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-950">
-                      <td className="px-5 py-3 text-sm" colSpan={4}>Totals · {report.totals?.services || 0} services</td>
-                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.revenue || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.cashCollected || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.qrCollected || 0)}</td>
-                      <td className="px-5 py-3 text-right text-sm tabular-nums">{formatCurrency(report.totals?.commission || 0)}</td>
-                    </tr>
-                  </tfoot>
-                ) : null}
-              </table>
-            </div>
-          </section>
+          />
         </div>
       </div>
+    </ErpPage>
   );
 }

@@ -98,11 +98,29 @@ The folder must be writable by the Node.js app and publicly accessible from `NEX
 Use a Node.js version supported by Next.js 15. Recommended: Node 20+.
 
 ```bash
-npm install --omit=dev
+# 1. Back up the database first (cPanel > Backup, or pg_dump).
+# 2. Install ALL dependencies — the build needs Tailwind/PostCSS, which are devDependencies.
+#    (`npm install --omit=dev` before `npm run build` makes the build fail.)
+npm ci
+# 3. Apply pending database migrations. Forward-only, safe to re-run; already-applied files are skipped.
+npm run db:migrate
+# 4. Build.
 npm run build
+# 5. Optional: drop dev-only packages after the build to save disk space.
+npm prune --omit=dev
 ```
 
+Then restart the app from cPanel (Setup Node.js App > Restart). Always migrate BEFORE the new
+code starts serving: the new code reads the new columns.
+
 The app starts through `server.js`, listens on `process.env.PORT || 3000`, and binds to `127.0.0.1` for cPanel's Node.js reverse proxy. Let Passenger start the app from cPanel; do not keep a manual `npm run start` process running beside Passenger.
+
+### Rollback
+
+1. Restore the previous code folder (keep the last release's folder until the new one is verified).
+2. `npm ci && npm run build`, restart.
+3. Migrations only ADD tables, columns and indexes, so the previous code keeps working on the migrated
+   database — do not try to "undo" a migration. Restore the database backup only if data itself is wrong.
 
 ## 6. Pre-Hosting QA
 
@@ -116,5 +134,22 @@ Verify before going live:
 - CMS uploads save into `UPLOAD_DIR` and load from `NEXT_PUBLIC_UPLOAD_BASE_URL`.
 - Admin routes and API routes require valid roles.
 - License remains disabled while `NEXT_PUBLIC_LICENSE_ENABLED=false`.
-- `/api/health` returns `{"status":"ok","app":"The Hair Cut Pos"}` after Passenger restart.
+- `/api/health` returns `"status":"ok"`, `"database":"ok"` and `"migrations":{"pending":0}` after Passenger restart.
+  `"status":"degraded"` means migrations are pending — run `npm run db:migrate` and restart.
+  HTTP 503 means the app cannot reach PostgreSQL — check `DATABASE_URL` / `PG_SSL`.
+- Opening & Closing: open the store, take a test bill, void it, close with a note count — Expected Cash
+  must match on the store bar, the close screen and the Summary.
+- Appointments: book one from `/book-appointment`, confirm it under CRM & Growth > Appointments.
 - `npm run lint` and `npm run build` pass.
+
+## 7. Full automated QA (before a release, on a developer machine)
+
+Needs a local PostgreSQL copy of the database; never run against production.
+
+```bash
+npm run qa:create-db     # once: clone the local DB into <name>_qa
+npm run qa:all           # migrate + reset the QA copy, build into .next-qa, run every suite
+```
+
+Suites: financial scenario (drawer, voids, reopen, new business day), appointments, direct-API
+permission audit, and a browser audit at 360–1440 px. Results and screenshots: `test-results/qa/`.

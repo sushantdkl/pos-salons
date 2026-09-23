@@ -24,6 +24,7 @@ const TABS = [
   ['staff', 'Staff'],
   ['products', 'Products & Inventory'],
   ['frontdesk', 'Tokens / Front Desk'],
+  ['appointments', 'Appointments'],
   ['controls', 'Controls & Activity'],
 ];
 
@@ -314,6 +315,38 @@ function FrontDesk({ a }) {
   );
 }
 
+function Appointments({ a }) {
+  const p = a.appointments;
+  if (!p?.booked) return <EmptyState title="No appointments in this period" message="Bookings from the front desk and the website appear here." />;
+  const SOURCE = { WALK_IN: 'Walk-in', PHONE: 'Phone', WEBSITE: 'Website', WHATSAPP: 'WhatsApp', STAFF: 'Staff entry', REBOOKING: 'Rebooking' };
+  return (
+    <div className="space-y-3">
+      <MetricGroup columns={5}>
+        <MetricCard label="Booked" value={count(p.booked)} tone="online" sub={`${count(p.pending)} pending · ${count(p.confirmed)} confirmed`} />
+        <MetricCard label="Completed" value={count(p.completed)} tone="inflow" />
+        <MetricCard label="Cancelled" value={count(p.cancelled)} tone="neutral" />
+        <MetricCard label="No show" value={count(p.noShow)} tone={p.noShow ? 'outflow' : 'neutral'} />
+        <MetricCard label="Completion rate" value={percent(p.completionRate)} tone="inflow" hint={`No-show rate ${percent(p.noShowRate)} — over appointments whose outcome is known.`} />
+      </MetricGroup>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ChartCard title="Status" height={240}>
+          <DonutChart
+            format={countFormat}
+            centerLabel="Booked"
+            rows={[
+              { label: 'Completed', value: p.completed, color: TONES.inflow.hex },
+              { label: 'Upcoming / in salon', value: p.pending + p.confirmed + p.inSalon, color: TONES.online.hex },
+              { label: 'Cancelled', value: p.cancelled, color: TONES.neutral.hex },
+              { label: 'No show', value: p.noShow, color: TONES.outflow.hex },
+            ]}
+          />
+        </ChartCard>
+        <BreakdownCard title="Where bookings come from" tone="outflow" format={countFormat} rows={p.sources.map((row) => ({ label: SOURCE[row.source] || row.source, value: row.count }))} />
+      </div>
+    </div>
+  );
+}
+
 function Controls({ a }) {
   const c = a.controls;
   return (
@@ -353,7 +386,7 @@ export default function AnalyticsPage() {
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const a = data?.analytics;
 
-  const TabBody = { overview: Overview, money: SalesMoney, services: Services, customers: Customers, staff: Staff, products: Products, frontdesk: FrontDesk, controls: Controls }[tab];
+  const TabBody = { overview: Overview, money: SalesMoney, services: Services, customers: Customers, staff: Staff, products: Products, frontdesk: FrontDesk, appointments: Appointments, controls: Controls }[tab];
 
   return (
     <ErpPage>

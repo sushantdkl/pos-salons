@@ -337,6 +337,39 @@ async function getControls(db, period, scope) {
   };
 }
 
+/* ------------------------------------------------------------ appointments */
+
+/**
+ * Appointments scheduled in the period (by appointment date; 'today' = today's calendar date).
+ * Completion and no-show rates are over appointments whose outcome is known, so bookings
+ * still in the future do not drag the rates down.
+ */
+async function getAppointmentStats(db, period, scope) {
+  const filter = periodDateColumnFilter(period, 'a.appointment_date', scope.startDate, scope.endDate);
+  const [statusRows, sourceRows] = await Promise.all([
+    db.all(`SELECT a.status, COUNT(*)::int AS n FROM appointments a WHERE ${filter.clause} GROUP BY a.status`, filter.params),
+    db.all(`SELECT a.source, COUNT(*)::int AS n FROM appointments a WHERE ${filter.clause} GROUP BY a.source ORDER BY n DESC`, filter.params),
+  ]);
+  const byStatus = Object.fromEntries(statusRows.map((row) => [row.status, Number(row.n || 0)]));
+  const booked = statusRows.reduce((sum, row) => sum + Number(row.n || 0), 0);
+  const completed = byStatus.COMPLETED || 0;
+  const cancelled = byStatus.CANCELLED || 0;
+  const noShow = byStatus.NO_SHOW || 0;
+  const resolved = completed + cancelled + noShow;
+  return {
+    booked,
+    pending: byStatus.PENDING || 0,
+    confirmed: byStatus.CONFIRMED || 0,
+    inSalon: (byStatus.CHECKED_IN || 0) + (byStatus.IN_SERVICE || 0),
+    completed,
+    cancelled,
+    noShow,
+    completionRate: pct(completed, resolved),
+    noShowRate: pct(noShow, resolved),
+    sources: sourceRows.map((row) => ({ source: row.source, count: Number(row.n || 0) })),
+  };
+}
+
 /* ---------------------------------------------------------- orchestration */
 
 export async function getSalonAnalytics(db, period, options = {}) {
@@ -346,7 +379,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     businessDayId: period === 'today' && options.businessDayId ? options.businessDayId : null,
   };
 
-  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls] = await Promise.all([
+  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls, appointments] = await Promise.all([
     getExecutiveSummary(db, period, { ...options, scope: 'admin' }),
     getSalesSeries(db, period, scope),
     getTopServices(db, period, scope),
@@ -356,6 +389,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     getProductAnalytics(db, period, scope),
     getTokenDemand(db, period, scope),
     getControls(db, period, scope),
+    getAppointmentStats(db, period, scope),
   ]);
 
   const { revenue, payments, expenses, salary, tokens, savings } = summary;
@@ -426,6 +460,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
       tokenBills: summary.quantities.tokenBills,
       byHour: tokenDemand,
     },
+    appointments,
     controls: { ...controls, cashAdded: summary.cashPosition.cashAdded, cashRemoved: summary.cashPosition.cashRemoved, cancelledTokens: tokens.cancelled },
   };
 }

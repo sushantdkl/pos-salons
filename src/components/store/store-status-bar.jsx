@@ -20,9 +20,9 @@ const ADD_SOURCES = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const FIELD = 'w-full rounded-xl border border-[#ddd5ca] bg-white px-3 py-2.5 text-sm text-[#21182f] focus:border-[#bfaed8] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/20';
-const BTN = 'inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] px-3.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b7a4fa] disabled:cursor-not-allowed disabled:opacity-60';
-const BTN_PRIMARY = `${BTN} border border-[#6b46e5] bg-[#6b46e5] text-white hover:bg-[#5a38d0]`;
+const FIELD = 'w-full rounded-xl border border-[#ddd5ca] bg-white px-3 py-2.5 text-sm text-[#21182f] focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-200';
+const BTN = 'inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] px-3.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-stone-900/30 disabled:cursor-not-allowed disabled:opacity-60';
+const BTN_PRIMARY = `${BTN} border border-stone-900 bg-stone-900 text-white hover:bg-stone-800`;
 const BTN_SECONDARY = `${BTN} border border-[#e4ded6] bg-white text-[#3a342d] hover:bg-[#f7f5f2]`;
 const BTN_DANGER = `${BTN} border border-[#dc2626] bg-[#dc2626] text-white hover:bg-[#b91c1c]`;
 
@@ -39,7 +39,7 @@ function formatDate(iso) {
 
 function formatTime(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return new Date(value).toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' });
 }
 
 function Modal({ title, subtitle, onClose, children, footer, width = 'max-w-lg' }) {
@@ -260,7 +260,7 @@ export default function StoreStatusBar({
           <>
             <span className="inline-flex items-center gap-2 text-sm font-bold text-[#17140f]">
               <span className={`h-2 w-2 rounded-full ${pill.dot}`} />
-              <PillIcon className={`h-4 w-4 text-[#6b46e5] ${pill.spin ? 'animate-spin' : ''}`} />
+              <PillIcon className={`h-4 w-4 text-stone-600 ${pill.spin ? 'animate-spin' : ''}`} />
               {pill.text}
             </span>
 

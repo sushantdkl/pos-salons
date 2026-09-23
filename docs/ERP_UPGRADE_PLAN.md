@@ -242,3 +242,17 @@ voided service earns no commission — intended.
 
 Run everything: `npm run qa:all` (builds into `.next-qa`, never touches a running dev server).
 Deploying this branch requires `npm run db:migrate` (2026-09-23 void attribution, 2026-09-24 cash denominations).
+
+## Appointments, role-consistent UI and production hardening (2026-09-25)
+
+| Area | Result | Evidence |
+|---|---|---|
+| Appointment system | PASS | `appointments`, services, events, working hours, time off, waitlist; conflicts blocked, admin override with reason (logged); check-in issues a token; one paid bill per appointment (unique index + transactional link) — `npm run qa:appointments` 52/52 |
+| Public online booking | PASS | `/book-appointment` shows real services and free times, creates PENDING requests (instant confirm optional); rate-limited, honeypot, per-phone cap, switch-off; WhatsApp kept as fallback |
+| POS ↔ appointment | PASS | "Bill appointment" pre-fills customer, services, staff and the check-in token; a second bill is refused (409) |
+| CRM & Growth sidebar | PASS | Appointments, Customers, Hours & Booking (admin); Appointments, Customers (cashier); My Appointments (staff) |
+| Same UI for every role | PASS | Admin and cashier share `TodayDashboard`; cashier Daily Expenses, Credit Collection, Salary Advance and the staff home rebuilt on the ERP kit; browser audit covers admin, cashier and barber at 360–1440 px |
+| Analytics — Appointments tab | PASS | booked / completed / cancelled / no-show, completion and no-show rates, booking sources |
+| Production hardening | PASS | login lockout after 8 wrong PINs; `/api/health` checks DB + pending migrations; one migration manifest; deploy guide fixed (`npm ci` before build, migrate before restart, rollback) |
+
+Release steps: back up DB → `npm ci` → `npm run db:migrate` → `npm run build` → restart → `/api/health` shows `ok`.

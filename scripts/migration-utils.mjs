@@ -1,22 +1,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { TRACKED_MIGRATIONS } from '../src/lib/db/migrations-manifest.js';
 
 export const migrationsDirectory = path.join(process.cwd(), 'docs', 'migrations');
 
-// Older SQL files in this repository were operational/manual scripts, not a
-// replayable migration chain. Only files explicitly added here may be applied
-// by the production runner.
-export const trackedMigrations = [
-  '2026-08-11-salary-advances.sql',
-  '2026-09-20-production-foundations.sql',
-  '2026-09-20-payment-allocation-backfill.sql',
-  '2026-09-20-credit-collections.sql',
-  '2026-09-20-payment-corrections.sql',
-  '2026-09-20-permission-matrix.sql',
-  '2026-09-23-void-event-attribution.sql',
-  '2026-09-24-cash-denominations.sql',
-];
+// The ordered migration list lives in src/lib/db/migrations-manifest.js so the runner and
+// /api/health (pending-migration check) can never disagree.
+export const trackedMigrations = TRACKED_MIGRATIONS;
 
 export function migrationFiles() {
   for (const name of trackedMigrations) {

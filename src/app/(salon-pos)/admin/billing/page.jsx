@@ -71,6 +71,8 @@ function BillingContent() {
   const [successBill, setSuccessBill] = useState(null);
   const [tokens, setTokens] = useState([]);
   const [selectedToken, setSelectedToken] = useState(null);
+  // The appointment this bill settles (opened from Appointments with ?appointmentId=).
+  const [appointmentLink, setAppointmentLink] = useState(null);
   const [paymentQr, setPaymentQr] = useState(null);
   const [salonInfo, setSalonInfo] = useState({
     salon_name: 'The Hair Cut',
@@ -261,6 +263,40 @@ function BillingContent() {
     }
   }, [tokens, services, searchParams]);
 
+  // Appointment -> bill: prefill customer, the booked services and the assigned staff member.
+  // The server links the bill to the appointment once; a second bill for it is rejected.
+  useEffect(() => {
+    const appointmentId = searchParams.get('appointmentId');
+    if (!appointmentId || !services.length) return;
+    let cancelled = false;
+    (async () => {
+      const response = await fetch(`/api/appointments/${encodeURIComponent(appointmentId)}`, { headers: headers() });
+      const payload = await response.json().catch(() => ({}));
+      if (cancelled) return;
+      if (!response.ok) { setError(payload.error || 'Could not load the appointment.'); return; }
+      const appointment = payload.appointment;
+      if (appointment.billId) { setError(`Appointment ${appointment.number} is already billed (${appointment.billNumber}).`); return; }
+      if (['CANCELLED', 'NO_SHOW'].includes(appointment.status)) {
+        setError(`Appointment ${appointment.number} is ${appointment.status.toLowerCase().replace('_', ' ')} and cannot be billed.`);
+        return;
+      }
+      const lines = appointment.services
+        .map((line, index) => {
+          const service = services.find((item) => Number(item.id) === Number(line.serviceId));
+          return service ? { ...service, cart_id: `appointment-${appointment.id}-${index}`, staff_id: appointment.staffId || '' } : null;
+        })
+        .filter(Boolean);
+      setAppointmentLink({ id: appointment.id, number: appointment.number });
+      setCustomer({ id: appointment.customerId || '', name: appointment.customerName || 'Walk-in Customer', phone: appointment.customerPhone || '' });
+      setCartServices(lines);
+      setCartProducts([]);
+      const token = appointment.tokenId ? tokens.find((item) => String(item.id) === String(appointment.tokenId)) : null;
+      setSelectedToken(token || null);
+      setError(lines.length === appointment.services.length ? '' : 'Some booked services are no longer active — add them manually.');
+    })();
+    return () => { cancelled = true; };
+  }, [services, tokens, searchParams]);
+
   const staffForService = (service) => filterStaffForService(staff, service);
 
   const addProduct = (product) => {
@@ -366,6 +402,7 @@ function BillingContent() {
         services: cartServices.map((service) => ({ id: service.id, staff_id: service.staff_id })),
         products: cartProducts.map((product) => ({ id: product.id, quantity: product.quantity })),
         token_id: selectedToken?.id || null,
+        appointment_id: appointmentLink?.id || null,
         discount_type: discountType,
         discount_value: Number(discountValue || 0),
         tax_percent: Number(taxPercent || 0),
@@ -396,6 +433,7 @@ function BillingContent() {
       clearCart();
       setCustomer(walkInCustomer);
       setSelectedToken(null);
+      setAppointmentLink(null);
       setTaxPercent('');
       localStorage.removeItem(draftKey);
       idempotencyKey.current = null;
@@ -536,6 +574,11 @@ function BillingContent() {
                         </option>
                       ))}
                     </select>
+                    {appointmentLink ? (
+                      <span className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-800">
+                        Billing appointment {appointmentLink.number}
+                      </span>
+                    ) : null}
                     {selectedToken ? (
                       <button
                         type="button"

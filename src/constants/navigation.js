@@ -8,7 +8,7 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  BadgeDollarSign, Banknote, CalendarDays, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  BadgeDollarSign, Banknote, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle,
   PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
   Settings, ShieldCheck, Sparkles, Store, Ticket, TrendingUp, Users, Wallet, WalletCards, Warehouse,
@@ -24,6 +24,7 @@ export const NAV_TINTS = {
   inventory: { bg: 'bg-lime-50', header: 'text-lime-800', hover: 'hover:bg-lime-100', active: 'bg-lime-100 text-lime-950', bar: 'bg-lime-600', icon: 'text-lime-700' },
   finance: { bg: 'bg-amber-50', header: 'text-amber-800', hover: 'hover:bg-amber-100', active: 'bg-amber-100 text-amber-950', bar: 'bg-amber-600', icon: 'text-amber-600' },
   hrm: { bg: 'bg-violet-50', header: 'text-violet-800', hover: 'hover:bg-violet-100', active: 'bg-violet-100 text-violet-950', bar: 'bg-violet-600', icon: 'text-violet-600' },
+  crm: { bg: 'bg-rose-50', header: 'text-rose-800', hover: 'hover:bg-rose-100', active: 'bg-rose-100 text-rose-950', bar: 'bg-rose-600', icon: 'text-rose-600' },
   system: { bg: 'bg-stone-100', header: 'text-stone-700', hover: 'hover:bg-stone-200', active: 'bg-stone-200 text-stone-950', bar: 'bg-stone-600', icon: 'text-stone-500' },
   top: { bg: '', header: 'text-stone-700', hover: 'hover:bg-stone-100', active: 'bg-stone-900 text-white', bar: 'bg-stone-900', icon: 'text-stone-600' },
 };
@@ -51,8 +52,12 @@ const ADMIN_NAV = [
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/admin/tokens', ListTodo),
     link('Services', '/admin/products', Sparkles),
-    link('Customers', '/admin/customers', Contact),
     link('Reminders', '/admin/reminders', MessageCircle),
+  ]),
+  group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
+    link('Appointments', '/admin/appointments', CalendarClock),
+    link('Customers', '/admin/customers', Contact),
+    link('Hours & Booking', '/admin/appointments/settings', CalendarCog),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse),
@@ -79,7 +84,7 @@ const ADMIN_NAV = [
   ]),
 ];
 
-// Cashier keeps exactly the items it had before the redesign — only grouped.
+// Cashier: the operational items it had before, grouped, plus front-desk Appointments.
 const CASHIER_NAV = [
   link('Dashboard', '/dashboard/cashier', LayoutDashboard, { exact: true }),
   link('POS', '/admin/billing', Store),
@@ -87,8 +92,11 @@ const CASHIER_NAV = [
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo),
     link('Services', '/admin/products', Sparkles),
-    link('Customers', '/admin/customers', Contact),
     link('Reminders', '/admin/reminders', MessageCircle),
+  ]),
+  group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
+    link('Appointments', '/admin/appointments', CalendarClock),
+    link('Customers', '/admin/customers', Contact),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse),
@@ -107,6 +115,7 @@ const CASHIER_NAV = [
 const serviceStaffNav = (role) => [
   link('Dashboard', `/dashboard/${role}`, LayoutDashboard, { exact: true }),
   link('Queue', `/dashboard/${role}/queue`, ListTodo),
+  link('My Appointments', '/appointments/my', CalendarClock),
 ];
 
 export const NAVIGATION = {
