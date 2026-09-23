@@ -13,6 +13,7 @@
 import { logAction } from '@/lib/db/helpers';
 import { salonDateString } from '@/lib/reports/dashboard-period';
 import { getFinancialSummary, numeric, PAID_BILL_STATUS_SQL } from '@/lib/reports/finance-summary';
+import { normalizeDenominations } from '@/lib/business-day/denominations';
 
 export const STORE_CLOSED_CODE = 'STORE_CLOSED';
 
@@ -254,6 +255,17 @@ export async function getSessionSummary(db, session) {
       cancelledNoShow: Number(tokens?.cancelled_no_show || 0),
       digital: Number(tokens?.digital || 0),
       printed: Number(tokens?.printed || 0),
+    },
+    // Online / bank movement of this session. Never part of the physical drawer.
+    online: {
+      onlineSales: numeric(fin.grossQrCollected),
+      creditCollectionsOnline: numeric(fin.creditCollectionsOnline),
+      onlineRefunds: numeric(fin.onlineRefunds),
+      onlineExpenses: numeric(fin.operatingExpensesOnline),
+      salaryOnline: numeric(fin.salaryExpensesOnline),
+      onlinePaidOut: numeric(fin.operatingExpensesOnline) + numeric(fin.salaryExpensesOnline),
+      onlineSavings: numeric(fin.savingsFromOnline),
+      netOnlineMovement: numeric(fin.netOnlineBalance),
     },
     expected,
   };
@@ -572,7 +584,10 @@ export async function startNextBusinessDay(db, user, input) {
 
 /** CLOSE STORE — reconcile and close the open session. Business day stays current. */
 export async function closeStore(db, user, input) {
-  const countedCash = money(input.countedCash);
+  // A note breakdown, when supplied, is the source of the counted total — the server re-sums
+  // it rather than trusting a figure computed in the browser.
+  const breakdown = normalizeDenominations(input.denominations);
+  const countedCash = breakdown ? money(breakdown.total) : money(input.countedCash);
   const closingNote = String(input.closingNote || '').replace(/[<>]/g, '').trim();
   const force = Boolean(input.force);
   const forceReason = String(input.forceReason || '').replace(/[<>]/g, '').trim();
@@ -609,11 +624,12 @@ export async function closeStore(db, user, input) {
       UPDATE store_sessions
       SET status = 'CLOSED', closed_by = ?, closed_at = NOW(),
           expected_cash = ?, counted_cash = ?, cash_difference = ?, closing_note = ?,
-          force_closed = ?, force_close_reason = ?, updated_at = NOW()
+          force_closed = ?, force_close_reason = ?, cash_denominations = ?::jsonb, updated_at = NOW()
       WHERE id = ?
     `, [
       user.id, expected.expectedCash, countedCash, difference, closingNote || null,
-      force && blockers.length > 0, force && blockers.length > 0 ? forceReason : null, session.id,
+      force && blockers.length > 0, force && blockers.length > 0 ? forceReason : null,
+      breakdown ? JSON.stringify(breakdown.counts) : null, session.id,
     ]);
 
     await logAction(
@@ -627,6 +643,7 @@ export async function closeStore(db, user, input) {
       expectedCash: expected.expectedCash,
       countedCash,
       difference,
+      denominations: breakdown ? breakdown.counts : null,
       status: difference === 0 ? 'MATCHED' : difference < 0 ? 'SHORT' : 'OVER',
       forced: force && blockers.length > 0,
     };
@@ -668,7 +685,8 @@ export async function getBusinessDayHistory(db, { limit = 60 } = {}) {
     SELECT
       ss.id, ss.business_day_id, ss.session_number, ss.status,
       ss.opened_at, ss.closed_at, ss.starting_cash, ss.expected_cash,
-      ss.counted_cash, ss.cash_difference, ss.force_closed,
+      ss.counted_cash, ss.cash_difference, ss.force_closed, ss.force_close_reason,
+      ss.cash_denominations, ss.opening_note, ss.closing_note,
       COALESCE(so.full_name, so.username, '') AS opened_by_name,
       COALESCE(sc.full_name, sc.username, '') AS closed_by_name
     FROM store_sessions ss
@@ -694,6 +712,10 @@ export async function getBusinessDayHistory(db, { limit = 60 } = {}) {
       countedCash: numeric(row.counted_cash),
       difference: numeric(row.cash_difference),
       forceClosed: Boolean(row.force_closed),
+      forceCloseReason: row.force_close_reason || null,
+      denominations: row.cash_denominations || null,
+      openingNote: row.opening_note || null,
+      closingNote: row.closing_note || null,
     });
     return acc;
   }, {});

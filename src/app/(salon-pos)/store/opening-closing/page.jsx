@@ -1,31 +1,33 @@
 'use client';
 
 /**
- * OPENING & CLOSING — store session lifecycle and cash reconciliation.
+ * OPENING & CLOSING — Business Day status, day summary, cash reconciliation, online position
+ * and Business Day history.
  *
- * Read-only view of the CURRENT store session plus the day's figures. Every lifecycle
- * action (Open / Reopen / Start Next Business Day / Close) is driven by StoreStatusBar,
- * which is the single implementation of that flow — this page never duplicates it.
- *
- * Admin and cashier both use this page; salary and other management-only figures are not
- * requested here, and the store APIs enforce the same role pair server-side.
+ * Every figure comes from the server:
+ *   - status / lifecycle ........ /api/store (StoreStatusBar is the only Open/Reopen/Next-Day control)
+ *   - live drawer + close ....... /api/store/summary -> CloseStoreForm (the only close flow)
+ *   - business-day summary ...... the Summary API scoped to today's Business Day
+ *   - history ................... /api/store/history (admin) — persisted close snapshots
+ * Admin and cashier share this page; cashier payloads never contain salary figures.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronRight, DoorOpen, Printer, RefreshCw } from 'lucide-react';
-import { formatCurrency } from '@/lib/currency';
+import { CalendarDays, DoorOpen, Landmark } from 'lucide-react';
 import StoreStatusBar from '@/components/store/store-status-bar';
-
-const CARD = 'rounded-2xl border border-[#ece7e1] bg-white shadow-[0_1px_2px_rgba(40,30,20,0.04)]';
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem('pos_token')}` };
-}
+import CloseStoreForm from '@/components/store/close-store-form';
+import BusinessDayHistory from '@/components/store/business-day-history';
+import {
+  AlertBanner, count, EmptyState, ErpPage, ErrorState, line, LoadingState, MetricCard,
+  MetricGroup, money, PageHeader, PrintButton, PrintHeader, RefreshButton, ReportGroup, ReportSection,
+  SectionHeading, StatusBadge,
+} from '@/components/erp';
+import { erpFetch } from '@/components/erp/use-report';
 
 function formatDate(iso) {
   if (!iso) return '—';
   const [year, month, day] = String(iso).slice(0, 10).split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(Date.UTC(year, month - 1, day)));
 }
 
@@ -34,198 +36,124 @@ function formatTime(value) {
   return new Date(value).toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' });
 }
 
+
+/* ------------------------------------------------ Section A — status header */
+
 function Fact({ label, value, strong = false }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#8a837b]">{label}</p>
-      <p className={`mt-0.5 truncate text-[13.5px] ${strong ? 'font-extrabold tabular-nums text-[#17140f]' : 'font-semibold text-[#2a251f]'}`}>
-        {value}
-      </p>
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-stone-400">{label}</p>
+      <p className={`mt-0.5 truncate text-[14px] ${strong ? 'font-extrabold tabular-nums text-stone-900' : 'font-semibold text-stone-700'}`}>{value}</p>
     </div>
   );
 }
 
-function Section({ title, subtitle, children, action }) {
-  return (
-    <section className={`${CARD} break-inside-avoid overflow-hidden`}>
-      <div className="flex flex-col gap-1 border-b border-[#f0ece6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div>
-          <h2 className="text-[13px] font-bold uppercase tracking-[0.05em] text-[#17140f]">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-xs text-[#8a837b]">{subtitle}</p> : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Row({ label, value, sign = '', tone = 'default', strong = false }) {
-  const toneClass = {
-    default: 'text-[#2a251f]',
-    positive: 'text-[#1f7a52]',
-    outflow: 'text-[#b4651a]',
-    alert: 'text-[#c0392b]',
-    muted: 'text-[#8a837b]',
-  }[tone] || 'text-[#2a251f]';
-  return (
-    <div className="flex items-baseline justify-between gap-4 px-4 py-2 sm:px-5">
-      <span className={`text-[13px] ${strong ? 'font-bold text-[#17140f]' : 'font-medium text-[#4a443c]'}`}>{label}</span>
-      <span className={`shrink-0 text-[13.5px] font-semibold tabular-nums ${strong ? 'font-extrabold' : ''} ${toneClass}`}>
-        {sign}{value}
-      </span>
-    </div>
-  );
-}
-
-function TotalRow({ label, value, tone = 'default' }) {
-  const toneClass = { default: 'text-[#17140f]', positive: 'text-[#1f7a52]', alert: 'text-[#c0392b]' }[tone] || 'text-[#17140f]';
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-t-2 border-[#e4ded6] bg-[#fbfaf8] px-4 py-2.5 sm:px-5">
-      <span className="text-[13px] font-extrabold text-[#17140f]">{label}</span>
-      <span className={`shrink-0 text-[15px] font-extrabold tabular-nums ${toneClass}`}>{value}</span>
-    </div>
-  );
-}
-
-function DiffBadge({ value }) {
-  const state = value === 0 ? 'MATCHED' : value < 0 ? 'SHORT' : 'OVER';
-  const tone = state === 'MATCHED'
-    ? 'bg-[#eaf8ef] text-[#15803d]'
-    : state === 'SHORT' ? 'bg-[#fdecec] text-[#dc2626]' : 'bg-[#fef4e6] text-[#b45309]';
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold ${tone}`}>
-      {state}{value !== 0 ? ` ${formatCurrency(Math.abs(value))}` : ''}
-    </span>
-  );
-}
-
-/* ------------------------------------------------------------ status panel */
-
-function StoreStatusPanel({ status }) {
+function BusinessDayStatus({ status }) {
   if (!status) return null;
   const open = status.state === 'OPEN';
   const session = status.session;
   const previous = status.previousSession;
-
   return (
-    <section className={`${CARD} break-inside-avoid overflow-hidden`}>
-      <div className={`flex items-center gap-2 px-4 py-3 sm:px-5 ${open ? 'bg-[#f2fbf5]' : 'bg-[#fdf4f1]'}`}>
-        <span className={`h-2.5 w-2.5 rounded-full ${open ? 'bg-[#1f8a5b]' : 'bg-[#dc2626]'}`} />
-        <h2 className={`text-[15px] font-extrabold uppercase tracking-[0.04em] ${open ? 'text-[#15803d]' : 'text-[#b91c1c]'}`}>
-          {open ? 'Store Open' : 'Store Closed'}
-        </h2>
+    <section aria-label="Business day status" className="break-inside-avoid overflow-hidden rounded-2xl border border-stone-200 bg-white">
+      <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 ${open ? 'bg-emerald-50' : 'bg-stone-50'}`}>
+        <StatusBadge status={open ? 'OPEN' : status.state === 'CLOSED_SAME_DAY' ? 'CLOSED_SAME_DAY' : 'NO_DAY'} label={open ? 'Store open' : status.state === 'CLOSED_SAME_DAY' ? 'Store closed · business day open' : 'No business day open'} />
+        <span className="text-xs text-stone-500">
+          {status.state === 'NO_DAY'
+            ? 'Open the store to start the next business day.'
+            : `Business Day ${formatDate(status.businessDate)} · ${status.sessionCount ?? 0} session${Number(status.sessionCount) === 1 ? '' : 's'}`}
+        </span>
       </div>
-      <div className="grid grid-cols-2 gap-4 px-4 py-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-5">
-        <Fact label="Business Day" value={formatDate(status.businessDate)} />
-        {open ? (
-          <>
-            <Fact label="Current Session" value={`Session ${session?.sessionNumber || 1}`} />
-            <Fact label="Opened" value={formatTime(session?.openedAt)} />
-            <Fact label="Opened By" value={session?.openedBy || '—'} />
-            <Fact label="Starting Cash" value={formatCurrency(session?.startingCash)} strong />
-          </>
-        ) : (
-          <>
-            <Fact label="Sessions Today" value={status.sessionCount ?? 0} />
-            <Fact
-              label="Last Session"
-              value={previous ? `Session ${previous.sessionNumber} · Closed ${formatTime(previous.closedAt)}` : 'None yet'}
-            />
-            <Fact label="Cash Carried" value={formatCurrency(status.previousClosingCash)} strong />
-          </>
-        )}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Fact label="Business day" value={formatDate(status.businessDate)} />
+        <Fact label="Store status" value={open ? 'Open' : 'Closed'} />
+        <Fact label="Session" value={open ? `Session ${session?.sessionNumber || 1}` : previous ? `Last: ${previous.sessionNumber}` : '—'} />
+        <Fact label="Opened at" value={open ? formatTime(session?.openedAt) : '—'} />
+        <Fact label="Opened by" value={open ? session?.openedBy || '—' : '—'} />
+        <Fact label="Starting cash" value={open ? money(session?.startingCash) : money(status.suggestedStartingCash ?? status.previousClosingCash)} strong />
+        <Fact label="Expected cash" value={open ? money(session?.expectedCash) : previous ? money(previous.countedCash) : '—'} strong />
       </div>
-      {open && previous ? (
-        <p className="border-t border-[#f0ece6] px-4 py-2 text-xs text-[#8a837b] sm:px-5">
-          Previous session: Session {previous.sessionNumber} · Closed {formatTime(previous.closedAt)} with {formatCurrency(previous.countedCash)} counted.
-          All sessions of {formatDate(status.businessDate)} accumulate into the same business day.
+      {previous ? (
+        <p className="border-t border-stone-100 px-4 py-2 text-xs text-stone-500">
+          Previous session: Session {previous.sessionNumber} closed {formatTime(previous.closedAt)}
+          {previous.closedBy ? ` by ${previous.closedBy}` : ''} with {money(previous.countedCash)} counted.
+          {open ? ' Its closing snapshot stays unchanged; this session reconciles on its own.' : ''}
         </p>
       ) : null}
     </section>
   );
 }
 
-/* -------------------------------------------------------------- history */
+/* ---------------------------------------- Section B — business day summary */
 
-function HistoryRow({ day, expanded, onToggle, isAdmin }) {
+function DaySummary({ report, isAdmin }) {
+  if (!report) return null;
+  const { revenue, payments, expenses, savings, quantities, tokens, cashPosition } = report;
+  const cashOutflow = isAdmin ? report.salary?.totalCash : null;
   return (
-    <>
-      <tr className="align-top hover:bg-[#fbf8ff]">
-        <td className="px-4 py-3">
-          <button type="button" onClick={onToggle} className="inline-flex items-center gap-1.5 font-semibold text-[#21182f]">
-            {expanded ? <ChevronDown className="h-4 w-4 text-[#6b46e5]" /> : <ChevronRight className="h-4 w-4 text-[#8a837b]" />}
-            {formatDate(day.businessDate)}
-          </button>
-        </td>
-        <td className="px-4 py-3">
-          <span className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-xs font-semibold ${day.status === 'OPEN' ? 'bg-[#eaf8ef] text-[#15803d]' : 'bg-[#f1eef6] text-[#5f5570]'}`}>
-            {day.status === 'OPEN' ? 'Open' : 'Closed'}
-          </span>
-        </td>
-        <td className="px-4 py-3 text-right tabular-nums">{day.sessions}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-[#62576b]">{formatTime(day.openedAt)}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-[#62576b]">{formatTime(day.closedAt)}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{formatCurrency(day.startingCash)}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
-          {day.finalExpectedCash === null ? <span className="text-xs text-[#9a938b]">In progress</span> : formatCurrency(day.finalExpectedCash)}
-        </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
-          {day.finalCountedCash === null ? <span className="text-xs text-[#9a938b]">—</span> : formatCurrency(day.finalCountedCash)}
-        </td>
-        <td className="px-4 py-3">
-          {day.status === 'OPEN' ? <span className="text-xs text-[#9a938b]">In progress</span> : <DiffBadge value={day.difference} />}
-        </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-[#6f3cc3]">{formatCurrency(day.netSales)}</td>
-        <td className="px-4 py-3 text-right tabular-nums">{day.bills}</td>
-      </tr>
-      {expanded ? (
-        <tr>
-          <td colSpan={11} className="bg-[#fbfaf8] px-4 py-3">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.05em] text-[#8a837b]">
-              Store sessions · balances are per session and are never added together
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {day.sessionDetails.length === 0 ? (
-                <p className="text-xs text-[#8a837b]">No sessions recorded.</p>
-              ) : day.sessionDetails.map((session) => (
-                <div key={session.id} className="rounded-xl border border-[#eee8df] bg-white px-3 py-2.5">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-bold text-[#17140f]">Session {session.sessionNumber}</p>
-                    {session.status === 'OPEN'
-                      ? <span className="rounded-lg bg-[#eaf8ef] px-2 py-0.5 text-[11px] font-bold text-[#15803d]">Open</span>
-                      : <DiffBadge value={session.difference} />}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-[#8a837b]">
-                    {formatTime(session.openedAt)} → {session.closedAt ? formatTime(session.closedAt) : 'still open'}
-                    {session.forceClosed ? ' · force closed' : ''}
-                  </p>
-                  <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11.5px]">
-                    <div>
-                      <p className="text-[10px] uppercase text-[#9a938b]">Starting</p>
-                      <p className="font-semibold tabular-nums text-[#2a251f]">{formatCurrency(session.startingCash)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-[#9a938b]">Expected</p>
-                      <p className="font-semibold tabular-nums text-[#2a251f]">{session.status === 'OPEN' ? '—' : formatCurrency(session.expectedCash)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-[#9a938b]">Counted</p>
-                      <p className="font-semibold tabular-nums text-[#2a251f]">{session.status === 'OPEN' ? '—' : formatCurrency(session.countedCash)}</p>
-                    </div>
-                  </div>
-                  {isAdmin && session.openedBy ? (
-                    <p className="mt-1.5 text-[10.5px] text-[#9a938b]">
-                      Opened by {session.openedBy}{session.closedBy ? ` · closed by ${session.closedBy}` : ''}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <div className="space-y-3">
+      <MetricGroup columns={4}>
+        <MetricCard label="Gross sales" value={money(revenue.grossSalesBeforeDiscount)} tone="ops" sub={`${count(revenue.bills)} bills`} />
+        <MetricCard label="Net sales" value={money(revenue.netSales)} tone="inflow" emphasis sub={`after ${money(revenue.totalDiscounts)} discounts${revenue.voidedSales ? ` and ${money(revenue.voidedSales)} voids` : ''}`} />
+        <MetricCard label="Cash collected" value={money(payments.grossCashCollected)} tone="cash" sub={payments.creditCollectionsCash ? `+ ${money(payments.creditCollectionsCash)} credit collected` : 'bill cash'} />
+        <MetricCard label="Online collected" value={money(payments.grossQrCollected)} tone="online" sub={payments.creditCollectionsOnline ? `+ ${money(payments.creditCollectionsOnline)} credit collected` : 'QR / bank'} />
+      </MetricGroup>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <ReportSection
+          title="Sales"
+          lines={[
+            line('Gross sales', revenue.grossSalesBeforeDiscount),
+            line('Discounts', revenue.totalDiscounts, { sign: '−', tone: 'outflow' }),
+            revenue.voidedSales ? line(`Voids processed (${revenue.voidCount})`, revenue.voidedSales, { sign: '−', tone: 'outflow' }) : null,
+            revenue.creditSales ? line('Sold on customer credit', revenue.creditSales, { muted: true, note: 'Included in sales; not yet received' }) : null,
+            line('Net sales', revenue.netSales, { strong: true, tone: 'inflow' }),
+          ]}
+        />
+        <ReportSection
+          title="Money out"
+          lines={[
+            line('Refunds', Number(payments.cashRefunds || 0) + Number(payments.onlineRefunds || 0), { sign: '−', tone: 'outflow' }),
+            line('Operating expenses', expenses.total, { sign: '−', tone: 'outflow' }),
+            isAdmin ? line('Salary / advances paid', report.salary?.totalPaid, { sign: '−', tone: 'outflow', note: cashOutflow ? `${money(cashOutflow)} paid from the drawer` : undefined }) : null,
+            line('Savings / transfers', savings.total, { note: 'Money moved to savings — not an expense' }),
+            line('Cash paid out (all)', cashPosition.cashOut, { strong: true, note: 'Refunds, expenses, salary and savings paid in cash' }),
+          ]}
+        />
+        <ReportSection
+          title="Activity"
+          lines={[
+            line('Bills', count(quantities.bills)),
+            line('Customers', count(quantities.uniqueCustomers)),
+            line('Services sold', count(quantities.servicesSold)),
+            line('Products sold', count(quantities.productsSold)),
+            line('Tokens generated', count(tokens.generated)),
+            line('Tokens converted to bills', count(tokens.converted)),
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------- Section D — online / bank position */
+
+function OnlinePosition({ online, isAdmin }) {
+  if (!online) return null;
+  return (
+    <ReportSection
+      title="Online / bank position — this session"
+      note="QR, eSewa, PhonePay and bank money. It is never physical cash and never changes Expected Cash."
+      lines={[
+        line('Online sales', online.onlineSales, { sign: '+', tone: 'online' }),
+        line('Credit collected online', online.creditCollectionsOnline, { sign: '+', tone: 'online' }),
+        line('Online refunds', online.onlineRefunds, { sign: '−', tone: 'outflow' }),
+        isAdmin
+          ? line('Online expenses', online.onlineExpenses, { sign: '−', tone: 'outflow' })
+          : line('Online expenses & salary', online.onlinePaidOut, { sign: '−', tone: 'outflow' }),
+        isAdmin ? line('Online salary / advances', online.salaryOnline, { sign: '−', tone: 'outflow' }) : null,
+        line('Online to savings / transfers', online.onlineSavings, { sign: '−' }),
+        line('Net online movement', online.netOnlineMovement, { strong: true, tone: 'online' }),
+      ]}
+    />
   );
 }
 
@@ -233,42 +161,36 @@ function HistoryRow({ day, expanded, onToggle, isAdmin }) {
 
 export default function OpeningClosingPage() {
   const [status, setStatus] = useState(null);
-  const [summary, setSummary] = useState(null);
-  const [blockers, setBlockers] = useState([]);
+  const [session, setSession] = useState(null);
+  const [report, setReport] = useState(null);
   const [days, setDays] = useState([]);
-  const [expandedDay, setExpandedDay] = useState(null);
   const [role, setRole] = useState('cashier');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
+  const [statusKey, setStatusKey] = useState(0);
   const isAdmin = role === 'admin';
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError('');
+    let currentRole = 'cashier';
     try {
       const user = JSON.parse(localStorage.getItem('pos_user') || '{}');
-      const currentRole = String(user.role || '').toLowerCase() === 'admin' ? 'admin' : 'cashier';
-      setRole(currentRole);
-
-      // Close-preview summary only exists while a session is open; a 409 is expected then.
-      const summaryResponse = await fetch('/api/store/summary', { cache: 'no-store', headers: authHeaders() });
-      const summaryPayload = await summaryResponse.json();
-      if (summaryResponse.ok && summaryPayload.open) {
-        setSummary(summaryPayload.summary);
-        setBlockers(summaryPayload.blockers || []);
-      } else {
-        setSummary(null);
-        setBlockers([]);
-      }
-
-      if (currentRole === 'admin') {
-        const historyResponse = await fetch('/api/store/history?limit=30', { cache: 'no-store', headers: authHeaders() });
-        const historyPayload = await historyResponse.json();
-        if (historyResponse.ok) setDays(historyPayload.days || []);
-      }
-    } catch (err) {
-      setError(err.message || 'Could not load the store session details.');
+      currentRole = String(user.role || '').toLowerCase() === 'admin' ? 'admin' : 'cashier';
+    } catch { /* default cashier */ }
+    setRole(currentRole);
+    try {
+      const [sessionPayload, reportPayload, historyPayload] = await Promise.all([
+        // The close preview only exists while a session is open; a 409 is expected otherwise.
+        erpFetch('/api/store/summary').catch((fetchError) => (fetchError.status === 409 ? null : Promise.reject(fetchError))),
+        erpFetch(`/api/${currentRole === 'admin' ? 'admin' : 'cashier'}/executive-summary?period=today`),
+        currentRole === 'admin' ? erpFetch('/api/store/history?limit=30') : Promise.resolve(null),
+      ]);
+      setSession(sessionPayload?.open ? sessionPayload : null);
+      setReport(reportPayload?.summary || null);
+      if (historyPayload) setDays(historyPayload.days || []);
+    } catch (loadError) {
+      setError(loadError.message || 'Could not load the store session details.');
     } finally {
       setLoading(false);
     }
@@ -276,36 +198,32 @@ export default function OpeningClosingPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const expected = summary?.expected;
+  const afterLifecycleChange = () => {
+    setStatusKey((key) => key + 1);
+    loadAll();
+  };
+
+  const generatedAt = report?.generatedAt ? new Date(report.generatedAt).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }) : '';
 
   return (
-    <div className="min-h-screen bg-[#f7f5f2] px-3 py-4 text-[#21182f] sm:px-5 lg:px-7 lg:py-6">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-4 sm:gap-5">
-        <header className="flex flex-col gap-3 border-b border-[#e9e3db] pb-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-[-0.02em] text-[#17140f] sm:text-[28px]">
-              <DoorOpen className="h-6 w-6 text-[#6b46e5]" /> Opening &amp; Closing
-            </h1>
-            <p className="mt-1 text-sm text-[#7a736b]">Store session lifecycle and cash reconciliation.</p>
-          </div>
-          <div className="print-hide flex gap-2">
-            <button type="button" onClick={() => window.print()} className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-[#e4ded6] bg-white px-3.5 text-sm font-semibold text-[#3a342d] hover:bg-[#f7f5f2]">
-              <Printer className="h-4 w-4" /> Print
-            </button>
-            <button type="button" onClick={loadAll} className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-[#e4ded6] bg-white px-3.5 text-sm font-semibold text-[#3a342d] hover:bg-[#f7f5f2]">
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </button>
-          </div>
-        </header>
+    <ErpPage>
+      <PrintHeader title="Opening & Closing" period={formatDate(status?.businessDate)} generatedAt={generatedAt} context="Business Day reconciliation" />
+      <PageHeader
+        icon={DoorOpen}
+        iconTone="cash"
+        title="Opening & Closing"
+        subtitle="Business Day status, the live cash drawer, and the history of every close."
+        actions={<><PrintButton /><RefreshButton loading={loading} onClick={afterLifecycleChange} /></>}
+      />
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>
-        ) : null}
+      <div className="space-y-4">
+        {error ? <ErrorState message={error} onRetry={loadAll} /> : null}
 
-        <StoreStatusPanel status={status} />
+        <BusinessDayStatus status={status} />
 
-        {/* The one and only lifecycle control. */}
+        {/* The one lifecycle control: Open / Reopen / Start Next Business Day. Close lives in Section C. */}
         <StoreStatusBar
+          key={statusKey}
           variant="actions"
           role={role}
           showOpeningClosingLink={false}
@@ -314,141 +232,70 @@ export default function OpeningClosingPage() {
           onChanged={loadAll}
         />
 
-        {loading && !summary ? (
-          <div className={`${CARD} px-4 py-12 text-center`}>
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[#ded3fb] border-t-[#6b46e5]" />
-            <p className="text-sm text-[#7a736b]">Loading store session…</p>
-          </div>
+        {loading && !report ? <LoadingState label="Loading the business day…" /> : null}
+
+        {report ? (
+          <ReportGroup title="Business day summary" tone="ops" note={`All sessions of ${formatDate(report.businessDay?.date || status?.businessDate)} so far — the same figures as Summary and Dashboard.`}>
+            <DaySummary report={report} isAdmin={isAdmin} />
+          </ReportGroup>
         ) : null}
 
-        {summary ? (
-          <>
-            <section aria-label="Day summary" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#ece7e1] bg-[#ece7e1] lg:grid-cols-6">
-              {[
-                { label: 'Net Sales', value: formatCurrency(summary.sales.netSales) },
-                { label: 'Bills', value: summary.sales.completedBills },
-                { label: 'Cash Collected', value: formatCurrency(summary.payments.cash) },
-                { label: 'QR Collected', value: formatCurrency(summary.payments.esewaPhonePay + summary.payments.bankQr) },
-                { label: 'Expenses', value: formatCurrency(summary.outflows.operatingExpenses) },
-                { label: 'Savings', value: formatCurrency(summary.outflows.savingsTransfers) },
-              ].map((item) => (
-                <div key={item.label} className="bg-white px-4 py-3.5">
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#8a837b]">{item.label}</p>
-                  <p className="mt-1 text-[18px] font-extrabold tabular-nums text-[#17140f]">{item.value}</p>
-                </div>
-              ))}
-            </section>
-
-            <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
-              <Section
-                title="Cash Reconciliation"
-                subtitle="Physical drawer only. QR and online collections never touch this balance."
-              >
-                <Row label="Starting Cash in Drawer" value={formatCurrency(expected?.startingCash)} />
-                <Row label="Cash Collections" value={formatCurrency(expected?.cashCollections)} sign="+ " tone="positive" />
-                <Row label="Cash Expenses &amp; Salary" value={formatCurrency(expected?.cashExpenses)} sign="- " tone="outflow" />
-                <Row label="Cash Savings / Transfers Out" value={formatCurrency(expected?.cashSavingsOut)} sign="- " tone="outflow" />
-                <TotalRow label="Expected Cash in Drawer" value={formatCurrency(expected?.expectedCash)} />
-                <p className="border-t border-[#f0ece6] bg-[#fbfaf8] px-4 py-2.5 text-[12px] leading-5 text-[#7a736b] sm:px-5">
-                  Counted cash and the SHORT / OVER / MATCHED result are entered on Close Store.
-                  QR / online collected this session ({formatCurrency(expected?.qrCollections)}) is excluded from expected cash.
-                </p>
-              </Section>
-
-              <Section title="Online / QR Position" subtitle="Kept entirely separate from physical drawer cash.">
-                <Row label="Esewa / PhonePay" value={formatCurrency(summary.payments.esewaPhonePay)} sign="+ " tone="positive" />
-                <Row label="Bank QR" value={formatCurrency(summary.payments.bankQr)} sign="+ " tone="positive" />
-                <Row label="Split — QR portion" value={formatCurrency(summary.payments.splitQr)} tone="muted" />
-                <TotalRow label="Net Online / Bank Balance" value={formatCurrency(expected?.netOnlineBalance)} />
-              </Section>
-            </div>
-
-            <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
-              <Section title="Outflows" subtitle="Savings transfers move money between salon accounts and are not expenses.">
-                <Row label="Operating Expenses" value={formatCurrency(summary.outflows.operatingExpenses)} tone="outflow" />
-                {isAdmin ? <Row label="Salary Paid" value={formatCurrency(summary.outflows.salaryExpenses)} tone="outflow" /> : null}
-                <Row label="Savings Transfers" value={formatCurrency(summary.outflows.savingsTransfers)} />
-                <Row label="Refunds" value={formatCurrency(summary.outflows.refunds)} tone="muted" />
-              </Section>
-
-              <Section title="Tokens &amp; Front Desk" subtitle="Walk-in queue activity for this session.">
-                <Row label="Tokens Generated" value={summary.tokens.generated} />
-                <Row label="Converted to Bills" value={summary.tokens.converted} tone="positive" />
-                <Row label="Cancelled / No-show" value={summary.tokens.cancelledNoShow} tone="alert" />
-                <Row label="Digital / Printed" value={`${summary.tokens.digital} / ${summary.tokens.printed}`} tone="muted" />
-              </Section>
-            </div>
-
-            <Section title="Issues Before Closing" subtitle="Resolve these before the store can be closed normally.">
-              {blockers.length === 0 ? (
-                <p className="px-4 py-4 text-[13px] font-medium text-[#1f7a52] sm:px-5">Nothing is blocking a normal close.</p>
-              ) : (
-                <ul className="px-4 py-3 sm:px-5">
-                  {blockers.map((blocker) => (
-                    <li key={blocker.code} className="py-1 text-[13px] font-medium text-[#b91c1c]">• {blocker.message}</li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-          </>
+        <SectionHeading
+          title="Cash reconciliation"
+          note="Physical drawer cash for the current store session. Count the notes; the difference is worked out for you."
+        />
+        {session ? (
+          <CloseStoreForm
+            key={session.sessionNumber}
+            summary={session.summary}
+            blockers={session.blockers}
+            role={role}
+            sessionLabel={`Store session ${session.sessionNumber} of ${status?.sessionCount || session.sessionNumber}`}
+            onClosed={afterLifecycleChange}
+          />
+        ) : !loading ? (
+          status?.previousSession ? (
+            <AlertBanner tone="neutral" title={`Last close: Session ${status.previousSession.sessionNumber} · ${money(status.previousSession.countedCash)} counted`}>
+              The store is closed. Reopen it (same business day) or start the next business day to trade again. Closed sessions keep their
+              reconciliation snapshot — it is never recalculated.
+            </AlertBanner>
+          ) : (
+            <EmptyState title="The store is not open" message="Open the store to start a business day and see the live cash drawer." icon={DoorOpen} />
+          )
         ) : null}
 
-        {!loading && !summary ? (
-          <div className={`${CARD} px-4 py-8 text-center`}>
-            <p className="text-sm font-semibold text-[#3a342d]">The store is not open.</p>
-            <p className="mt-1 text-[13px] text-[#8a837b]">
-              Open or reopen the store above to record transactions and see the live cash reconciliation.
-            </p>
+        {session ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <OnlinePosition online={session.summary.online} isAdmin={isAdmin} />
+            <ReportSection
+              title="Cash ledger vs. drawer"
+              note="Why these two numbers can differ."
+              lines={[
+                line('Expected cash in drawer (this session)', session.summary.expected.expectedCash, { tone: 'cash' }),
+                line('Net cash movement (whole business day)', report?.cashPosition?.netCashMovement, { note: 'Cash in less cash out across every session, incl. opening adjustments; excludes the float' }),
+              ]}
+              footnote="Expected drawer cash answers “what should be in the till now”. Net cash movement answers “how much cash did today’s trading add”. A reopen, a float adjustment or an earlier shortage makes them differ — neither is wrong."
+            />
           </div>
         ) : null}
 
         {isAdmin ? (
-          <Section
-            title="Business Day History"
-            subtitle="Cash balances are per session; expected and counted cash are the final session's figures, never a sum."
-            action={<a href="/dashboard/admin/business-days" className="print-hide text-[11px] font-bold uppercase tracking-[0.05em] text-[#6b46e5]">Full history</a>}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#eee8df] bg-[#fbfaf8] text-[11px] font-bold uppercase tracking-[0.04em] text-[#6c6175]">
-                    <th className="px-4 py-3">Business Day</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Sessions</th>
-                    <th className="px-4 py-3">First Open</th>
-                    <th className="px-4 py-3">Final Close</th>
-                    <th className="px-4 py-3 text-right">Opening Cash</th>
-                    <th className="px-4 py-3 text-right">Final Expected</th>
-                    <th className="px-4 py-3 text-right">Final Counted</th>
-                    <th className="px-4 py-3">Difference</th>
-                    <th className="px-4 py-3 text-right">Net Sales</th>
-                    <th className="px-4 py-3 text-right">Bills</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f0ebe4]">
-                  {days.length === 0 ? (
-                    <tr><td colSpan={11} className="px-4 py-8 text-center text-[#8a837b]">No business days recorded yet.</td></tr>
-                  ) : days.map((day) => (
-                    <HistoryRow
-                      key={day.id}
-                      day={day}
-                      isAdmin={isAdmin}
-                      expanded={expandedDay === day.id}
-                      onToggle={() => setExpandedDay(expandedDay === day.id ? null : day.id)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
+          <>
+            <SectionHeading
+              title="Business day history"
+              note="Expected and counted cash are the final session's persisted close — never a sum of sessions. Differences add up because each shortage is its own event."
+              action={<a href="/dashboard/admin/business-days" className="print-hide inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:underline"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Full history</a>}
+            />
+            <BusinessDayHistory days={days} />
+          </>
         ) : null}
 
-        <p className="flex items-center gap-2 pb-2 text-xs text-[#8a837b]">
-          <CalendarDays className="h-3.5 w-3.5 text-[#6b46e5]" />
-          A business day may contain several store sessions. Reopening the store on the same day continues the same business day —
-          sales, bills, tokens, expenses and savings are never reset. Only Start Next Business Day begins a new operational day.
+        <p className="flex items-start gap-2 pb-2 text-xs text-stone-500">
+          <Landmark className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          One business day may hold several store sessions. Reopening on the same day continues the same business day; only Start Next
+          Business Day begins a new operational day. Nothing is ever deleted.
         </p>
       </div>
-    </div>
+    </ErpPage>
   );
 }

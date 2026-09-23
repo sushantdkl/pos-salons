@@ -24,6 +24,8 @@ export async function GET(request) {
       delete summary.outflows.salaryExpenses;
       delete summary.expected.salaryCash;
       delete summary.expected.operatingExpensesCash;
+      delete summary.online.salaryOnline;
+      delete summary.online.onlineExpenses;
     }
     const blockers = await getCloseBlockers(db, session);
     return NextResponse.json({

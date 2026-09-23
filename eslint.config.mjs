@@ -11,6 +11,8 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = defineConfig([
+  // Lint every source extension — without this, .jsx files were silently skipped.
+  { files: ['**/*.{js,jsx,mjs,cjs,ts,tsx}'] },
   ...compat.extends('next/core-web-vitals'),
   {
     rules: {
@@ -23,6 +25,7 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    '.kilo/**',
   ]),
 ]);
 

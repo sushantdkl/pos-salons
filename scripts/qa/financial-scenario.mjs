@@ -136,7 +136,13 @@ check('S1 Cashier close preview hides salary', close1.summary.expected.salaryCas
 check('S1 Cashier cash position hides salary', execC.cashPosition.cashSalary, (value) => value === undefined);
 
 // ---- close with a known shortage
-const closed1 = (await call(cashier, 'POST', '/api/store', { action: 'close', countedCash: 4900 })).json.result;
+// Notes 4x1000 + 1x500 + 4x100 = 4,900. countedCash is deliberately wrong: the server must
+// re-sum the breakdown and ignore the browser's total.
+const closed1 = (await call(cashier, 'POST', '/api/store', {
+  action: 'close', countedCash: 1, denominations: { 1000: 4, 500: 1, 100: 4, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0 },
+})).json.result;
+check('S1 Counted derived from notes, not client total', closed1.countedCash, 4900);
+check('S1 Note breakdown persisted', closed1.denominations?.['1000'], 4);
 check('S1 Close expected persisted', closed1.expectedCash, 5000);
 check('S1 Close difference', closed1.difference, -100);
 check('S1 Close status', closed1.status, (value) => value === 'SHORT');
@@ -176,6 +182,52 @@ check('History final counted = last session', day.finalCountedCash, 5600);
 check('History difference = sum of session differences', day.difference, -100);
 check('History net sales after voids', day.netSales, 9200);
 check('History session 1 snapshot unchanged', day.sessionDetails?.[0]?.expectedCash, 5000);
+check('History session 1 notes kept', day.sessionDetails?.[0]?.denominations?.['500'], 1);
+
+/* --------------------------------------------- invalid close input is rejected */
+const badBreakdown = await call(cashier, 'POST', '/api/store', { action: 'close', denominations: { 1000: -1 } }, { 'x-expect-error': '1' });
+check('Negative note count rejected', badBreakdown.status, (value) => value >= 400);
+
+/* ----------------------------------------------------- Phase 12: new business day */
+// A business day may never be dated in the future, so QA moves the closed day back one
+// calendar day (QA database only) to make "Start Next Business Day" legitimate today.
+if (process.env.QA_DATABASE_URL) {
+  const pg = (await import('pg')).default;
+  const qa = new pg.Client({ connectionString: process.env.QA_DATABASE_URL });
+  await qa.connect();
+  const dbName = new URL(process.env.QA_DATABASE_URL).pathname.slice(1);
+  if (!dbName.endsWith('_qa')) throw new Error('QA_DATABASE_URL must point at a *_qa database');
+  await qa.query(`UPDATE business_days SET business_date = business_date - 1 WHERE status = 'OPEN'`);
+  const stockBefore = (await qa.query(`SELECT current_stock FROM salon_products WHERE name = 'QA Serum'`)).rows[0].current_stock;
+  const customersBefore = (await qa.query('SELECT COUNT(*)::int n FROM customers')).rows[0].n;
+  const billSeqBefore = (await qa.query(`SELECT next_value FROM document_sequences WHERE document_type = 'salon_bill'`)).rows[0].next_value;
+
+  const beforeNext = (await call(admin, 'GET', '/api/store')).json.status;
+  check('Next day is allowed after the date moved', beforeNext.canStartNextDay, (value) => value === true);
+  await call(admin, 'POST', '/api/store', { action: 'next-day', startingCash: 5600 });
+  const nextStatus = (await call(admin, 'GET', '/api/store')).json.status;
+  check('New business day opened', nextStatus.businessDayId, (value) => String(value) !== String(beforeNext.businessDayId));
+  check('New day session 1', nextStatus.session.sessionNumber, 1);
+  check('New day expected = float', nextStatus.session.expectedCash, 5600);
+
+  const fresh = (await call(admin, 'GET', '/api/admin/executive-summary?period=today')).json.summary;
+  check('New day net sales = 0', fresh.revenue.netSales, 0);
+  check('New day bills = 0', fresh.revenue.bills, 0);
+  check('New day expenses = 0', fresh.expenses.total, 0);
+  check('New day savings = 0', fresh.savings.total, 0);
+  check('New day services sold = 0', fresh.revenue.servicesSold, 0);
+  check('New day products sold = 0', fresh.revenue.productsSold, 0);
+  check('New day tokens = 0', fresh.tokens.generated, 0);
+  check('New day customers = 0', fresh.quantities.uniqueCustomers, 0);
+
+  check('Stock not reset', (await qa.query(`SELECT current_stock FROM salon_products WHERE name = 'QA Serum'`)).rows[0].current_stock, stockBefore);
+  check('Customers not reset', (await qa.query('SELECT COUNT(*)::int n FROM customers')).rows[0].n, customersBefore);
+  check('Bill numbering continues', (await qa.query(`SELECT next_value FROM document_sequences WHERE document_type = 'salon_bill'`)).rows[0].next_value, billSeqBefore);
+  const previousDay = (await call(admin, 'GET', '/api/store/history')).json.days.find((row) => String(row.id) === String(beforeNext.businessDayId));
+  check('Previous day closed with its final snapshot', previousDay?.finalCountedCash, 5600);
+  check('Previous day net sales unchanged', previousDay?.netSales, 9200);
+  await qa.end();
+}
 
 /* -------------------------------------------------------------------- report */
 const failed = results.filter((row) => !row.ok);

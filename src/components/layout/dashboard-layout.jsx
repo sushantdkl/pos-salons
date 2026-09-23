@@ -4,39 +4,28 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import {
-  Users, FileText, Settings, DollarSign, ReceiptText,
-  LogOut, Menu, X, LayoutDashboard, Warehouse, Scissors, MessageCircle, Globe, PiggyBank, CalendarDays,
-  ClipboardList, DoorOpen, ShieldCheck, ChevronDown, Printer, ChartNoAxesCombined, HandCoins,
-  PackageSearch, BadgeDollarSign, WalletCards, Scale, GitCompareArrows
-} from 'lucide-react';
+import { ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
+import { flattenNavigation, NAV_TINTS, navigationForRole, resolveActiveHref } from '@/constants/navigation';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
+const NAV_GROUPS_KEY = 'salon_pos_nav_groups';
 const DESKTOP_MQ = '(min-width: 1024px)';
 let authInitialized = false;
-
-const reportMenuItems = [
-  { icon: ChartNoAxesCombined, label: 'Business Overview', href: '/admin/reports' },
-  { icon: ReceiptText, label: 'Sales & Invoices', href: '/admin/reports/center/sales' },
-  { icon: Scissors, label: 'Services Report', href: '/admin/reports/center/services' },
-  { icon: PackageSearch, label: 'Products & Retail', href: '/admin/reports/center/products' },
-  { icon: WalletCards, label: 'Payment Reconciliation', href: '/admin/reports/center/payments' },
-  { icon: HandCoins, label: 'Customer Credit', href: '/admin/reports/center/credit' },
-  { icon: BadgeDollarSign, label: 'Expenses Report', href: '/admin/reports/center/expenses' },
-  { icon: Scale, label: 'Salary Advances', href: '/admin/reports/center/advances' },
-  { icon: GitCompareArrows, label: 'Compare Reports', href: '/admin/reports/compare' },
-];
 
 function isDesktopViewport() {
   if (typeof window === 'undefined') return true;
   return window.matchMedia(DESKTOP_MQ).matches;
 }
 
-function isNavigationItemActive(pathname, href, isDashboard = false) {
-  if (isDashboard) return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
+function readSavedGroups() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAV_GROUPS_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch {
+    return {};
+  }
 }
 
 export default function AdminLayout({ children }) {
@@ -51,7 +40,9 @@ export default function AdminLayout({ children }) {
   const [userName, setUserName] = useState('');
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
-  const [reportsOpen, setReportsOpen] = useState(() => pathname.startsWith('/admin/reports'));
+  // Group open state. Starts empty on the server and the first client paint (no hydration
+  // mismatch); saved state is restored in an effect and the active page's group is forced open.
+  const [openGroups, setOpenGroups] = useState({});
 
   const closeMobileSidebar = () => setSidebarOpen(false);
 
@@ -154,8 +145,24 @@ export default function AdminLayout({ children }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (pathname.startsWith('/admin/reports')) setReportsOpen(true);
-  }, [pathname]);
+    // Restore saved groups, then make sure the group holding the current page is open.
+    const entries = navigationForRole(currentRole);
+    const active = resolveActiveHref(entries, pathname);
+    const activeGroup = entries.find((entry) => entry.items?.some((item) => item.href === active));
+    setOpenGroups((current) => ({
+      ...readSavedGroups(),
+      ...current,
+      ...(activeGroup ? { [activeGroup.id]: true } : {}),
+    }));
+  }, [pathname, currentRole]);
+
+  const toggleGroup = (id) => {
+    setOpenGroups((current) => {
+      const next = { ...current, [id]: !current[id] };
+      try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  };
 
   useLayoutEffect(() => {
     restoreSidebarScroll();
@@ -206,41 +213,8 @@ export default function AdminLayout({ children }) {
     router.push('/login');
   };
 
-  const allMenuItems = [
-    { roles: ['admin'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/admin', color: 'text-gray-600', isDashboard: true },
-    { roles: ['cashier'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/cashier', color: 'text-gray-600', isDashboard: true },
-    { roles: ['barber'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/barber', color: 'text-gray-600', isDashboard: true },
-    { roles: ['stylist'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/stylist', color: 'text-gray-600', isDashboard: true },
-    { roles: ['beautician'], icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/beautician', color: 'text-gray-600', isDashboard: true },
-    { roles: ['admin'], icon: ClipboardList, label: 'Executive Summary', href: '/admin/executive-summary', color: 'text-[#6b46e5]' },
-    { roles: ['cashier'], icon: ClipboardList, label: 'Executive Summary', href: '/cashier/executive-summary', color: 'text-[#6b46e5]' },
-    { roles: ['admin', 'cashier'], icon: DoorOpen, label: 'Opening & Closing', href: '/store/opening-closing', color: 'text-emerald-700' },
-    { roles: ['admin'], icon: Scissors, label: 'Tokens', href: '/dashboard/admin/tokens', color: 'text-amber-700' },
-    { roles: ['cashier'], icon: Scissors, label: 'Tokens', href: '/dashboard/cashier/tokens', color: 'text-amber-700' },
-    { roles: ['barber'], icon: Scissors, label: 'Queue', href: '/dashboard/barber/queue', color: 'text-amber-700' },
-    { roles: ['stylist'], icon: Scissors, label: 'Queue', href: '/dashboard/stylist/queue', color: 'text-amber-700' },
-    { roles: ['beautician'], icon: Scissors, label: 'Queue', href: '/dashboard/beautician/queue', color: 'text-amber-700' },
-    { roles: ['admin', 'cashier'], icon: DollarSign, label: 'Billing', href: '/admin/billing', color: 'text-teal-600' },
-    { roles: ['cashier'], icon: ReceiptText, label: 'Daily Expenses', href: '/dashboard/cashier/daily-expenses', color: 'text-emerald-700' },
-    { roles: ['cashier'], icon: DollarSign, label: 'Salary Advance', href: '/cashier/advances', color: 'text-amber-700' },
-    { roles: ['admin', 'cashier'], icon: ReceiptText, label: 'Credit Collection', href: '/cashier/credit', color: 'text-violet-700' },
-    { roles: ['cashier'], icon: PiggyBank, label: 'Savings', href: '/dashboard/cashier/savings', color: 'text-emerald-700' },
-    { roles: ['admin', 'cashier'], icon: Scissors, label: 'Services', href: '/admin/products', color: 'text-blue-600' },
-    { roles: ['admin', 'cashier'], icon: Warehouse, label: 'Inventory', href: '/admin/stock', color: 'text-indigo-600' },
-    { roles: ['admin'], icon: Users, label: 'Staff', href: '/admin/employees', color: 'text-green-600' },
-    { roles: ['admin', 'cashier'], icon: Users, label: 'Customers', href: '/admin/customers', color: 'text-pink-600' },
-    { roles: ['admin'], icon: FileText, label: 'Reports', href: '/admin/reports', color: 'text-purple-600', children: reportMenuItems },
-    { roles: ['admin'], icon: CalendarDays, label: 'Business Days', href: '/dashboard/admin/business-days', color: 'text-purple-600' },
-    { roles: ['admin'], icon: Users, label: 'Performance', href: '/dashboard/admin/staff-performance', color: 'text-amber-700' },
-    { roles: ['admin'], icon: DollarSign, label: 'Expenses & Salary', href: '/dashboard/admin/expenses', color: 'text-emerald-700' },
-    { roles: ['admin'], icon: PiggyBank, label: 'Savings', href: '/admin/savings', color: 'text-emerald-700' },
-    { roles: ['admin'], icon: Globe, label: 'Website CMS', href: '/dashboard/admin/website', color: 'text-blue-700' },
-    { roles: ['admin', 'cashier'], icon: MessageCircle, label: 'Reminders', href: '/admin/reminders', color: 'text-green-600' },
-    { roles: ['admin'], icon: ShieldCheck, label: 'Staff Permissions', href: '/admin/permissions', color: 'text-blue-700' },
-    { roles: ['admin'], icon: Printer, label: 'Printer', href: '/admin/printer', color: 'text-violet-700' },
-    { roles: ['admin'], icon: Settings, label: 'Settings', href: '/admin/settings', color: 'text-gray-600' },
-  ];
-  const menuItems = allMenuItems.filter((item) => !item.roles || item.roles.includes(currentRole));
+  const navEntries = navigationForRole(currentRole);
+  const activeHref = resolveActiveHref(navEntries, pathname);
 
   if (loading) {
     return (
@@ -270,6 +244,42 @@ export default function AdminLayout({ children }) {
     </div>
   );
   const userInitial = (userName || currentRole || 'U').trim().charAt(0).toUpperCase();
+
+  /**
+   * One nav link. Top-level links sit on white; group children sit on their family tint.
+   * The active row is always the strongest element in the sidebar: tinted fill, bold label
+   * and a solid left marker. In the collapsed rail the label becomes a native tooltip.
+   */
+  const renderNavLink = (item, tint, topLevel, iconOnly = false) => {
+    const isActive = item.href === activeHref;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        title={iconOnly ? item.label : undefined}
+        aria-label={iconOnly ? item.label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={() => {
+          saveSidebarScroll();
+          if (!isDesktopViewport()) closeMobileSidebar();
+        }}
+        className={`relative flex items-center gap-3 rounded-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-900/30 ${
+          topLevel ? 'min-h-11 px-3 py-2.5' : 'min-h-10 px-3 py-2'
+        } ${isActive ? `${tint.active} font-semibold` : `text-stone-700 ${topLevel ? 'hover:bg-stone-100' : 'hover:bg-white/70'}`} ${
+          iconOnly ? 'justify-center px-2' : ''
+        }`}
+      >
+        {isActive && !iconOnly ? (
+          <span className={`absolute inset-y-1.5 left-0 w-[3px] rounded-full ${topLevel ? 'bg-white/80' : tint.bar}`} aria-hidden="true" />
+        ) : null}
+        <item.icon
+          className={`h-[18px] w-[18px] shrink-0 ${isActive ? (topLevel ? 'text-white' : '') : tint.icon}`}
+          aria-hidden="true"
+        />
+        {iconOnly ? null : <span className={`truncate text-sm ${isActive ? '' : 'font-medium'}`}>{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#F7F5F2]">
@@ -317,76 +327,42 @@ export default function AdminLayout({ children }) {
         <nav
           ref={navRef}
           onScroll={saveSidebarScroll}
+          aria-label="Main navigation"
           className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3"
         >
-          {menuItems.map((item) => {
-            const isActive = isNavigationItemActive(pathname, item.href, item.isDashboard);
-            if (item.children && showExpanded) {
+          {showExpanded
+            ? navEntries.map((entry) => {
+              if (!entry.items) return renderNavLink(entry, NAV_TINTS.top, true);
+              const tint = NAV_TINTS[entry.tint] || NAV_TINTS.system;
+              const hasActive = entry.items.some((item) => item.href === activeHref);
+              const expanded = Boolean(openGroups[entry.id]) || hasActive;
+              const panelId = `nav-group-${entry.id}`;
               return (
-                <div key={item.href} className={`overflow-hidden rounded-[14px] ${isActive ? 'bg-[#EEF0FF]' : 'bg-transparent'}`}>
+                <div key={entry.id} className={`rounded-xl ${tint.bg}`}>
                   <button
                     type="button"
-                    aria-expanded={reportsOpen}
-                    onClick={() => setReportsOpen((current) => !current)}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#6B46E5]/25 ${
-                      isActive ? 'bg-[#DCE2FF] text-[#17140f]' : 'text-[#3a342d] hover:bg-[#E5E9FF]'
-                    }`}
+                    aria-expanded={expanded}
+                    aria-controls={panelId}
+                    onClick={() => toggleGroup(entry.id)}
+                    className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-900/30 ${tint.header} ${tint.hover}`}
                   >
-                    <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-[#5433C9]' : item.color}`} />
-                    <span className="flex-1 text-sm font-bold">{item.label}</span>
-                    <ChevronDown className={`h-4 w-4 transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
+                    <entry.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1">{entry.label}</span>
+                    {hasActive && !expanded ? <span className={`h-1.5 w-1.5 rounded-full ${tint.bar}`} aria-hidden="true" /> : null}
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
                   </button>
-                  {reportsOpen ? (
-                    <div className="space-y-0.5 px-1.5 pb-2 pt-1">
-                      {item.children.map((child) => {
-                        const childActive = pathname === child.href;
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            aria-current={childActive ? 'page' : undefined}
-                            onClick={() => {
-                              saveSidebarScroll();
-                              if (!isDesktopViewport()) closeMobileSidebar();
-                            }}
-                            className={`flex min-h-10 items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#6B46E5]/25 ${
-                              childActive ? 'bg-[#CED7FF] font-semibold text-[#17140f]' : 'font-medium text-[#37375A] hover:bg-white/70'
-                            }`}
-                          >
-                            <child.icon className="h-[18px] w-[18px] shrink-0 text-[#5E5CE6]" />
-                            <span className="leading-snug">{child.label}</span>
-                          </Link>
-                        );
-                      })}
+                  {expanded ? (
+                    <div id={panelId} role="group" aria-label={entry.label} className="space-y-0.5 px-1.5 pb-1.5">
+                      {entry.items.map((item) => renderNavLink(item, tint, false))}
                     </div>
                   ) : null}
                 </div>
               );
-            }
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-label={!showExpanded ? item.label : undefined}
-                aria-current={isActive ? 'page' : undefined}
-                onClick={() => {
-                  saveSidebarScroll();
-                  if (!isDesktopViewport()) closeMobileSidebar();
-                }}
-                className={`flex min-h-11 items-center gap-3 rounded-[10px] border-l-[3px] px-3 py-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#6B46E5]/25 ${
-                  isActive ? 'border-[#17140f] bg-[#f3f1ec]' : 'border-transparent hover:bg-[#f5f2ee]'
-                } ${showExpanded ? '' : 'justify-center px-2'}`}
-              >
-                {/* Colorful per-item icon (item.color); the active row goes dark/neutral. */}
-                <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-[#17140f]' : item.color}`} />
-                {showExpanded ? (
-                  <span className={`truncate text-sm ${isActive ? 'font-semibold text-[#17140f]' : 'font-medium text-[#3a342d]'}`}>
-                    {item.label}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
+            })
+            : flattenNavigation(navEntries).map((item) => {
+              const owner = navEntries.find((entry) => entry.items?.includes(item));
+              return renderNavLink(item, NAV_TINTS[owner?.tint] || NAV_TINTS.top, true, true);
+            })}
         </nav>
 
         <div className="shrink-0 space-y-2 border-t border-[#F0ECE6] p-3">

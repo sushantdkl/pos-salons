@@ -5,6 +5,7 @@ import {
   AlertTriangle, DoorClosed, DoorOpen, Loader2, Lock, RefreshCw, X,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import CloseStoreForm from '@/components/store/close-store-form';
 
 const REMOVE_DESTINATIONS = [
   { value: 'CASH_RESERVE', label: 'Cash Reserve / Safe' },
@@ -170,10 +171,6 @@ export default function StoreStatusBar({
   // Close form
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [countedCash, setCountedCash] = useState('');
-  const [closingNote, setClosingNote] = useState('');
-  const [force, setForce] = useState(false);
-  const [forceReason, setForceReason] = useState('');
 
   const loadStatus = useCallback(async () => {
     try {
@@ -201,10 +198,6 @@ export default function StoreStatusBar({
     setTransfer({});
     setOpeningNote('');
     if (type === 'close') {
-      setCountedCash('');
-      setClosingNote('');
-      setForce(false);
-      setForceReason('');
       setSummary(null);
       loadSummary();
     } else {
@@ -249,34 +242,6 @@ export default function StoreStatusBar({
     }
   };
 
-  const submitClose = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const body = { action: 'close', countedCash: Number(countedCash || 0), closingNote, force, forceReason };
-      const response = await fetch('/api/store', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
-      const payload = await response.json();
-      if (response.status === 409 && payload.code === 'CLOSE_BLOCKED') {
-        setBlockers(payload.blockers || []);
-        setError('Resolve the pending items below, or force close.');
-        return;
-      }
-      if (!response.ok) throw new Error(payload.error || 'Could not close the store.');
-      setStatus(payload.status);
-      setModal(null);
-      onChanged?.();
-    } catch (err) {
-      setError(err.message || 'Could not close the store.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const expected = summary?.expected;
-  const countedNumber = Number(countedCash || 0);
-  const difference = expected ? Math.round((countedNumber - expected.expectedCash) * 100) / 100 : 0;
-  const diffState = difference === 0 ? 'MATCHED' : difference < 0 ? 'SHORT' : 'OVER';
-  const diffTone = diffState === 'MATCHED' ? 'text-[#15803d]' : diffState === 'SHORT' ? 'text-[#dc2626]' : 'text-[#b45309]';
 
   const pill = useMemo(() => {
     if (loading) return { dot: 'bg-[#c9c2b8]', text: 'Checking store…', icon: Loader2, spin: true };
@@ -411,121 +376,25 @@ export default function StoreStatusBar({
         <Modal
           title="Close Store"
           subtitle={`Closes Session ${status?.session?.sessionNumber || 1} of Business Day ${formatDate(status?.businessDate)}. The business day stays open for a same-day reopen.`}
-          width="max-w-2xl"
-          onClose={() => (busy ? null : setModal(null))}
-          footer={(
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button type="button" className={BTN_SECONDARY} onClick={() => setModal(null)} disabled={busy}>Cancel</button>
-              <button type="button" className={BTN_DANGER} disabled={busy || summaryLoading}
-                onClick={submitClose}>
-                {busy ? 'Closing…' : blockers.length && force ? 'Force Close Store' : 'Close Store'}
-              </button>
-            </div>
-          )}
+          width="max-w-5xl"
+          onClose={() => setModal(null)}
         >
           {summaryLoading ? (
             <div className="flex items-center justify-center py-10 text-[#8a837b]"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading summary…</div>
           ) : summary ? (
-            <div className="space-y-4">
-              {/* Reconciliation — Expected beside Counted on desktop, stacked on mobile. */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-[#e9e3db] bg-[#faf8f5] p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Expected Cash</p>
-                  <p className="mt-1 text-2xl font-extrabold tabular-nums text-[#17140f]">{formatCurrency(expected?.expectedCash)}</p>
-                </div>
-                <div className="rounded-2xl border border-[#d9c9f2] bg-[#f7f3ff] p-4">
-                  <label className="text-[11px] font-bold uppercase tracking-wide text-[#7c3aed]">Counted Cash</label>
-                  <input type="number" min="0" step="0.01" autoFocus className={`${FIELD} mt-1 text-right text-2xl font-extrabold`}
-                    value={countedCash} onChange={(event) => setCountedCash(event.target.value)} placeholder="0.00" />
-                </div>
-              </div>
-              <div className={`rounded-2xl border p-4 ${diffState === 'MATCHED' ? 'border-[#cfe8d8] bg-[#f2fbf5]' : diffState === 'SHORT' ? 'border-[#f2d2d2] bg-[#fdf3f3]' : 'border-[#f1e0c8] bg-[#fdf8ef]'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Difference</span>
-                  <span className={`text-sm font-bold ${diffTone}`}>{countedCash === '' ? '—' : diffState}</span>
-                </div>
-                <p className={`mt-1 text-2xl font-extrabold tabular-nums ${diffTone}`}>{countedCash === '' ? '—' : formatCurrency(Math.abs(difference))}</p>
-              </div>
-
-              {/* Expected cash breakdown with correct signs. */}
-              <div className="rounded-2xl border border-[#eee8df] p-4">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Expected Cash Breakdown</p>
-                <Row label="Starting Cash" value={expected?.startingCash} />
-                <Row label="Cash Collections" value={expected?.cashCollections} sign="+" tone="text-[#15803d]" />
-                {expected?.cashExpenses ? <Row label="Cash Expenses" value={expected?.cashExpenses} sign="−" tone="text-[#dc2626]" /> : null}
-                {expected?.cashSavingsOut ? <Row label="Cash Savings / Transfers Out" value={expected?.cashSavingsOut} sign="−" tone="text-[#dc2626]" /> : null}
-                <div className="mt-1 flex items-center justify-between border-t border-[#eee8df] pt-2 text-sm">
-                  <span className="font-bold text-[#17140f]">Expected Cash</span>
-                  <span className="font-extrabold tabular-nums text-[#17140f]">{formatCurrency(expected?.expectedCash)}</span>
-                </div>
-                <p className="mt-2 text-[11px] text-[#9a938b]">QR / online collections ({formatCurrency(expected?.qrCollections)}) are not physical drawer cash and are excluded from Expected Cash.</p>
-              </div>
-
-              {/* Session summary */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-[#eee8df] p-4">
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Sales</p>
-                  <Row label="Gross Sales" value={summary.sales.grossSales} />
-                  <Row label="Discounts" value={summary.sales.discounts} tone="text-[#dc2626]" />
-                  <Row label="Net Sales" value={summary.sales.netSales} />
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Completed Bills</span><span className="font-semibold">{summary.sales.completedBills}</span></div>
-                  <Row label="Average Bill" value={summary.sales.avgBill} />
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Services / Products</span><span className="font-semibold">{summary.sales.servicesSold} / {summary.sales.productsSold}</span></div>
-                </div>
-                <div className="rounded-2xl border border-[#eee8df] p-4">
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Payments</p>
-                  <Row label="Cash" value={summary.payments.cash} />
-                  <Row label="Esewa / PhonePay" value={summary.payments.esewaPhonePay} />
-                  <Row label="Bank QR" value={summary.payments.bankQr} />
-                  <Row label="Split Cash" value={summary.payments.splitCash} />
-                  <Row label="Split QR" value={summary.payments.splitQr} />
-                  <div className="mt-1 flex items-center justify-between border-t border-[#eee8df] pt-2 text-sm"><span className="font-bold">Total Collected</span><span className="font-extrabold tabular-nums">{formatCurrency(summary.payments.totalCollected)}</span></div>
-                </div>
-                <div className="rounded-2xl border border-[#eee8df] p-4">
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Outflows</p>
-                  <Row label="Operating Expenses" value={summary.outflows.operatingExpenses} tone="text-[#dc2626]" />
-                  <Row label="Savings Transfers" value={summary.outflows.savingsTransfers} />
-                  <Row label="Salary" value={summary.outflows.salaryExpenses} tone="text-[#dc2626]" />
-                  <Row label="Refunds" value={summary.outflows.refunds} />
-                </div>
-                <div className="rounded-2xl border border-[#eee8df] p-4">
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#8a837b]">Tokens</p>
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Generated</span><span className="font-semibold">{summary.tokens.generated}</span></div>
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Converted</span><span className="font-semibold">{summary.tokens.converted}</span></div>
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Cancelled / No-show</span><span className="font-semibold">{summary.tokens.cancelledNoShow}</span></div>
-                  <div className="flex items-center justify-between py-1.5 text-sm"><span className="text-[#6b6157]">Digital / Printed</span><span className="font-semibold">{summary.tokens.digital} / {summary.tokens.printed}</span></div>
-                </div>
-              </div>
-
-              {blockers.length > 0 ? (
-                <div className="space-y-2 rounded-2xl border border-[#f1d0d0] bg-[#fdf3f3] p-4">
-                  <p className="flex items-center gap-2 text-sm font-bold text-[#b91c1c]"><AlertTriangle className="h-4 w-4" /> Pending items block a normal close</p>
-                  {blockers.map((blocker) => <p key={blocker.code} className="text-sm text-[#8a3b3b]">• {blocker.message}</p>)}
-                  {/* Force close is an admin action. The store API enforces this too — hiding
-                      the control simply stops a cashier from attempting it. */}
-                  {role === 'admin' ? (
-                    <>
-                      <label className="mt-1 flex items-center gap-2 text-sm text-[#8a3b3b]">
-                        <input type="checkbox" checked={force} onChange={(event) => setForce(event.target.checked)} />
-                        Force close anyway (admin only)
-                      </label>
-                      {force ? (
-                        <input className={FIELD} placeholder="Reason for force close (required)" value={forceReason} onChange={(event) => setForceReason(event.target.value)} />
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="text-sm text-[#8a3b3b]">Ask an admin to force close if these items cannot be resolved.</p>
-                  )}
-                </div>
-              ) : null}
-
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#6c6175]">Closing Note (optional)</span>
-                <input className={FIELD} value={closingNote} onChange={(event) => setClosingNote(event.target.value)} />
-              </label>
-
-              {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p> : null}
-            </div>
+            <CloseStoreForm
+              summary={summary}
+              blockers={blockers}
+              role={role}
+              sessionLabel={`Store session ${status?.session?.sessionNumber || 1}`}
+              onCancel={() => setModal(null)}
+              onClosed={(payload) => {
+                setStatus(payload.status);
+                onStatus?.(payload.status);
+                setModal(null);
+                onChanged?.();
+              }}
+            />
           ) : (
             <p className="py-6 text-center text-sm text-[#8a837b]">{error || 'No open session.'}</p>
           )}
