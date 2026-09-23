@@ -189,7 +189,7 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
       business_day_id, store_session_id, created_by, updated_by,
       payroll_period_start, payroll_period_end, eligible_salary_snapshot,
       ceiling_percent_snapshot, idempotency_key, source_identifier
-    ) VALUES (?, ?, 0, ?, ?, ?, ?::date, ?, ?, 'OUTSTANDING', ?, ?, ?, ?, ?, ?, ?::date, ?::date, ?, ?, ?, ?)
+    ) VALUES (?, ?, 0, ?, ?, ?, ?::date, ?, ?, 'OUTSTANDING', ?, ?, ?, ?, ?, ?::date, ?::date, ?, ?, ?, ?)
   `, [
     staffId, amount, booked?.payment_method || 'cash',
     money(booked?.cash_amount), money(booked?.online_amount),

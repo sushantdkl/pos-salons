@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { mapApiError } from '@/lib/db/api-errors';
-import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getDashboardTransactions, getSalonDashboardSummary, PAID_BILL_STATUS_SQL } from '@/lib/reports/dashboard-summary';
-import { getSalesSeries } from '@/lib/reports/finance-summary';
+import { getSalesSeries, revenueScope } from '@/lib/reports/finance-summary';
 import { isValidCustomRange, resolveDashboardPeriod } from '@/lib/reports/dashboard-period';
 import { getCurrentBusinessDay } from '@/lib/business-day/service';
 
@@ -36,9 +35,8 @@ export async function GET(request) {
     const range = { startDate, endDate, businessDayId };
 
     const dashboard = await getSalonDashboardSummary(db, period, range);
-    const itemFilter = businessDayId
-      ? { clause: 'b.business_day_id = ?', params: [businessDayId] }
-      : periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    // Same revenue-day rule as every sales figure: a backdated bill counts on the day it was sold.
+    const itemFilter = revenueScope('b', period, range);
 
     const totalServicesRow = await db.get('SELECT COUNT(*)::int as count FROM salon_services WHERE is_active = TRUE');
     const totalStaffRow = await db.get('SELECT COUNT(*)::int as count FROM users WHERE is_active = TRUE');

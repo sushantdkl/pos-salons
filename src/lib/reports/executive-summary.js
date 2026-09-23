@@ -25,9 +25,11 @@
 
 import { periodDateColumnFilter, SALON_TIMEZONE } from '@/lib/db/postgres-dates';
 import { getDashboardPeriodMeta, resolveDashboardPeriod, salonDateString } from '@/lib/reports/dashboard-period';
+import { computeExpectedCash, getOpenSession } from '@/lib/business-day/service';
 import {
   DEPOSIT_SOURCE_LABELS,
   DEPOSIT_TYPE_LABELS,
+  eventScope,
   expenseCashSql,
   expenseOnlineSql,
   getFinancialSummary,
@@ -121,10 +123,12 @@ async function getRevenueSplit(db, period, options) {
  */
 async function getProductCost(db, period, options) {
   const filter = billFilterFor(period, options);
+  // Unit cost snapshotted on the bill line when available, else today's purchase price.
+  const unitCost = 'COALESCE(i.unit_cost_snapshot, p.purchase_price, 0)';
   const row = await db.get(`
     SELECT
-      COALESCE(SUM(i.quantity * COALESCE(p.purchase_price, 0)), 0) AS estimated_cost,
-      COALESCE(SUM(CASE WHEN COALESCE(p.purchase_price, 0) > 0 THEN i.quantity ELSE 0 END), 0)::int AS costed_units,
+      COALESCE(SUM(i.quantity * ${unitCost}), 0) AS estimated_cost,
+      COALESCE(SUM(CASE WHEN ${unitCost} > 0 THEN i.quantity ELSE 0 END), 0)::int AS costed_units,
       COALESCE(SUM(i.quantity), 0)::int AS total_units
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
@@ -132,10 +136,21 @@ async function getProductCost(db, period, options) {
     WHERE ${filter.clause} AND ${PAID_BILL_STATUS_SQL} AND i.item_type = 'product'
   `, filter.params);
 
+  // A void returns its products to stock, so their cost leaves COGS on the void day — the
+  // same day the void leaves revenue.
+  const voidFilter = eventScope('fc', period, options);
+  const voided = await db.get(`
+    SELECT COALESCE(SUM(i.quantity * ${unitCost}), 0) AS voided_cost
+    FROM financial_corrections fc
+    JOIN salon_bill_items i ON i.bill_id = fc.source_id AND i.item_type = 'product'
+    LEFT JOIN salon_products p ON p.id = i.item_id
+    WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void' AND ${voidFilter.clause}
+  `, voidFilter.params);
+
   const totalUnits = Number(row?.total_units || 0);
   const costedUnits = Number(row?.costed_units || 0);
   return {
-    estimatedProductCost: round2(row?.estimated_cost),
+    estimatedProductCost: round2(numeric(row?.estimated_cost) - numeric(voided?.voided_cost)),
     costedUnits,
     totalProductUnits: totalUnits,
     // Only claim a cost figure when at least one sold product actually carries a purchase price.
@@ -596,7 +611,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
 
   const [
     financial, revenueSplit, serviceCategories, productCategories,
-    savingsBreakdown, cashAdjustments, sessionFacts, tokens, activity,
+    savingsBreakdown, cashAdjustments, sessionFacts, tokens, activity, creditOutstanding,
   ] = await Promise.all([
     // includeSalary stays TRUE for both roles: cash salary physically leaves the drawer, so
     // excluding it would make the cashier's Expected Cash in Drawer disagree with the admin's
@@ -610,6 +625,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     getSessionFacts(db, period, scope),
     getTokenSummary(db, period, scope),
     getActivityCounts(db, period, scope),
+    db.get('SELECT COALESCE(SUM(debit - credit), 0) AS balance FROM customer_credit_ledger'),
   ]);
 
   const [productCost, expenseCategories, salary, purchases, staffPerformance] = forAdmin
@@ -631,9 +647,14 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     totalDiscounts: round2(financial.totalDiscounts),
     totalTax: round2(financial.totalTax),
     totalServiceCharge: round2(financial.totalServiceCharge),
+    finalizedBillTotal: round2(financial.finalizedBillTotal),
+    // Voids PROCESSED in this period (the bills may have been sold earlier).
+    voidedSales: round2(financial.voidedSales),
+    voidCount: Number(financial.voidCount || 0),
+    creditSales: round2(financial.creditSales),
     netSales: round2(financial.netSalesAfterDiscount),
     bills: Number(financial.bills || 0),
-    avgBill: financial.bills > 0 ? round2(numeric(financial.netSalesAfterDiscount) / financial.bills) : 0,
+    avgBill: financial.bills > 0 ? round2(numeric(financial.finalizedBillTotal) / financial.bills) : 0,
     servicesSold: revenueSplit.servicesSold,
     productsSold: revenueSplit.productsSold,
     discountRate: percentOf(financial.totalDiscounts, financial.grossSalesBeforeDiscount),
@@ -651,10 +672,21 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     splitCash: round2(financial.splitCash),
     splitQr: round2(financial.splitQr),
     grossTotalCollected: round2(financial.grossTotalCollected),
-    // Collections less net sales. A paid bill always reconciles cash + QR to grand_total,
-    // so the only legitimate cause of a gap is a backdated bill: its cash lands in this
-    // period while its revenue belongs to an earlier business day.
-    collectionVariance: round2(numeric(financial.grossTotalCollected) - numeric(financial.netSalesAfterDiscount)),
+    // Money received against earlier customer credit — cash/online in, not a new sale.
+    creditCollectionsCash: round2(financial.creditCollectionsCash),
+    creditCollectionsOnline: round2(financial.creditCollectionsOnline),
+    cashRefunds: round2(financial.cashRefunds),
+    onlineRefunds: round2(financial.onlineRefunds),
+    netCashReceived: round2(financial.netCashIn),
+    netOnlineReceived: round2(financial.netOnlineIn),
+    netReceived: round2(numeric(financial.netCashIn) + numeric(financial.netOnlineIn)),
+    // Bill collections less the part of the billed total actually due now (billed - credit).
+    // A paid bill always reconciles cash + QR + credit to grand_total, so the only
+    // legitimate cause of a gap is a backdated bill: its cash lands in this period while its
+    // revenue belongs to an earlier business day.
+    collectionVariance: round2(
+      numeric(financial.grossTotalCollected) - (numeric(financial.finalizedBillTotal) - numeric(financial.creditSales))
+    ),
     backdatedCollected: round2(financial.backdatedCollected),
     backdatedBills: Number(financial.backdatedBills || 0),
     cashShare: percentOf(financial.grossCashCollected, financial.grossTotalCollected),
@@ -717,27 +749,34 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
       // product cost is valued at current purchase price, which makes the result an estimate.
       basis: productCost.costTracked ? 'Estimated' : 'Actual',
       costNote: productCost.costTracked
-        ? 'Product cost is valued at each product\'s current purchase price — historical unit cost is not stored on the bill line.'
+        ? 'Product cost uses the unit cost recorded on the bill line where available, otherwise the product\'s current purchase price. Voided products are removed from cost on the void day.'
         : 'No purchase price is recorded for the products sold, so no cost of goods is deducted. Service cost is not tracked by this POS.',
     };
   })() : null;
 
   /* ---- cash position --------------------------------------------------- */
   const cashPaidOut = round2(expenses.cash + salaryCash);
-  const cashOut = round2(cashPaidOut + savings.fromCash);
-  const netCashMovement = round2(payments.grossCashCollected - cashOut + cashAdjustments.net);
-  const liveExpectedCash = round2(sessionFacts.startingCash + netCashMovement);
+  const cashOut = round2(cashPaidOut + savings.fromCash + payments.cashRefunds);
+  // Cash MOVEMENT statement for the period (not a drawer balance): everything that moved
+  // physical cash, including non-P&L drawer adjustments made at Store Open.
+  const netCashMovement = round2(numeric(financial.netCashMovement) + cashAdjustments.net);
 
-  // OPEN session  -> expected cash is computed live from current transactions.
-  // CLOSED session -> the PERSISTED closing snapshot is authoritative. Reading it back rather
+  // The drawer: an OPEN session is computed live by the one Expected Cash formula that Close
+  // Store also uses (computeExpectedCash), so this report can never disagree with the
+  // Opening & Closing screen. Rebuilding it from the first session's float would count
+  // opening adjustments twice and ignore an earlier session's shortage or overage.
+  // CLOSED sessions -> the PERSISTED closing snapshot is authoritative. Reading it back rather
   // than recomputing is what stops a historical report from drifting when an unrelated record
   // is edited later, and it is why admin and cashier always report the identical close.
-  const useSnapshot = sessionFacts.allClosed && sessionFacts.snapshotExpectedCash !== null;
-  const expectedCash = useSnapshot ? sessionFacts.snapshotExpectedCash : liveExpectedCash;
+  const openSession = sessionFacts.openSessions > 0 ? await getOpenSession(db) : null;
+  const liveDrawer = openSession ? await computeExpectedCash(db, openSession) : null;
+  const liveExpectedCash = liveDrawer ? liveDrawer.expectedCash : null;
+  const useSnapshot = !liveDrawer && sessionFacts.allClosed && sessionFacts.snapshotExpectedCash !== null;
+  const expectedCash = liveDrawer ? liveExpectedCash : useSnapshot ? sessionFacts.snapshotExpectedCash : null;
   const countedCash = sessionFacts.allClosed ? sessionFacts.countedCash : null;
   const cashDifference = useSnapshot
     ? sessionFacts.snapshotDifference
-    : countedCash === null ? null : round2(countedCash - expectedCash);
+    : countedCash === null || expectedCash === null ? null : round2(countedCash - expectedCash);
 
   const cashPosition = {
     hasSessionData: sessionFacts.sessions > 0,
@@ -746,27 +785,44 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     businessDays: sessionFacts.businessDays,
     startingCash: sessionFacts.startingCash,
     cashCollected: payments.grossCashCollected,
+    creditCollectionsCash: payments.creditCollectionsCash,
+    cashRefunds: payments.cashRefunds,
     cashExpenses: expenses.cash,
     // Combined outflow so the drawer reconciles without naming payroll to a cashier.
     cashPaidOut,
     cashSavings: savings.fromCash,
     cashAdded: cashAdjustments.added,
     cashRemoved: cashAdjustments.removed,
-    cashRefunds: 0,
+    cashOut,
+    // Shortages (-) / overages (+) found at every close in the period. Additive by design.
+    sessionDifferences: sessionFacts.sessionDifference,
     netCashMovement,
     liveExpectedCash,
+    // The open session's own drawer breakdown (cashier-safe: salary is inside cashExpenses).
+    liveDrawer: liveDrawer ? {
+      sessionId: openSession.id,
+      sessionNumber: Number(openSession.session_number || 0),
+      startingCash: liveDrawer.startingCash,
+      cashCollections: liveDrawer.cashCollections,
+      creditCollectionsCash: liveDrawer.creditCollectionsCash,
+      cashRefunds: liveDrawer.cashRefunds,
+      cashExpenses: liveDrawer.cashExpenses,
+      cashSavingsOut: liveDrawer.cashSavingsOut,
+      expectedCash: liveDrawer.expectedCash,
+      ...(forAdmin ? { salaryCash: liveDrawer.salaryCash, operatingExpensesCash: liveDrawer.operatingExpensesCash } : {}),
+    } : null,
     expectedCash,
     countedCash,
     cashDifference,
     // Where expectedCash came from, so the UI can say so plainly.
-    expectedCashSource: useSnapshot ? 'snapshot' : 'live',
+    expectedCashSource: liveDrawer ? 'live' : useSnapshot ? 'snapshot' : 'none',
     closedBy: sessionFacts.closedBy,
     finalSessionNumber: sessionFacts.finalSessionNumber,
     reconciliationState: cashDifference === null
       ? 'PENDING'
       : cashDifference === 0 ? 'MATCHED' : cashDifference < 0 ? 'SHORT' : 'OVER',
     countedAt: sessionFacts.countedAt,
-    netCashInHand: sessionFacts.sessions > 0 ? expectedCash : netCashMovement,
+    netCashInHand: expectedCash !== null ? expectedCash : netCashMovement,
     // Admin-only itemisation of the combined cash outflow.
     ...(forAdmin ? { cashSalary: salaryCash } : {}),
   };
@@ -778,11 +834,12 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     bankQr: payments.bankQr,
     otherOnline: payments.otherQr,
     totalOnlineIn: payments.grossQrCollected,
+    creditCollectionsOnline: payments.creditCollectionsOnline,
     onlineExpenses: expenses.online,
     onlinePaidOut: round2(expenses.online + salaryOnline),
     onlineSavings: savings.fromOnline,
-    onlineRefunds: 0,
-    totalOnlineOut: round2(expenses.online + salaryOnline + savings.fromOnline),
+    onlineRefunds: payments.onlineRefunds,
+    totalOnlineOut: round2(expenses.online + salaryOnline + savings.fromOnline + payments.onlineRefunds),
     netOnlineBalance: round2(financial.netOnlineBalance),
     ...(forAdmin ? { onlineSalary: salaryOnline } : {}),
   };
@@ -842,7 +899,15 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     executiveKpis,
     revenue,
     payments,
-    customerCredit: null, // credit sales / customer ledger are not implemented in this POS
+    customerCredit: {
+      creditSales: revenue.creditSales,
+      collectionsCash: payments.creditCollectionsCash,
+      collectionsOnline: payments.creditCollectionsOnline,
+      collectionsTotal: round2(payments.creditCollectionsCash + payments.creditCollectionsOnline),
+      records: Number(financial.creditCollectionRecords || 0),
+      // Receivable balance as of NOW (a ledger balance, not a period movement).
+      outstandingNow: round2(creditOutstanding?.balance),
+    },
     expenses,
     savings,
     cashPosition,
@@ -852,8 +917,8 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     tokens,
     quantities,
     capabilities: {
-      customerCredit: false,
-      refunds: false,
+      customerCredit: true,
+      refunds: true,
       supplierCredit: false,
       openingOnlineBalance: false,
       serviceCost: false,

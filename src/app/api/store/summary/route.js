@@ -18,6 +18,13 @@ export async function GET(request) {
       return NextResponse.json({ open: false, error: 'The store is not open.' }, { status: 409 });
     }
     const summary = await getSessionSummary(db, session);
+    // Payroll is management information: a cashier still gets the combined cash outflow the
+    // drawer needs (cashExpenses already includes salary), but never the salary figures.
+    if (user.role !== 'admin') {
+      delete summary.outflows.salaryExpenses;
+      delete summary.expected.salaryCash;
+      delete summary.expected.operatingExpensesCash;
+    }
     const blockers = await getCloseBlockers(db, session);
     return NextResponse.json({
       open: true,

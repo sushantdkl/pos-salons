@@ -14,6 +14,7 @@ export const trackedMigrations = [
   '2026-09-20-credit-collections.sql',
   '2026-09-20-payment-corrections.sql',
   '2026-09-20-permission-matrix.sql',
+  '2026-09-23-void-event-attribution.sql',
 ];
 
 export function migrationFiles() {

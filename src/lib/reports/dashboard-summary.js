@@ -3,7 +3,6 @@ import { getDashboardPeriodMeta, resolveDashboardPeriod, salonDateString } from 
 import {
   billCashSql,
   billQrSql,
-  billScope,
   getFinancialSummary,
   numeric,
   PAID_BILL_STATUS_SQL,
@@ -26,7 +25,6 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
   // Revenue attribution: a backdated bill belongs to the day the service happened, not to
   // the day whose drawer took the cash. Collections keep the cash attribution below.
   const billFilter = revenueScope('b', period, { businessDayId: useDay, startDate, endDate });
-  const cashFilter = billScope('b', period, { businessDayId: useDay, startDate, endDate });
   const itemFilter = billFilter;
   const tokenFilter = useDay
     ? { clause: 'wt.business_day_id = ?', params: [useDay] }
@@ -43,37 +41,17 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
   const expenseParams = options.expenseCreatedBy ? [...expenseFilter.params, options.expenseCreatedBy] : expenseFilter.params;
   const recentExpenseParams = options.expenseCreatedBy ? [...recentExpenseFilter.params, options.expenseCreatedBy] : recentExpenseFilter.params;
 
-  const billCash = billCashSql('b');
-  const billQr = billQrSql('b');
-
-  // Revenue-scoped: what the salon SOLD in this period.
+  // Revenue-scoped COUNTS of what the salon sold. Money totals come from getFinancialSummary.
   const sales = await db.get(`
     SELECT
       COUNT(DISTINCT b.id)::int as bills,
-      COALESCE(SUM(b.grand_total), 0) as total_sales,
-      COALESCE(SUM(b.subtotal), 0) as gross_before_discount,
-      COALESCE(SUM(b.discount_amount), 0) as total_discounts,
       COUNT(DISTINCT CASE WHEN b.token_id IS NULL THEN b.id END)::int as direct_bills,
       COUNT(DISTINCT CASE WHEN b.token_id IS NOT NULL THEN b.id END)::int as token_bills,
       COUNT(DISTINCT b.customer_id)::int as saved_customers,
-      COUNT(DISTINCT CASE WHEN b.customer_id IS NULL THEN b.id END)::int as anonymous_customer_bills,
-      CASE WHEN COUNT(DISTINCT b.id) > 0 THEN COALESCE(SUM(b.grand_total), 0) / COUNT(DISTINCT b.id) ELSE 0 END as avg_bill_value
+      COUNT(DISTINCT CASE WHEN b.customer_id IS NULL THEN b.id END)::int as anonymous_customer_bills
     FROM salon_bills b
     WHERE ${billFilter.clause} AND ${PAID_BILL_STATUS_SQL}
   `, billFilter.params);
-
-  // Cash-scoped: what the drawer / online accounts actually RECEIVED in this period.
-  const collections = await db.get(`
-    SELECT
-      COALESCE(SUM(${billCash}), 0) as cash_received,
-      COALESCE(SUM(${billQr}), 0) as qr_received,
-      COALESCE(SUM(CASE WHEN b.qr_type = 'ESEWA_PHONEPAY' THEN ${billQr} ELSE 0 END), 0) as esewa_phonepay_received,
-      COALESCE(SUM(CASE WHEN b.qr_type = 'BANK' THEN ${billQr} ELSE 0 END), 0) as bank_qr_received,
-      COALESCE(SUM(CASE WHEN b.payment_method = 'split' THEN ${billCash} ELSE 0 END), 0) as split_cash,
-      COALESCE(SUM(CASE WHEN b.payment_method = 'split' THEN ${billQr} ELSE 0 END), 0) as split_qr
-    FROM salon_bills b
-    WHERE ${cashFilter.clause} AND ${PAID_BILL_STATUS_SQL}
-  `, cashFilter.params);
 
   const itemCounts = await db.get(`
     SELECT
@@ -248,23 +226,33 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
     financial,
     summary: {
       totalBills: Number(sales?.bills || 0),
-      totalSales: numeric(sales?.total_sales),
-      grossSalesBeforeDiscount: numeric(sales?.gross_before_discount),
-      totalDiscounts: numeric(sales?.total_discounts),
-      netSalesAfterDiscount: numeric(sales?.total_sales),
-      cashReceived: numeric(collections?.cash_received),
-      qrReceived: numeric(collections?.qr_received),
-      grossTotalCollected: numeric(collections?.cash_received) + numeric(collections?.qr_received),
-      esewaPhonePayReceived: numeric(collections?.esewa_phonepay_received),
-      bankQrReceived: numeric(collections?.bank_qr_received),
-      splitCash: numeric(collections?.split_cash),
-      splitQr: numeric(collections?.split_qr),
+      // Money figures come from getFinancialSummary only, so the dashboard can never total a
+      // bill differently from the Summary, Opening & Closing or the reports.
+      totalSales: financial.netSalesAfterDiscount,
+      grossSalesBeforeDiscount: financial.grossSalesBeforeDiscount,
+      totalDiscounts: financial.totalDiscounts,
+      finalizedBillTotal: financial.finalizedBillTotal,
+      voidedSales: financial.voidedSales,
+      voidCount: financial.voidCount,
+      netSalesAfterDiscount: financial.netSalesAfterDiscount,
+      cashReceived: financial.grossCashCollected,
+      qrReceived: financial.grossQrCollected,
+      grossTotalCollected: financial.grossTotalCollected,
+      esewaPhonePayReceived: financial.esewaPhonePayCollected,
+      bankQrReceived: financial.bankQrCollected,
+      splitCash: financial.splitCash,
+      splitQr: financial.splitQr,
+      creditSales: financial.creditSales,
+      creditCollectionsCash: financial.creditCollectionsCash,
+      creditCollectionsOnline: financial.creditCollectionsOnline,
+      cashRefunds: financial.cashRefunds,
+      onlineRefunds: financial.onlineRefunds,
       tokenBills: Number(sales?.token_bills || 0),
       directBills: Number(sales?.direct_bills || 0),
       customersServed: Number(sales?.saved_customers || 0) + Number(sales?.anonymous_customer_bills || 0),
       savedCustomers: Number(sales?.saved_customers || 0),
       anonymousCustomerBills: Number(sales?.anonymous_customer_bills || 0),
-      avgBillValue: numeric(sales?.avg_bill_value),
+      avgBillValue: Number(sales?.bills || 0) > 0 ? Math.round((financial.finalizedBillTotal / Number(sales.bills)) * 100) / 100 : 0,
       servicesSold: Number(itemCounts?.services_sold || 0),
       productsSold: Number(itemCounts?.products_sold || 0),
       serviceRevenue,

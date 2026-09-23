@@ -16,7 +16,10 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify-migrations.mjs",
     "verify:cashier-payroll-denial": "node scripts/verify-cashier-payroll-denial.mjs",
-    "verify:permission-policy": "node scripts/verify-permission-policy.mjs"
+    "verify:permission-policy": "node scripts/verify-permission-policy.mjs",
+    "qa:create-db": "node --env-file=.env.local scripts/qa/create-qa-db.mjs",
+    "qa:seed": "node scripts/qa/seed-qa.mjs",
+    "qa:scenario": "node scripts/qa/financial-scenario.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",

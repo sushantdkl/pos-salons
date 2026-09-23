@@ -12,7 +12,7 @@
 
 import { logAction } from '@/lib/db/helpers';
 import { salonDateString } from '@/lib/reports/dashboard-period';
-import { getFinancialSummary, numeric } from '@/lib/reports/finance-summary';
+import { getFinancialSummary, numeric, PAID_BILL_STATUS_SQL } from '@/lib/reports/finance-summary';
 
 export const STORE_CLOSED_CODE = 'STORE_CLOSED';
 
@@ -115,34 +115,47 @@ async function dayClosingCash(db, businessDayId) {
 }
 
 /**
- * Cash a session is expected to hold, from this project's real payment fields:
- *   starting_cash + cash collected - cash operating/salary expenses - cash savings/transfers out.
- * Online/QR movements never affect physical expected cash. CASH_TRANSFER rows are excluded
- * (they are non-P&L records), so the opening adjustment is not double-counted.
+ * Cash a session is expected to hold — THE drawer formula, used by Close Store, the Opening &
+ * Closing screen and every summary that reports a live drawer:
+ *
+ *   starting_cash + cash sales + credit collected in cash
+ *   - cash refunds - cash operating expenses - cash salary/advances - cash savings
+ *
+ * Every term comes from getFinancialSummary scoped to this session, so it can never disagree
+ * with the cash figures shown elsewhere. A bill sold AND voided in this session nets to zero
+ * (its cash stays in cash sales, the refund leaves once). Online/QR never touches the drawer.
+ * CASH_TRANSFER rows are non-P&L and already reflected in starting_cash.
  */
 export async function computeExpectedCash(db, session) {
   const fin = await getFinancialSummary(db, 'today', { storeSessionId: session.id, includeSalary: true });
   const startingCash = numeric(session.starting_cash);
   const cashCollections = numeric(fin.grossCashCollected);
-  const creditCollectionRow = await db.get(`SELECT COALESCE(SUM(amount),0) AS cash FROM customer_credit_collections WHERE store_session_id=? AND payment_method='cash'`, [session.id]);
-  const creditCollectionsCash = numeric(creditCollectionRow?.cash);
-  const refundRow = await db.get(`SELECT COALESCE(SUM(amount),0) AS cash FROM payment_refunds WHERE store_session_id=? AND method='cash'`, [session.id]);
-  const cashRefunds = numeric(refundRow?.cash);
-  const cashExpenses = numeric(fin.operatingExpensesCash) + numeric(fin.salaryExpensesCash);
+  const creditCollectionsCash = numeric(fin.creditCollectionsCash);
+  const cashRefunds = numeric(fin.cashRefunds);
+  const operatingExpensesCash = numeric(fin.operatingExpensesCash);
+  const salaryCash = numeric(fin.salaryExpensesCash);
+  const cashExpenses = operatingExpensesCash + salaryCash;
   const cashSavingsOut = numeric(fin.savingsFromCash);
   const expectedCash = Math.round((startingCash + cashCollections + creditCollectionsCash - cashExpenses - cashRefunds - cashSavingsOut) * 100) / 100;
 
   return {
     startingCash,
     cashCollections,
+    splitCash: numeric(fin.splitCash),
     creditCollectionsCash,
     otherCashIn: 0,
-    cashExpenses,
     cashRefunds,
+    operatingExpensesCash,
+    // Salary + advances paid from the drawer. Callers that serve a cashier must not itemise it.
+    salaryCash,
+    cashExpenses,
     cashSavingsOut,
+    otherCashOut: 0,
     expectedCash,
-    // Context figures (not part of physical drawer cash):
+    // Context figures (NOT part of physical drawer cash):
     qrCollections: numeric(fin.grossQrCollected),
+    creditCollectionsOnline: numeric(fin.creditCollectionsOnline),
+    onlineRefunds: numeric(fin.onlineRefunds),
     netOnlineBalance: numeric(fin.netOnlineBalance),
   };
 }
@@ -203,7 +216,7 @@ export async function getSessionSummary(db, session) {
       COALESCE(SUM(CASE WHEN i.item_type = 'service' THEN i.quantity ELSE 0 END), 0)::int AS services_sold,
       COALESCE(SUM(CASE WHEN i.item_type = 'product' THEN i.quantity ELSE 0 END), 0)::int AS products_sold
     FROM salon_bill_items i JOIN salon_bills b ON b.id = i.bill_id
-    WHERE b.store_session_id = ? AND LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')
+    WHERE b.store_session_id = ? AND ${PAID_BILL_STATUS_SQL}
   `, [session.id]);
   const expected = await computeExpectedCash(db, session);
 
@@ -211,6 +224,8 @@ export async function getSessionSummary(db, session) {
     sales: {
       grossSales: numeric(fin.grossSalesBeforeDiscount),
       discounts: numeric(fin.totalDiscounts),
+      voids: numeric(fin.voidedSales),
+      voidCount: Number(fin.voidCount || 0),
       netSales: numeric(fin.netSalesAfterDiscount),
       completedBills: Number(fin.bills || 0),
       avgBill: fin.bills > 0 ? Math.round((numeric(fin.netSalesAfterDiscount) / fin.bills) * 100) / 100 : 0,
@@ -229,7 +244,9 @@ export async function getSessionSummary(db, session) {
       operatingExpenses: numeric(fin.operatingExpenses),
       savingsTransfers: numeric(fin.savingsTransfers),
       salaryExpenses: numeric(fin.salaryExpenses),
-      refunds: 0,
+      refunds: numeric(fin.totalRefunds),
+      cashRefunds: numeric(fin.cashRefunds),
+      onlineRefunds: numeric(fin.onlineRefunds),
     },
     tokens: {
       generated: Number(tokens?.generated || 0),
@@ -696,10 +713,20 @@ export async function getBusinessDayHistory(db, { limit = 60 } = {}) {
         WHEN b.backdated_by IS NOT NULL THEN b.revenue_business_day_id
         ELSE COALESCE(b.revenue_business_day_id, b.business_day_id)
       END) IN (${placeholders})
-      AND LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')
+      AND ${PAID_BILL_STATUS_SQL}
     GROUP BY 1
   `, dayIds);
   const salesMap = new Map(salesByDay.map((row) => [String(row.report_day_id), row]));
+
+  // Voids reduce the sales of the day they were PROCESSED on (same rule as getFinancialSummary).
+  const voidsByDay = await db.all(`
+    SELECT fc.business_day_id, COALESCE(SUM(fc.amount), 0) AS voided, COUNT(fc.id)::int AS void_count
+    FROM financial_corrections fc
+    WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void'
+      AND fc.business_day_id IN (${placeholders})
+    GROUP BY fc.business_day_id
+  `, dayIds);
+  const voidMap = new Map(voidsByDay.map((row) => [String(row.business_day_id), row]));
 
   const today = currentBusinessDate();
 
@@ -731,7 +758,10 @@ export async function getBusinessDayHistory(db, { limit = 60 } = {}) {
       finalCountedCash: finalSession ? finalSession.countedCash : null,
       // Additive on purpose: every session shortage/overage is a separate event.
       difference: numeric(row.sessions_difference),
-      netSales: numeric(sales?.net_sales),
+      grossBilled: numeric(sales?.net_sales),
+      voids: numeric(voidMap.get(String(row.id))?.voided),
+      voidCount: Number(voidMap.get(String(row.id))?.void_count || 0),
+      netSales: Math.round((numeric(sales?.net_sales) - numeric(voidMap.get(String(row.id))?.voided)) * 100) / 100,
       bills: Number(sales?.bills || 0),
       sessionDetails: sessions,
     };

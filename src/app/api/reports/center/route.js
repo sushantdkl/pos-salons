@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
 import { isCanonicalAdDate, nepalDateString } from '@/lib/dates/calendar';
+import { PAID_BILL_STATUS_SQL, SALARY_EXPENSE_CATEGORIES } from '@/lib/reports/finance-summary';
+
+// Operating expenses only — the definition every other screen uses. Salary / commission and
+// non-P&L drawer transfers (CASH_TRANSFER) are reported elsewhere.
+const OPERATING_EXPENSE_SQL = `deleted_at IS NULL AND COALESCE(record_type,'EXPENSE')='EXPENSE' AND category NOT IN (${SALARY_EXPENSE_CATEGORIES.map((c) => `'${c}'`).join(',')})`;
 
 const REPORTS = new Set(['overview','sales','services','products','payments','credit','expenses','advances']);
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -20,16 +25,23 @@ export async function GET(request) {
     const pageSize = Math.min(100, Math.max(10, Number(params.get('pageSize') || 25)));
     const offset = (page - 1) * pageSize;
     let rows = []; let metrics = {}; let total = 0;
-    const billRange = `COALESCE(b.transaction_time,b.created_at) >= (?::date AT TIME ZONE 'Asia/Kathmandu') AND COALESCE(b.transaction_time,b.created_at) < ((?::date + 1) AT TIME ZONE 'Asia/Kathmandu') AND b.status='paid'`;
+    // Same "sold bill" rule as finance-summary: a voided bill stays a sale on its sale date and
+    // the void is deducted on the date it was processed.
+    const billRange = `COALESCE(b.transaction_time,b.created_at) >= (?::date AT TIME ZONE 'Asia/Kathmandu') AND COALESCE(b.transaction_time,b.created_at) < ((?::date + 1) AT TIME ZONE 'Asia/Kathmandu') AND ${PAID_BILL_STATUS_SQL}`;
     if (['overview','sales'].includes(report)) {
-      const summary = await db.get(`SELECT COALESCE(SUM(subtotal),0) gross_billed, COALESCE(SUM(discount_amount),0) discounts, COALESCE(SUM(tax),0) tax, COALESCE(SUM(grand_total),0) revenue_after_voids, COUNT(*)::int invoices FROM salon_bills b WHERE ${billRange}`, [start,end]);
-      metrics = Object.fromEntries(Object.entries(summary).map(([key,value]) => [key, key === 'invoices' ? Number(value) : money(value)]));
+      const summary = await db.get(`SELECT COALESCE(SUM(subtotal),0) gross_billed, COALESCE(SUM(discount_amount),0) discounts, COALESCE(SUM(tax),0) tax, COALESCE(SUM(grand_total),0) finalized_total, COUNT(*)::int invoices FROM salon_bills b WHERE ${billRange}`, [start,end]);
+      const voids = await db.get(`SELECT COALESCE(SUM(fc.amount),0) voids, COUNT(*)::int void_count FROM financial_corrections fc WHERE fc.source_type='salon_bill' AND fc.correction_type='void' AND fc.created_at >= (?::date AT TIME ZONE 'Asia/Kathmandu') AND fc.created_at < ((?::date + 1) AT TIME ZONE 'Asia/Kathmandu')`, [start,end]);
+      metrics = {
+        gross_billed: money(summary.gross_billed), discounts: money(summary.discounts), tax: money(summary.tax),
+        finalized_total: money(summary.finalized_total), voids: money(voids.voids), void_count: Number(voids.void_count),
+        revenue_after_voids: money(Number(summary.finalized_total) - Number(voids.voids)), invoices: Number(summary.invoices),
+      };
       const settlements = await db.all(`SELECT a.method,COALESCE(SUM(a.amount),0) amount FROM salon_payment_allocations a JOIN salon_bills b ON b.id=a.bill_id WHERE ${billRange} GROUP BY a.method`, [start,end]);
       const byMethod = Object.fromEntries(settlements.map((row)=>[row.method,money(row.amount)]));
       metrics = { ...metrics, cash_received: byMethod.cash || 0, online_received: byMethod.online || 0, credit_issued: byMethod.credit || 0 };
       if (report === 'sales') {
         const count = await db.get(`SELECT COUNT(*)::int total FROM salon_bills b WHERE ${billRange}`, [start,end]); total = Number(count.total);
-        rows = await db.all(`SELECT b.id,b.bill_number,b.customer_name,b.grand_total,b.total_paid,b.credit_amount,b.payment_method,b.transaction_time FROM salon_bills b WHERE ${billRange} ORDER BY COALESCE(b.transaction_time,b.created_at) DESC,b.id DESC LIMIT ? OFFSET ?`, [start,end,pageSize,offset]);
+        rows = await db.all(`SELECT b.id,b.bill_number,b.customer_name,b.grand_total,b.total_paid,b.credit_amount,b.payment_method,b.status,b.transaction_time FROM salon_bills b WHERE ${billRange} ORDER BY COALESCE(b.transaction_time,b.created_at) DESC,b.id DESC LIMIT ? OFFSET ?`, [start,end,pageSize,offset]);
       }
     } else if (report === 'services' || report === 'products') {
       const type = report === 'services' ? 'service' : 'product';
@@ -44,9 +56,9 @@ export async function GET(request) {
       rows=await db.all(`SELECT l.id,l.customer_id,c.name customer,l.entry_type,l.debit,l.credit,l.created_at,l.bill_id FROM customer_credit_ledger l JOIN customers c ON c.id=l.customer_id WHERE l.created_at >= (?::date AT TIME ZONE 'Asia/Kathmandu') AND l.created_at < ((?::date+1) AT TIME ZONE 'Asia/Kathmandu') ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,[start,end,pageSize,offset]);
       const balance=await db.get(`SELECT COALESCE(SUM(debit-credit),0) balance FROM customer_credit_ledger`); metrics={ outstanding:money(balance.balance) };
     } else if (report === 'expenses') {
-      const count=await db.get(`SELECT COUNT(*)::int total FROM expenses WHERE deleted_at IS NULL AND expense_date BETWEEN ?::date AND ?::date`,[start,end]); total=Number(count.total);
-      rows=await db.all(`SELECT id,title,category,amount,payment_method,expense_date,paid_to FROM expenses WHERE deleted_at IS NULL AND expense_date BETWEEN ?::date AND ?::date ORDER BY expense_date DESC,id DESC LIMIT ? OFFSET ?`,[start,end,pageSize,offset]);
-      const sum=await db.get(`SELECT COALESCE(SUM(amount),0) amount FROM expenses WHERE deleted_at IS NULL AND expense_date BETWEEN ?::date AND ?::date`,[start,end]); metrics={ expenses:money(sum.amount) };
+      const count=await db.get(`SELECT COUNT(*)::int total FROM expenses WHERE ${OPERATING_EXPENSE_SQL} AND expense_date BETWEEN ?::date AND ?::date`,[start,end]); total=Number(count.total);
+      rows=await db.all(`SELECT id,title,category,amount,payment_method,expense_date,paid_to FROM expenses WHERE ${OPERATING_EXPENSE_SQL} AND expense_date BETWEEN ?::date AND ?::date ORDER BY expense_date DESC,id DESC LIMIT ? OFFSET ?`,[start,end,pageSize,offset]);
+      const sum=await db.get(`SELECT COALESCE(SUM(amount),0) amount FROM expenses WHERE ${OPERATING_EXPENSE_SQL} AND expense_date BETWEEN ?::date AND ?::date`,[start,end]); metrics={ expenses:money(sum.amount) };
     } else if (report === 'advances') {
       const count=await db.get(`SELECT COUNT(*)::int total FROM salary_advances WHERE deleted_at IS NULL AND status<>'CANCELLED' AND payment_date BETWEEN ?::date AND ?::date`,[start,end]); total=Number(count.total);
       rows=await db.all(`SELECT a.id,u.full_name employee,a.amount,a.applied_amount,(a.amount-a.applied_amount) outstanding,a.payment_method,a.payment_date,a.status FROM salary_advances a JOIN users u ON u.id=a.staff_id WHERE a.deleted_at IS NULL AND a.status<>'CANCELLED' AND a.payment_date BETWEEN ?::date AND ?::date ORDER BY a.payment_date DESC,a.id DESC LIMIT ? OFFSET ?`,[start,end,pageSize,offset]);

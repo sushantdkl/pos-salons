@@ -7,11 +7,14 @@ import {
   billQrSql,
   getFinancialSummary,
   numeric,
+  PAID_BILL_STATUS_SQL,
   paymentMethodLabel,
   qrTypeLabel,
 } from '@/lib/reports/finance-summary';
 
-const PAID_BILL_STATUS_B = "LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')";
+// Shared sold-bill rule: a voided bill stays a sale on its sale day; the void is deducted on
+// the day it was processed (see finance-summary).
+const PAID_BILL_STATUS_B = PAID_BILL_STATUS_SQL;
 
 export async function GET(request) {
   try {
@@ -204,7 +207,8 @@ export async function GET(request) {
     return NextResponse.json({
       period: financial.period,
       financial,
-      totalSales: numeric(summary.total_sales ?? summary.totalsales ?? summary.totalSales),
+      // Net sales after voids, from the shared financial summary.
+      totalSales: numeric(financial.netSalesAfterDiscount),
       totalBills: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
       totalOrders: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
       avgBillValue: numeric(summary.avg_bill_value ?? summary.avgbillvalue ?? summary.avgBillValue),

@@ -188,3 +188,39 @@ Database changes anticipated: **none required** for Phases 1–2, 4–9. Phase 3
 ---
 
 ## Phase 0 — PASS (architecture understood; financial issues F1–F3 recorded as blockers for Phases 3/4/10 until D2 is decided)
+
+---
+
+## Decisions recorded (2026-09-23)
+
+- D1 checkpoint: committed on branch `salon-erp-upgrade` (eafb686).
+- D2 voids: a void reduces sales on the day it is PROCESSED; the sale day is never rewritten.
+- D3 denominations: persist the count of each note (migration in Phase 3).
+- D4 charts: `recharts`, as in the restaurant system.
+- D5 QA data: local `thehaircut_qa` clone + `scripts/qa/*` (seed, scenario). Never the source DB.
+
+## Phase 0.5 — Financial correctness — PASS
+
+Changes:
+- `finance-summary.js`: `soldBillSql` (voided bills stay sold on their sale day), `eventScope`,
+  `getEventTotals` (voids, cash/online refunds, credit collections), net sales = finalized − voids,
+  cash/online movement include refunds + credit collections, credit sales, void-adjusted sales trend,
+  credit_amount in the bill reconcile check.
+- `business-day/service.js`: Expected Cash reads every term from `getFinancialSummary` (fixes F1
+  double-count); history Sales = billed − voids of that day.
+- `executive-summary.js`: live drawer = `computeExpectedCash(open session)` (fixes F3); voids, refunds,
+  credit sales/collections, receivable balance (F7); product cost uses bill-line unit cost and removes
+  voided products on the void day.
+- `dashboard-summary.js`, `api/admin/dashboard`, `api/admin/reports`, `api/reports/center`: money read
+  from the shared summary / shared sold rule; revenue-day scope (F4, F5, F6).
+- `api/store/summary`: cashier response no longer carries salary figures.
+- `api/admin/billing/[id]/corrections`: void stamped with its store session.
+- **Bug fixed:** `createAdvance` INSERT had 22 values for 21 columns — every salary advance failed.
+- Migration `2026-09-23-void-event-attribution.sql` (session column on corrections, indexes).
+
+Evidence: `npm run qa:scenario` against the QA app — 46/46 checks (same-session void, shortage close,
+same-day reopen, history snapshots, admin/cashier/dashboard/close-preview agreement, cashier salary
+redaction). Lint clean, unit 15/15, build OK.
+
+Known, unchanged: payroll commission (`api/admin/expenses`) counts `status='paid'` bills only, so a
+voided service earns no commission — intended.

@@ -10,7 +10,11 @@
  *   Final bill total  subtotal - discount + tax + service charge  (salon_bills.grand_total)
  *   Cash collected    only the cash portion actually paid
  *   QR collected      only the online / QR portion actually paid
- *   Cash + QR         always equals the final bill total for a paid bill
+ *   Cash + QR + Credit always equals the final bill total for a paid bill
+ *   Net sales         finalized bill totals sold in the period LESS bills voided in the period
+ *   Void              an event on the day it is processed; the sale day is never rewritten
+ *   Refund            money handed back for a void (cash leaves the drawer on the void day)
+ *   Credit collection money received against customer credit — cash/online in, not a sale
  *   Savings transfer  internal fund movement, NOT an operating expense
  */
 
@@ -70,8 +74,38 @@ export function savingsScope(alias, period, options = {}) {
   return periodDateColumnFilter(period, `${alias}.deposit_date`, options.startDate, options.endDate);
 }
 
-export const PAID_BILL_STATUS_SQL = "LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')";
-export const PAID_BILL_STATUS_SQL_SB = "LOWER(COALESCE(sb.status, '')) IN ('paid', 'completed')";
+/**
+ * A bill that was SOLD: paid / completed, or paid and later voided.
+ *
+ * A void is an event on the day it is processed, not an edit of history. The voided bill
+ * therefore stays a sale on the day it was sold (so a closed day's figures and its persisted
+ * session snapshot never drift apart), and the void itself is reported as a deduction on
+ * the void day (see getVoidTotals). A bill cancelled without a void correction was never
+ * paid and is not a sale.
+ */
+export function soldBillSql(alias = 'b') {
+  return `(LOWER(COALESCE(${alias}.status, '')) IN ('paid', 'completed')
+    OR (LOWER(COALESCE(${alias}.status, '')) = 'cancelled' AND EXISTS (
+      SELECT 1 FROM financial_corrections vfc
+      WHERE vfc.source_type = 'salon_bill' AND vfc.correction_type = 'void' AND vfc.source_id = ${alias}.id
+    )))`;
+}
+
+export const PAID_BILL_STATUS_SQL = soldBillSql('b');
+export const PAID_BILL_STATUS_SQL_SB = soldBillSql('sb');
+
+/** Nepal calendar date of a timestamp column. */
+const nepalDate = (column) => `((${column}) AT TIME ZONE '${SALON_TIMEZONE}')::date`;
+
+/**
+ * Scope for money EVENTS stamped with a session / business day / timestamp (voids, refunds,
+ * credit collections): session -> business day -> Nepal calendar date of created_at.
+ */
+export function eventScope(alias, period, options = {}) {
+  if (options.storeSessionId) return { clause: `${alias}.store_session_id = ?`, params: [options.storeSessionId] };
+  if (options.businessDayId) return { clause: `${alias}.business_day_id = ?`, params: [options.businessDayId] };
+  return periodDateColumnFilter(period, nepalDate(`${alias}.created_at`), options.startDate, options.endDate);
+}
 
 export const SALARY_EXPENSE_CATEGORIES = ['Staff Salary', 'Staff Commission'];
 
@@ -96,6 +130,10 @@ export function numeric(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function round2(value) {
+  return Math.round((numeric(value) + Number.EPSILON) * 100) / 100;
+}
+
 export function qrTypeLabel(value) {
   if (value === 'ESEWA_PHONEPAY') return 'Esewa / PhonePay';
   if (value === 'BANK') return 'Bank QR';
@@ -113,14 +151,14 @@ export function paymentMethodLabel(value) {
 /**
  * Cash portion actually collected for a bill.
  *
- * The stored cash_amount / qr_amount pair is authoritative whenever it reconciles to
- * grand_total (that is what the billing API writes for cash, online and split bills).
+ * The stored cash_amount / qr_amount (+ credit_amount) set is authoritative whenever it
+ * reconciles to grand_total (that is what the billing API writes for cash, online and split bills).
  * Only when a historical row does not reconcile do we fall back to the payment method,
  * and an online / card bill then falls back to ZERO cash — never to the full total.
  */
 export function billCashSql(alias = 'b') {
   return `CASE
-    WHEN ABS(COALESCE(${alias}.cash_amount, 0) + COALESCE(${alias}.qr_amount, 0) - COALESCE(${alias}.grand_total, 0)) <= 0.01
+    WHEN ABS(COALESCE(${alias}.cash_amount, 0) + COALESCE(${alias}.qr_amount, 0) + COALESCE(${alias}.credit_amount, 0) - COALESCE(${alias}.grand_total, 0)) <= 0.01
       THEN COALESCE(${alias}.cash_amount, 0)
     WHEN LOWER(COALESCE(${alias}.payment_method, '')) = 'cash' THEN COALESCE(${alias}.grand_total, 0)
     WHEN LOWER(COALESCE(${alias}.payment_method, '')) IN ('online', 'card') THEN 0
@@ -131,7 +169,7 @@ export function billCashSql(alias = 'b') {
 /** QR / online portion actually collected for a bill. Mirror image of billCashSql. */
 export function billQrSql(alias = 'b') {
   return `CASE
-    WHEN ABS(COALESCE(${alias}.cash_amount, 0) + COALESCE(${alias}.qr_amount, 0) - COALESCE(${alias}.grand_total, 0)) <= 0.01
+    WHEN ABS(COALESCE(${alias}.cash_amount, 0) + COALESCE(${alias}.qr_amount, 0) + COALESCE(${alias}.credit_amount, 0) - COALESCE(${alias}.grand_total, 0)) <= 0.01
       THEN COALESCE(${alias}.qr_amount, 0)
     WHEN LOWER(COALESCE(${alias}.payment_method, '')) = 'online' THEN COALESCE(${alias}.grand_total, 0)
     WHEN LOWER(COALESCE(${alias}.payment_method, '')) = 'cash' THEN 0
@@ -186,7 +224,8 @@ export async function getSalesTotals(db, period, options = {}) {
         COALESCE(SUM(b.discount_amount), 0) AS total_discounts,
         COALESCE(SUM(b.tax), 0) AS total_tax,
         COALESCE(SUM(b.service_charge), 0) AS total_service_charge,
-        COALESCE(SUM(b.grand_total), 0) AS net_sales_after_discount
+        COALESCE(SUM(b.grand_total), 0) AS net_sales_after_discount,
+        COALESCE(SUM(COALESCE(b.credit_amount, 0)), 0) AS credit_sales
       FROM salon_bills b
       WHERE ${revenueFilter.clause} AND ${PAID_BILL_STATUS_SQL}
     `, revenueFilter.params),
@@ -218,7 +257,11 @@ export async function getSalesTotals(db, period, options = {}) {
     totalDiscounts,
     totalTax: numeric(row?.total_tax),
     totalServiceCharge: numeric(row?.total_service_charge),
+    // Sum of finalized bill totals sold in scope, before any void processed later.
+    finalizedBillTotal: netSalesAfterDiscount,
     netSalesAfterDiscount,
+    // Part of the finalized total that went onto customer credit (no money received yet).
+    creditSales: numeric(row?.credit_sales),
     grossCashCollected,
     grossQrCollected,
     grossTotalCollected: grossCashCollected + grossQrCollected,
@@ -298,6 +341,56 @@ export async function getSavingsTotals(db, period, options = {}) {
 }
 
 /**
+ * Money EVENTS that happen after a sale: voids, the refunds they pay out, and customer credit
+ * collections. Each is attributed to the session / business day / date it was PROCESSED on.
+ *
+ *   voidedSales       bill totals voided in this scope (deducted from net sales here, never
+ *                     from the day the bill was sold)
+ *   cash/onlineRefunds money actually handed back (credit portions reverse the ledger instead)
+ *   creditCollections money received against customer credit — cash in, but not a new sale
+ */
+export async function getEventTotals(db, period, options = {}) {
+  const voidFilter = eventScope('fc', period, options);
+  const refundFilter = eventScope('pr', period, options);
+  const collectionFilter = eventScope('cc', period, options);
+
+  const [voids, refunds, collections] = await Promise.all([
+    db.get(`
+      SELECT COUNT(fc.id)::int AS void_count, COALESCE(SUM(fc.amount), 0) AS voided_sales
+      FROM financial_corrections fc
+      WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void' AND ${voidFilter.clause}
+    `, voidFilter.params),
+    db.get(`
+      SELECT
+        COALESCE(SUM(CASE WHEN pr.method = 'cash' THEN pr.amount ELSE 0 END), 0) AS cash_refunds,
+        COALESCE(SUM(CASE WHEN pr.method = 'online' THEN pr.amount ELSE 0 END), 0) AS online_refunds,
+        COUNT(pr.id)::int AS refund_records
+      FROM payment_refunds pr
+      WHERE ${refundFilter.clause}
+    `, refundFilter.params),
+    db.get(`
+      SELECT
+        COALESCE(SUM(CASE WHEN cc.payment_method = 'cash' THEN cc.amount ELSE 0 END), 0) AS cash_collections,
+        COALESCE(SUM(CASE WHEN cc.payment_method = 'online' THEN cc.amount ELSE 0 END), 0) AS online_collections,
+        COUNT(cc.id)::int AS collection_records
+      FROM customer_credit_collections cc
+      WHERE ${collectionFilter.clause}
+    `, collectionFilter.params),
+  ]);
+
+  return {
+    voidCount: Number(voids?.void_count || 0),
+    voidedSales: numeric(voids?.voided_sales),
+    cashRefunds: numeric(refunds?.cash_refunds),
+    onlineRefunds: numeric(refunds?.online_refunds),
+    refundRecords: Number(refunds?.refund_records || 0),
+    creditCollectionsCash: numeric(collections?.cash_collections),
+    creditCollectionsOnline: numeric(collections?.online_collections),
+    creditCollectionRecords: Number(collections?.collection_records || 0),
+  };
+}
+
+/**
  * The Nepal calendar day a bill REPORTS under.
  *
  * Business-Day-aware: a sale taken at 01:00 on 11 Aug while the store opened on 10 Aug
@@ -324,7 +417,7 @@ const BILL_REPORT_DAY = `COALESCE(rbd.business_date, ((COALESCE(b.transaction_ti
  * Only bill-level columns are aggregated here — salon_bill_items is never joined, which is what
  * would otherwise multiply each day's total by its number of line items.
  */
-export async function getSalesSeries(db, periodValue, options = {}) {
+async function getRawSalesSeries(db, periodValue, options = {}) {
   const period = resolveDashboardPeriod(periodValue);
   const bounds = periodBoundsSql(period, options.startDate, options.endDate);
   const cash = billCashSql('b');
@@ -458,6 +551,53 @@ export async function getSalesSeries(db, periodValue, options = {}) {
   });
 }
 
+/** The Nepal calendar day a void REPORTS under: its business day, else when it was processed. */
+const VOID_REPORT_DAY = `COALESCE(vbd.business_date, ((fc.created_at) AT TIME ZONE '${SALON_TIMEZONE}')::date)`;
+
+/**
+ * Sales trend with voids applied on the day (or hour) they were processed, so the chart's
+ * Net Sales always adds up to the Net Sales KPI for the same period.
+ */
+export async function getSalesSeries(db, periodValue, options = {}) {
+  const period = resolveDashboardPeriod(periodValue);
+  const series = await getRawSalesSeries(db, period, options);
+  if (series.length === 0) return series;
+
+  const hourly = period === 'today';
+  const first = series[0].bucket;
+  const last = series[series.length - 1].bucket;
+  const dayClause = options.businessDayId
+    ? '(SELECT business_date FROM business_days WHERE id = ?)'
+    : `(CURRENT_TIMESTAMP AT TIME ZONE '${SALON_TIMEZONE}')::date`;
+  const voids = hourly
+    ? await db.all(`
+      SELECT date_part('hour', fc.created_at AT TIME ZONE '${SALON_TIMEZONE}')::int AS bucket,
+             COALESCE(SUM(fc.amount), 0) AS amount
+      FROM financial_corrections fc
+      LEFT JOIN business_days vbd ON vbd.id = fc.business_day_id
+      WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void'
+        AND ${VOID_REPORT_DAY} = ${dayClause}
+      GROUP BY 1
+    `, options.businessDayId ? [options.businessDayId] : [])
+    : await db.all(`
+      SELECT (${VOID_REPORT_DAY})::text AS bucket, COALESCE(SUM(fc.amount), 0) AS amount
+      FROM financial_corrections fc
+      LEFT JOIN business_days vbd ON vbd.id = fc.business_day_id
+      WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void'
+        AND ${VOID_REPORT_DAY} BETWEEN ?::date AND ?::date
+      GROUP BY 1
+    `, [first, last]);
+
+  const byBucket = new Map(voids.map((row) => [
+    hourly ? String(Number(row.bucket)).padStart(2, '0') : String(row.bucket).slice(0, 10),
+    numeric(row.amount),
+  ]));
+  return series.map((point) => {
+    const voided = byBucket.get(point.bucket) || 0;
+    return voided ? { ...point, voided, netSales: round2(point.netSales - voided) } : { ...point, voided: 0 };
+  });
+}
+
 /**
  * The complete financial picture for one period.
  *
@@ -466,10 +606,11 @@ export async function getSalesSeries(db, periodValue, options = {}) {
  */
 export async function getFinancialSummary(db, periodValue, options = {}) {
   const period = resolveDashboardPeriod(periodValue);
-  const [sales, expenses, savings] = await Promise.all([
+  const [sales, expenses, savings, events] = await Promise.all([
     getSalesTotals(db, period, options),
     getExpenseTotals(db, period, options),
     getSavingsTotals(db, period, options),
+    getEventTotals(db, period, options),
   ]);
 
   const includeSalary = options.includeSalary !== false;
@@ -477,41 +618,52 @@ export async function getFinancialSummary(db, periodValue, options = {}) {
   const salaryExpensesCash = includeSalary ? expenses.salaryExpensesCash : 0;
   const salaryExpensesOnline = includeSalary ? expenses.salaryExpensesOnline : 0;
 
-  // Net CASH MOVEMENT for the period: cash collected less cash paid out.
+  // Net sales = bills sold in scope less bills VOIDED in scope. A void lowers the sales of
+  // the day it is processed; the day the bill was sold keeps its original figure.
+  const netSalesAfterDiscount = round2(sales.finalizedBillTotal - events.voidedSales);
+
+  // Net CASH MOVEMENT for the period: cash in (bill cash + credit collected in cash) less
+  // cash out (refunds, operating and salary expenses, savings).
   //
   // This is NOT "cash in hand": it excludes the starting float that was already in the
   // drawer and any non-P&L drawer transfer. The physical drawer position is
-  // `Expected Cash in Drawer`, computed by the Business Day service from the store session
-  // (starting cash + this movement + drawer adjustments).
+  // `Expected Cash in Drawer`, computed by the Business Day service from the store session.
+  const cashIn = sales.grossCashCollected + events.creditCollectionsCash;
+  const onlineIn = sales.grossQrCollected + events.creditCollectionsOnline;
   const netCashMovement =
-    sales.grossCashCollected
+    cashIn
+    - events.cashRefunds
     - expenses.operatingExpensesCash
     - salaryExpensesCash
     - savings.savingsFromCash;
 
   // Online / QR account balance: only online inflows and online outflows move this number.
   const netOnlineBalance =
-    sales.grossQrCollected
+    onlineIn
+    - events.onlineRefunds
     - expenses.operatingExpensesOnline
     - salaryExpensesOnline
     - savings.savingsFromOnline;
 
-  const netAvailableBalance =
-    sales.grossTotalCollected
-    - expenses.operatingExpenses
-    - salaryExpenses
-    - savings.savingsTransfers;
+  const netAvailableBalance = netCashMovement + netOnlineBalance;
 
   // Combined outflow totals. A cashier response withholds the salary AMOUNTS but still needs
   // the correct totals, so these are computed here rather than re-derived in the UI — that is
   // what stops a cashier's "Total Cash Outflow" disagreeing with the admin's.
-  const totalCashOut = expenses.operatingExpensesCash + salaryExpensesCash + savings.savingsFromCash;
-  const totalOnlineOut = expenses.operatingExpensesOnline + salaryExpensesOnline + savings.savingsFromOnline;
-  const totalOutflows = expenses.operatingExpenses + salaryExpenses + savings.savingsTransfers;
+  const totalCashOut = events.cashRefunds + expenses.operatingExpensesCash + salaryExpensesCash + savings.savingsFromCash;
+  const totalOnlineOut = events.onlineRefunds + expenses.operatingExpensesOnline + salaryExpensesOnline + savings.savingsFromOnline;
+  const totalOutflows = expenses.operatingExpenses + salaryExpenses + savings.savingsTransfers
+    + events.cashRefunds + events.onlineRefunds;
 
   return {
     period: getDashboardPeriodMeta(period, options.startDate, options.endDate),
     ...sales,
+    ...events,
+    netSalesAfterDiscount,
+    totalRefunds: round2(events.cashRefunds + events.onlineRefunds),
+    totalCreditCollections: round2(events.creditCollectionsCash + events.creditCollectionsOnline),
+    netCashIn: round2(cashIn - events.cashRefunds),
+    netOnlineIn: round2(onlineIn - events.onlineRefunds),
     operatingExpenses: expenses.operatingExpenses,
     operatingExpensesCash: expenses.operatingExpensesCash,
     operatingExpensesOnline: expenses.operatingExpensesOnline,

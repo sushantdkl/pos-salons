@@ -37,7 +37,7 @@ export const REPORT_CATALOG = Object.freeze({
 });
 
 export const MONEY_FIELDS = new Set([
-  'gross_billed', 'discounts', 'tax', 'revenue_after_voids', 'cash_received', 'online_received',
+  'gross_billed', 'discounts', 'tax', 'finalized_total', 'voids', 'revenue_after_voids', 'cash_received', 'online_received',
   'credit_issued', 'revenue', 'commission', 'cost', 'amount', 'change', 'outstanding', 'debit',
   'credit', 'expenses', 'issued', 'applied_amount', 'grand_total', 'total_paid', 'credit_amount',
 ]);
