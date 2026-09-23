@@ -224,3 +224,21 @@ redaction). Lint clean, unit 15/15, build OK.
 
 Known, unchanged: payroll commission (`api/admin/expenses`) counts `status='paid'` bills only, so a
 voided service earns no commission — intended.
+
+## Phase results (2026-09-24)
+
+| Phase | Result | Evidence |
+|---|---|---|
+| 1 Sidebar / IA | PASS | `constants/navigation.js`; 46 links all resolve; UI audit: one active link per page, nested route opens parent, Enter toggles groups, collapsed rail tooltips, mobile drawer + Escape |
+| 2 Shared ERP kit | PASS | `components/erp/*` (tokens, primitives, recharts charts, hooks); one period definition (`periodBoundsSql`) |
+| 3 Opening & Closing | PASS | note-by-note close, server re-sums notes, breakdown persisted; scenario checks S1/S2/history |
+| 4 Summary | PASS | shared admin/cashier report, print CSS; reconciles with dashboard, close preview, reports center |
+| 5 Analytics | PASS | `/admin/analytics` admin-only; KPIs equal Summary; all periods respond; 8 tabs render with data at 390/1280 |
+| 6 Dashboard | PASS | current Business Day, drawer, queue, recent bills, staff, low stock, alerts |
+| 7 Consistency | PARTIAL | all new/rebuilt pages share the kit; legacy operational pages (billing, stock, customers, employees, expenses, savings, settings, CMS) keep their existing styling — deferred to avoid regressions in working flows |
+| 8 Permissions | PASS | `npm run qa:permissions` 70/70 (anonymous, barber, cashier; payload key scan) |
+| 9 Responsive | PASS | `npm run qa:ui` 470/470 at 360–1440 (overflow, console/hydration errors, NaN/undefined) |
+| 10–12 Financial regression / reopen / new day | PASS | `npm run qa:scenario` 114/114 |
+
+Run everything: `npm run qa:all` (builds into `.next-qa`, never touches a running dev server).
+Deploying this branch requires `npm run db:migrate` (2026-09-23 void attribution, 2026-09-24 cash denominations).

@@ -228,6 +228,7 @@ export default function OpeningClosingPage() {
           role={role}
           showOpeningClosingLink={false}
           showManageLink={false}
+          showClose={false}
           onStatus={setStatus}
           onChanged={loadAll}
         />

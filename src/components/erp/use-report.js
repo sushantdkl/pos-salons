@@ -37,6 +37,21 @@ export function usePeriod(initial = 'today') {
   const [draft, setDraft] = useState({ start: '', end: '' });
   const [applied, setApplied] = useState({ start: '', end: '' });
 
+  // Deep links: ?period=yesterday or ?period=custom&startDate=…&endDate=… (read after mount,
+  // so the server render and first client render still agree).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('period');
+    if (!fromUrl) return;
+    const start = params.get('startDate') || '';
+    const end = params.get('endDate') || '';
+    setPeriodState(fromUrl);
+    if (fromUrl === 'custom' && start && end && start <= end) {
+      setDraft({ start, end });
+      setApplied({ start, end });
+    }
+  }, []);
+
   const setPeriod = useCallback((value) => {
     setPeriodState(value);
     if (value !== 'custom') setApplied({ start: '', end: '' });

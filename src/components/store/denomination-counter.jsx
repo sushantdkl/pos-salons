@@ -17,7 +17,7 @@ export function DenominationCounter({ counts, onChange, disabled = false }) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-1.5">
         {CASH_DENOMINATIONS.map((value) => {
           const quantity = Number(counts[String(value)] || 0);
           const subtotal = quantity * value;
@@ -39,9 +39,9 @@ export function DenominationCounter({ counts, onChange, disabled = false }) {
                 onFocus={(event) => event.target.select()}
                 placeholder="0"
                 aria-label={`Number of Rs ${value} notes`}
-                className="h-10 min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-2 text-center text-base font-semibold tabular-nums text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-stone-50"
+                className="h-10 w-24 shrink-0 rounded-md border border-stone-200 bg-white px-2 text-center text-base font-semibold tabular-nums text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-stone-50"
               />
-              <span className="w-[92px] shrink-0 text-right text-[12.5px] tabular-nums text-stone-500">
+              <span className="min-w-0 flex-1 truncate text-right text-[13px] tabular-nums text-stone-500">
                 = <span className={subtotal > 0 ? 'font-semibold text-stone-900' : ''}>{money(subtotal)}</span>
               </span>
             </div>

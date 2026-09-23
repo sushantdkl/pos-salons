@@ -197,7 +197,7 @@ export function ReportGroup({ title, note, tone: toneName = 'neutral', children,
  */
 export function ReportSection({ title, note, lines = [], children, footnote, className = '' }) {
   return (
-    <section className={`break-inside-avoid overflow-hidden rounded-xl border border-stone-200 bg-white ${className}`}>
+    <section className={`min-w-0 break-inside-avoid overflow-hidden rounded-xl border border-stone-200 bg-white ${className}`}>
       {title ? (
         <div className="border-b border-stone-100 px-4 py-2.5">
           <h3 className="text-[12.5px] font-bold uppercase tracking-[0.05em] text-stone-800">{title}</h3>
@@ -254,7 +254,7 @@ export function SectionHeading({ title, note, action }) {
  */
 export function FinancialTable({ columns, rows, rowKey = (row, index) => row.id ?? index, empty = 'No records for this period.', footer, caption, onRowClick }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-stone-200 bg-white">
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-sm">
           {caption ? <caption className="sr-only">{caption}</caption> : null}

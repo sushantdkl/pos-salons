@@ -83,3 +83,10 @@ export function percent(value, digits = 1) {
 export function toNum(value) {
   return toNumber(value);
 }
+
+/** Stored keys such as CLEANING or TEA_SNACKS read as "Cleaning" / "Tea Snacks"; normal names pass through. */
+export function humanize(value) {
+  const text = String(value ?? '').trim();
+  if (!/^[A-Z0-9_]+$/.test(text)) return text;
+  return text.toLowerCase().split('_').filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ');
+}

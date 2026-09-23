@@ -118,7 +118,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-5">
-            <div className="xl:col-span-2">
+            <div className="min-w-0 xl:col-span-2">
               <SectionHeading title="Current queue" action={<Link href="/dashboard/admin/tokens" className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:underline">Tokens <ArrowRight className="h-3.5 w-3.5" /></Link>} />
               {stats.queue.length ? (
                 <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
@@ -154,7 +154,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <div>
+            <div className="min-w-0">
               <SectionHeading title="Today's staff activity" />
               <FinancialTable
                 caption="Staff activity"
@@ -170,7 +170,7 @@ export default function AdminDashboardPage() {
                 ]}
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <SectionHeading title="Low stock" action={<Link href="/admin/stock" className="inline-flex items-center gap-1 text-xs font-bold text-lime-700 hover:underline">Stock <ArrowRight className="h-3.5 w-3.5" /></Link>} />
               {stats.lowStockItems.length ? (
                 <ReportSection

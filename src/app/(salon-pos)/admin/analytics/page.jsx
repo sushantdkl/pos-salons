@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { ChartColumnBig } from 'lucide-react';
 import {
   AlertBanner, BreakdownCard, ChartCard, count, EmptyState, ErpPage, ErrorState, FinancialTable, line,
-  LoadingState, MetricCard, MetricGroup, money, PageHeader, percent, PeriodFilter, RefreshButton,
+  humanize, LoadingState, MetricCard, MetricGroup, money, PageHeader, percent, PeriodFilter, RefreshButton,
   ReportSection, TONES,
 } from '@/components/erp';
 import { DonutChart, GroupedBarChart, HorizontalBarChart, TrendChart } from '@/components/erp/charts';
@@ -76,7 +76,7 @@ function Overview({ a }) {
         <HorizontalBarChart rows={a.products.categories.map((row) => ({ label: row.category, value: row.revenue }))} color={TONES.online.hex} name="Revenue" />
       </ChartCard>
       <ChartCard title="Expenses by category" note="Operating expenses only — salary and savings excluded." height={220}>
-        <HorizontalBarChart rows={a.expenses.categories.map((row) => ({ label: row.category, value: row.amount }))} color={TONES.outflow.hex} name="Expense" />
+        <HorizontalBarChart rows={a.expenses.categories.map((row) => ({ label: humanize(row.category), value: row.amount }))} color={TONES.outflow.hex} name="Expense" />
       </ChartCard>
       <div className="lg:col-span-2">
         <ChartCard title="Token performance" height={200}>

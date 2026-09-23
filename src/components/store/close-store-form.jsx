@@ -147,7 +147,7 @@ export default function CloseStoreForm({ summary, blockers = [], role, sessionLa
           ].map(([label, value]) => (
             <div key={label} className="bg-stone-900 px-3 py-2.5">
               <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-stone-400">{label}</p>
-              <p className={`mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-lg ${label === 'Difference' && hasCount ? (state === 'MATCHED' ? 'text-emerald-300' : state === 'SHORT' ? 'text-rose-300' : 'text-amber-300') : 'text-white'}`}>
+              <p className={`mt-0.5 break-words text-sm font-extrabold tabular-nums sm:text-lg ${label === 'Difference' && hasCount ? (state === 'MATCHED' ? 'text-emerald-300' : state === 'SHORT' ? 'text-rose-300' : 'text-amber-300') : 'text-white'}`}>
                 {value}
               </p>
             </div>

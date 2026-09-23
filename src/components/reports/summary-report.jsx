@@ -11,7 +11,7 @@
 
 import { ScrollText } from 'lucide-react';
 import {
-  AlertBanner, BreakdownCard, count, ErpPage, ErrorState, line, LoadingState, money, PageHeader,
+  AlertBanner, BreakdownCard, count, ErpPage, humanize, ErrorState, line, LoadingState, money, PageHeader,
   PeriodFilter, PrintButton, PrintHeader, RefreshButton, ReportGroup, ReportSection, StatusBadge,
 } from '@/components/erp';
 import { usePeriod, useReport } from '@/components/erp/use-report';
@@ -100,7 +100,7 @@ function MoneyOut({ s, isAdmin }) {
       </div>
       {isAdmin && e.categories?.length ? (
         <div className="mt-3">
-          <BreakdownCard title="Expenses by category" tone="outflow" rows={e.categories.map((row) => ({ label: row.category, value: row.amount, sub: `${row.records} records · cash ${money(row.cash)} · online ${money(row.online)}` }))} />
+          <BreakdownCard title="Expenses by category" tone="outflow" rows={e.categories.map((row) => ({ label: humanize(row.category), value: row.amount, sub: `${row.records} records · cash ${money(row.cash)} · online ${money(row.online)}` }))} />
         </div>
       ) : null}
     </ReportGroup>

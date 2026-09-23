@@ -155,6 +155,7 @@ export default function StoreStatusBar({
   variant = 'bar',
   role = 'admin',
   onStatus,
+  showClose = true,
 }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -302,8 +303,11 @@ export default function StoreStatusBar({
           <button type="button" onClick={loadStatus} className="rounded-lg p-1.5 text-[#8a837b] hover:bg-[#f5f2ee]" aria-label="Refresh store status">
             <RefreshCw className="h-4 w-4" />
           </button>
-          {status?.state === 'OPEN' ? (
+          {status?.state === 'OPEN' && showClose ? (
             <button type="button" className={BTN_DANGER} onClick={() => openModal('close')}>Close Store</button>
+          ) : null}
+          {status?.state === 'OPEN' && !showClose ? (
+            <span className="text-xs text-[#8a837b]">Count the drawer below to close the store.</span>
           ) : null}
           {status?.state === 'CLOSED_SAME_DAY' ? (
             <>

@@ -19,7 +19,10 @@
     "verify:permission-policy": "node scripts/verify-permission-policy.mjs",
     "qa:create-db": "node --env-file=.env.local scripts/qa/create-qa-db.mjs",
     "qa:seed": "node scripts/qa/seed-qa.mjs",
-    "qa:scenario": "node scripts/qa/financial-scenario.mjs"
+    "qa:scenario": "node scripts/qa/financial-scenario.mjs",
+    "qa:permissions": "node scripts/qa/permission-audit.mjs",
+    "qa:ui": "node scripts/qa/responsive-audit.mjs",
+    "qa:all": "bash scripts/qa/run-all.sh prod"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",
