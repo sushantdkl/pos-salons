@@ -80,7 +80,19 @@ const bill = (token, body) => call(token, 'POST', '/api/admin/billing', body, { 
 /* ---------------------------------------------------------------- session 1 */
 await call(admin, 'POST', '/api/store', { action: 'open', startingCash: 2000 });
 
+// Front desk: T1 is billed (bill A), T2 cancelled, T3 no-show, T4 left waiting.
+const token = async (name) => (await call(cashier, 'POST', '/api/admin/tokens', {
+  customer_name: name, service_id: svc('QA Haircut'), assigned_staff_id: barber.id,
+})).json.token;
+const t1 = await token('QA Token One');
+const t2 = await token('QA Token Two');
+const t3 = await token('QA Token Three');
+const t4 = await token('QA Token Four');
+await call(cashier, 'PATCH', '/api/admin/tokens', { id: t2.id, action: 'cancel' });
+await call(cashier, 'PATCH', '/api/admin/tokens', { id: t3.id, action: 'no_show' });
+
 const billA = await bill(cashier, {
+  token_id: t1.id,
   services: [{ id: svc('QA Haircut'), staff_id: barber.id }], customer_name: 'QA Walk-in',
   discount_type: 'amount', discount_value: 500, payment_method: 'cash', amount_paid: 4500,
 });
@@ -108,6 +120,14 @@ const dash1 = (await call(admin, 'GET', '/api/admin/dashboard?period=today')).js
 const execA = execAdmin1.summary || execAdmin1;
 const execC = execCashier1.summary || execCashier1;
 
+check('Dashboard store state', dash1.store?.state, (value) => value === 'OPEN');
+check('Dashboard queue shows the waiting token', dash1.queue?.length, 1);
+check('Dashboard expected cash = store', dash1.store?.session?.expectedCash, 5000);
+check('Dashboard waiting tokens', dash1.summary.currentWaitingTokens, 1);
+check('Tokens generated', execA.tokens.generated, 4);
+check('Tokens converted', execA.tokens.converted, 1);
+check('Tokens cancelled', execA.tokens.cancelled, 1);
+check('Tokens no-show', execA.tokens.noShow, 1);
 check('S1 Expected cash — store status', status1.session.expectedCash, 5000);
 check('S1 Expected cash — close preview', close1.summary.expected.expectedCash, 5000);
 check('S1 Expected cash — admin summary', execA.cashPosition.expectedCash, 5000);
@@ -131,11 +151,44 @@ check('S1 Services sold', execA.revenue.servicesSold, 3);
 check('S1 Products sold', execA.revenue.productsSold, 1);
 check('S1 Sales trend sums to net sales',
   (dash1.salesSeries || []).reduce((sum, point) => sum + Number(point.netSales || 0), 0), 8500);
+const analytics1 = (await call(admin, 'GET', '/api/admin/analytics?period=today')).json.analytics;
+check('Analytics net sales = summary', analytics1.kpis.netSales, execA.revenue.netSales);
+check('Analytics gross sales = summary', analytics1.kpis.grossSales, execA.revenue.grossSalesBeforeDiscount);
+check('Analytics cash = summary', analytics1.payments.cash, execA.payments.grossCashCollected);
+check('Analytics online = summary', analytics1.payments.online, execA.payments.grossQrCollected);
+check('Analytics expenses = summary', analytics1.kpis.expenses, execA.expenses.total);
+check('Analytics payroll = summary', analytics1.kpis.payroll, execA.salary.totalPaid);
+check('Analytics bills = summary', analytics1.kpis.bills, execA.revenue.bills);
+check('Analytics customers = summary', analytics1.kpis.customersServed, execA.quantities.uniqueCustomers);
+check('Analytics services sold', analytics1.services.servicesSold, 3);
+check('Analytics top service by revenue', analytics1.services.byRevenue[0]?.name, (value) => value === 'QA Haircut');
+check('Analytics voids control', analytics1.controls.voids, 1);
+check('Analytics trend sums to net sales', analytics1.salesTrend.reduce((sum, point) => sum + point.netSales, 0), 8500);
+check('Analytics staff revenue (barber, 3 services)', analytics1.staff[0]?.servicesCompleted, 3);
+const cashierAnalytics = await call(cashier, 'GET', '/api/admin/analytics?period=today', null, { 'x-expect-error': '1' });
+check('Cashier cannot read analytics', cashierAnalytics.status, 403);
+for (const periodValue of ['yesterday', '3days', '7days', '30days', 'this_week', 'month', 'last_month']) {
+  const probe = await call(admin, 'GET', `/api/admin/analytics?period=${periodValue}`, null, { 'x-expect-error': '1' });
+  check(`Analytics period ${periodValue} responds`, probe.status, 200);
+}
+const customRange = await call(admin, 'GET', '/api/admin/analytics?period=custom&startDate=2026-08-01&endDate=2026-09-30', null, { 'x-expect-error': '1' });
+check('Analytics custom range responds', customRange.status, 200);
+check('S1 Advance salary shown separately', execA.salary.advancePaid, 1000);
+check('S1 Regular salary not double-counted', execA.salary.regularSalaryPaid, 0);
+check('S1 Net received (cash + online - refunds)', execA.payments.netReceived, 8500);
+check('S1 Cash movement statement', execA.cashPosition.netCashMovement, 3000);
+check('S1 Cashier cash paid out (combined)', execC.cashPosition.cashPaidOut, 1500);
+check('S1 Cashier summary hides P&L', execC.profitLoss, (value) => value === undefined || value === null);
 check('S1 Cashier summary hides salary', execC.salary, (value) => value === undefined || value === null);
 check('S1 Cashier close preview hides salary', close1.summary.expected.salaryCash, (value) => value === undefined);
 check('S1 Cashier cash position hides salary', execC.cashPosition.cashSalary, (value) => value === undefined);
 
 // ---- close with a known shortage
+// A waiting token blocks a normal close.
+const blocked = await call(cashier, 'POST', '/api/store', { action: 'close', countedCash: 4900 }, { 'x-expect-error': '1' });
+check('Waiting token blocks close', blocked.json.code, (value) => value === 'CLOSE_BLOCKED');
+await call(cashier, 'PATCH', '/api/admin/tokens', { id: t4.id, action: 'no_show' });
+
 // Notes 4x1000 + 1x500 + 4x100 = 4,900. countedCash is deliberately wrong: the server must
 // re-sum the breakdown and ignore the browser's total.
 const closed1 = (await call(cashier, 'POST', '/api/store', {
@@ -170,8 +223,26 @@ check('S2 Expected cash — store status', status2b.session.expectedCash, 5600);
 check('S2 Expected cash — admin summary (no shortage double-count)', e2.cashPosition.expectedCash, 5600);
 check('S2 Business day net sales accumulate', e2.revenue.netSales, 9200);
 
+// Reports must use the same definitions for the same day.
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+const center = (await call(admin, 'GET', `/api/reports/center?report=sales&start=${today}&end=${today}`)).json.metrics;
+check('Reports center revenue after voids', center.revenue_after_voids, 9200);
+check('Reports center voids', center.voids, 700);
+check('Reports center cash received (allocations)', center.cash_received, 6900);
+check('Reports center online received', center.online_received, 3000);
+const overview = (await call(admin, 'GET', '/api/admin/reports?period=today')).json;
+check('Business overview total sales', (overview.stats || overview.summary || overview).totalSales, 9200);
+const expensesReport = (await call(admin, 'GET', `/api/reports/center?report=expenses&start=${today}&end=${today}`)).json.metrics;
+check('Expenses report = operating only (no advance)', expensesReport.expenses, 500);
+const cashierAdvancesReport = await call(cashier, 'GET', `/api/reports/center?report=advances&start=${today}&end=${today}`, null, { 'x-expect-error': '1' });
+check('Cashier cannot read advances report', cashierAdvancesReport.status, 403);
+
 const closed2 = (await call(cashier, 'POST', '/api/store', { action: 'close', countedCash: 5600 })).json.result;
 check('S2 Close status', closed2.status, (value) => value === 'MATCHED');
+const controls = (await call(admin, 'GET', '/api/admin/analytics?period=today')).json.analytics.controls;
+check('Analytics same-day reopen counted', controls.reopenedSessions, 1);
+check('Analytics shortage counted', controls.shortages, 1);
+check('Analytics shortage total', controls.shortageTotal, -100);
 
 /* ------------------------------------------------------------------- history */
 const history = (await call(admin, 'GET', '/api/store/history')).json;

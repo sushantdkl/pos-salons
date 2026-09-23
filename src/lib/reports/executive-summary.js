@@ -254,6 +254,9 @@ async function getSalaryBreakdown(db, period, options) {
       COALESCE(SUM(CASE WHEN e.category = 'Staff Commission' THEN COALESCE(e.amount, 0) ELSE 0 END), 0) AS commission_total,
       COALESCE(SUM(CASE WHEN e.category = 'Staff Commission' THEN ${cash} ELSE 0 END), 0) AS commission_cash,
       COALESCE(SUM(CASE WHEN e.category = 'Staff Commission' THEN ${online} ELSE 0 END), 0) AS commission_online,
+      COALESCE(SUM(CASE WHEN e.category = 'Staff Salary' AND e.advance_id IS NOT NULL THEN COALESCE(e.amount, 0) ELSE 0 END), 0) AS advance_total,
+      COALESCE(SUM(CASE WHEN e.category = 'Staff Salary' AND e.advance_id IS NOT NULL THEN ${cash} ELSE 0 END), 0) AS advance_cash,
+      COALESCE(SUM(CASE WHEN e.category = 'Staff Salary' AND e.advance_id IS NOT NULL THEN ${online} ELSE 0 END), 0) AS advance_online,
       COUNT(e.id)::int AS records
     FROM expenses e
     WHERE e.deleted_at IS NULL
@@ -269,6 +272,14 @@ async function getSalaryBreakdown(db, period, options) {
     commissionPaid: round2(row?.commission_total),
     commissionCash: round2(row?.commission_cash),
     commissionOnline: round2(row?.commission_online),
+    // Advances are salary paid EARLY. They are already inside salaryPaid (booked once, when
+    // issued); a later settlement only expenses the remainder, so nothing is counted twice.
+    advancePaid: round2(row?.advance_total),
+    advanceCash: round2(row?.advance_cash),
+    advanceOnline: round2(row?.advance_online),
+    regularSalaryPaid: round2(numeric(row?.salary_total) - numeric(row?.advance_total)),
+    regularSalaryCash: round2(numeric(row?.salary_cash) - numeric(row?.advance_cash)),
+    regularSalaryOnline: round2(numeric(row?.salary_online) - numeric(row?.advance_online)),
     records: Number(row?.records || 0),
   };
 }
@@ -498,6 +509,8 @@ async function getTokenSummary(db, period, options) {
       COUNT(DISTINCT CASE WHEN COALESCE(wt.is_printed, FALSE) = FALSE THEN wt.id END)::int AS digital_tokens,
       COUNT(DISTINCT CASE WHEN COALESCE(wt.is_printed, FALSE) = TRUE THEN wt.id END)::int AS printed_tokens,
       COUNT(DISTINCT CASE WHEN wt.status IN ('CANCELLED', 'NO_SHOW') THEN wt.id END)::int AS cancelled_no_show,
+      COUNT(DISTINCT CASE WHEN wt.status = 'CANCELLED' THEN wt.id END)::int AS cancelled,
+      COUNT(DISTINCT CASE WHEN wt.status = 'NO_SHOW' THEN wt.id END)::int AS no_show,
       COUNT(DISTINCT CASE WHEN wt.status = 'BILLED' AND wt.invoice_id IS NOT NULL AND sb.id IS NOT NULL THEN wt.id END)::int AS converted,
       COUNT(DISTINCT CASE
         WHEN wt.status = 'BILLED' AND wt.invoice_id IS NOT NULL AND sb.id IS NOT NULL AND COALESCE(sb.is_printed, FALSE) = FALSE THEN sb.id
@@ -529,6 +542,8 @@ async function getTokenSummary(db, period, options) {
     printedTokens: Number(row?.printed_tokens || 0),
     converted: Number(row?.converted || 0),
     cancelledNoShow: Number(row?.cancelled_no_show || 0),
+    cancelled: Number(row?.cancelled || 0),
+    noShow: Number(row?.no_show || 0),
     waitingNow: Number(waiting?.waiting || 0),
     digitalBills: Number(row?.digital_bills || 0),
     printedBills: Number(row?.printed_bills || 0),

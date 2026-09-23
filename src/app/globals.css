@@ -221,6 +221,21 @@
     gap: 8px !important;
   }
 
+  /* ERP reports print their semantic section tints and never clip a card. */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  section {
+    overflow: visible !important;
+  }
+
   @page {
     margin: 12mm;
   }
