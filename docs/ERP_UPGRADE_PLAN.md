@@ -1,6 +1,6 @@
 # The Hair Cut — Salon ERP Upgrade: Phase 0 Audit & Execution Plan
 
-Status: **PLAN — awaiting approval. No application code has been changed.**
+Status: **ERP phases complete — see "Phase results" at the end.**
 Date: 2026-09-23
 Reference studied: `dimsum.zip` (restaurant ERP, extracted outside the repo for reading only).
 
