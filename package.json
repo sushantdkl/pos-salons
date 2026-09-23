@@ -22,7 +22,8 @@
     "qa:scenario": "node scripts/qa/financial-scenario.mjs",
     "qa:permissions": "node scripts/qa/permission-audit.mjs",
     "qa:ui": "node scripts/qa/responsive-audit.mjs",
-    "qa:all": "bash scripts/qa/run-all.sh prod"
+    "qa:all": "bash scripts/qa/run-all.sh prod",
+    "qa:appointments": "node scripts/qa/appointments-scenario.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",
