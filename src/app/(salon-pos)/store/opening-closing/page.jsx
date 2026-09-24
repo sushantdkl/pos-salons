@@ -12,6 +12,7 @@
  * Admin and cashier share this page; cashier payloads never contain salary figures.
  */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, DoorOpen, Landmark } from 'lucide-react';
 import StoreStatusBar from '@/components/store/store-status-bar';
@@ -285,7 +286,7 @@ export default function OpeningClosingPage() {
             <SectionHeading
               title="Business day history"
               note="Expected and counted cash are the final session's persisted close — never a sum of sessions. Differences add up because each shortage is its own event."
-              action={<a href="/dashboard/admin/business-days" className="print-hide inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:underline"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Full history</a>}
+              action={<Link href="/dashboard/admin/business-days" className="print-hide inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:underline"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Full history</Link>}
             />
             <BusinessDayHistory days={days} />
           </>

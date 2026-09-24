@@ -238,6 +238,7 @@ export function ControlsTab({ a }) {
           { label: 'Bills with a discount', value: `${count(c.discountedBills)} (${percent(c.discountedShare)})` },
           { label: 'Discount given', value: c.discountTotal, sub: `${percent(c.discountRate)} of gross sales` },
           { label: 'Backdated bills', value: count(c.backdatedBills) },
+          { label: 'Payment method changes', value: count(c.paymentMethodChanges), sub: 'Cash ↔ online fixes, each with a reason' },
           { label: 'Cancelled tokens', value: count(c.cancelledTokens) },
         ]} />
         <LedgerPanel title="Cash control" tone="cash" rows={[

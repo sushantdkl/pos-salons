@@ -318,7 +318,7 @@ export default function AdminLayout({ children }) {
               <div className="flex min-w-0 flex-col">
                 <span
                   className="truncate text-[14px] font-extrabold text-[#1A1714]"
-                  style={{ fontFamily: "'Manrope', system-ui, sans-serif", letterSpacing: '-.01em' }}
+                  style={{ fontFamily: 'var(--font-manrope), system-ui, sans-serif', letterSpacing: '-.01em' }}
                 >
                   The Hair Cut POS
                 </span>
@@ -416,7 +416,7 @@ export default function AdminLayout({ children }) {
             <div className="min-w-0">
               <h2
                 className="truncate text-[15px] font-extrabold text-[#1A1714]"
-                style={{ fontFamily: "'Manrope', system-ui, sans-serif", letterSpacing: '-.01em' }}
+                style={{ fontFamily: 'var(--font-manrope), system-ui, sans-serif', letterSpacing: '-.01em' }}
               >
                 The Hair Cut POS
               </h2>

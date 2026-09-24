@@ -106,5 +106,13 @@ export function useReport(url, { enabled = true } = {}) {
 
   useEffect(() => { load(); }, [load]);
 
+  // A bill was cancelled or its payment method changed in the bill drawer: refresh the figures.
+  useEffect(() => {
+    if (!enabled || !url) return undefined;
+    const onChange = () => { load(); };
+    window.addEventListener('salon:bill-changed', onChange);
+    return () => window.removeEventListener('salon:bill-changed', onChange);
+  }, [load, enabled, url]);
+
   return { data, error, loading, reload: load, setData };
 }

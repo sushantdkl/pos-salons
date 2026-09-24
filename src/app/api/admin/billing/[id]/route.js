@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { hasPermission, PERMISSIONS } from '@/lib/auth/permissions';
+import { getOpenSession } from '@/lib/business-day/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const parseMeta = (value) => {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return {}; }
+};
 
 /**
  * Everything about ONE bill, for the bill-detail drawer used across the app: lines with staff,
@@ -38,7 +45,7 @@ export async function GET(request, { params }) {
       db.all(`SELECT i.id, i.item_type, i.name, i.quantity, i.unit_price, i.subtotal, i.staff_name_snapshot, i.commission_amount, i.loyalty_reward
         FROM salon_bill_items i WHERE i.bill_id = ? ORDER BY i.id`, [id]),
       db.all(`SELECT method, amount, provider, reference_number, cash_tendered, change_amount FROM salon_payment_allocations WHERE bill_id = ? ORDER BY id`, [id]),
-      db.all(`SELECT fc.correction_type, fc.amount, fc.reason, fc.created_at, COALESCE(u.full_name, u.username) AS by_name
+      db.all(`SELECT fc.correction_type, fc.amount, fc.reason, fc.metadata, fc.created_at, COALESCE(u.full_name, u.username) AS by_name
         FROM financial_corrections fc LEFT JOIN users u ON u.id = fc.created_by WHERE fc.source_type = 'salon_bill' AND fc.source_id = ? ORDER BY fc.id`, [id]),
       db.all('SELECT method, amount, created_at FROM payment_refunds WHERE bill_id = ? ORDER BY id', [id]),
       db.all(`SELECT l.entry_type, l.visits, l.created_at, p.name AS program, r.entry_type AS reversed
@@ -46,6 +53,15 @@ export async function GET(request, { params }) {
       db.get('SELECT overall_rating, review_text, status, submitted_at FROM customer_reviews WHERE bill_id = ? AND NOT superseded ORDER BY id DESC LIMIT 1', [id]),
       db.get('SELECT code, claimed_at, expires_at FROM loyalty_claim_codes WHERE bill_id = ?', [id]),
     ]);
+
+    const [canVoid, canChangePayment, openSession] = await Promise.all([
+      hasPermission(db, user, PERMISSIONS.BILLING_CORRECT),
+      hasPermission(db, user, PERMISSIONS.BILLING_PAYMENT_METHOD_CHANGE),
+      getOpenSession(db),
+    ]);
+    const paid = bill.status === 'paid';
+    const collected = allocations.filter((row) => row.method !== 'credit').reduce((sum, row) => sum + Number(row.amount), 0);
+    const inOpenSession = Boolean(openSession) && String(openSession.id) === String(bill.store_session_id);
 
     const loyaltyDiscount = round2(bill.loyalty_discount);
     return NextResponse.json({
@@ -67,7 +83,19 @@ export async function GET(request, { params }) {
         commission: user.role === 'admin' ? round2(row.commission_amount) : undefined,
       })),
       payments: allocations.map((row) => ({ method: row.method, amount: round2(row.amount), provider: row.provider, reference: row.reference_number, tendered: row.cash_tendered === null ? null : round2(row.cash_tendered), change: round2(row.change_amount) })),
-      corrections: corrections.map((row) => ({ type: row.correction_type, amount: round2(row.amount), reason: row.reason, at: row.created_at, by: row.by_name })),
+      corrections: corrections.map((row) => ({
+        type: row.correction_type, amount: round2(row.amount), reason: row.reason, at: row.created_at, by: row.by_name,
+        before: parseMeta(row.metadata).before || null, after: parseMeta(row.metadata).after || null,
+      })),
+      actions: {
+        // Cancelling needs an open store (the refund is recorded in the open session).
+        canVoid: canVoid && paid,
+        canChangePayment: canChangePayment && paid && collected > 0,
+        storeOpen: Boolean(openSession),
+        inOpenSession,
+        collected: round2(collected),
+        credit: round2(allocations.filter((row) => row.method === 'credit').reduce((sum, row) => sum + Number(row.amount), 0)),
+      },
       refunds: refunds.map((row) => ({ method: row.method, amount: round2(row.amount), at: row.created_at })),
       loyalty: loyalty.map((row) => ({ type: row.entry_type, visits: Number(row.visits), program: row.program, at: row.created_at, reversed: row.reversed })),
       review: review ? { rating: review.overall_rating, text: review.review_text, status: review.status, at: review.submitted_at } : null,

@@ -27,7 +27,7 @@ export function ServiceCard({
           {!hideCategory ? (
             <p
               className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                isLight ? 'text-[#9b742d]' : 'text-[#d7b56d]'
+                isLight ? 'text-[#8a6727]' : 'text-[#d7b56d]'
               }`}
             >
               {service.category}
@@ -65,7 +65,7 @@ export function ServiceCard({
         </div>
         <p
           className={`shrink-0 font-serif ${
-            isLight ? 'text-[#9b742d]' : 'text-[#d7b56d]'
+            isLight ? 'text-[#8a6727]' : 'text-[#d7b56d]'
           } ${compact ? 'text-sm md:text-right' : 'text-lg md:text-right md:text-xl'}`}
         >
           {service.priceLabel}
@@ -115,18 +115,18 @@ export function PackageCard({
         }`}
       >
         <div className={`absolute left-0 top-0 h-1 w-full ${featured ? 'bg-[#d7b56d]' : 'bg-[#e7ded2]'}`} />
-        <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${featured ? 'text-[#9b742d]' : 'text-[#8a6a52]'}`}>
+        <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${featured ? 'text-[#8a6727]' : 'text-[#8a6a52]'}`}>
           Grooming tier
         </p>
         <h3 className="mt-4 font-serif text-2xl font-light tracking-tight text-[#171411] md:text-3xl">{item.name}</h3>
-        <p className={`mt-5 font-serif text-4xl font-light tracking-tight ${featured ? 'text-[#9b742d]' : 'text-[#171411]'}`}>
+        <p className={`mt-5 font-serif text-4xl font-light tracking-tight ${featured ? 'text-[#8a6727]' : 'text-[#171411]'}`}>
           Rs. {item.price}
         </p>
         <p className="mt-4 text-sm font-light leading-relaxed text-[#6d625b]">{item.description}</p>
         <ul className="mt-8 flex-1 space-y-3 border-t border-[#e7ded2] pt-6 text-sm">
           {item.includes.map((service) => (
             <li key={service} className="flex items-start gap-3 text-[#3a312b]">
-              <span className={`mt-2 h-1 w-1 shrink-0 ${featured ? 'bg-[#d7b56d]' : 'bg-[#9b742d]'}`} />
+              <span className={`mt-2 h-1 w-1 shrink-0 ${featured ? 'bg-[#d7b56d]' : 'bg-[#8a6727]'}`} />
               <span className="font-light">{service}</span>
             </li>
           ))}
@@ -215,13 +215,13 @@ export function StaffCard({
               className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-[#f8f3ed] font-serif text-5xl font-light text-[#9b742d]">
+            <div className="flex h-full items-center justify-center bg-[#f8f3ed] font-serif text-5xl font-light text-[#8a6727]">
               {member.name.charAt(0)}
             </div>
           )}
         </div>
         <div className="flex flex-1 flex-col p-5 md:p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9b742d]">{member.role}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a6727]">{member.role}</p>
           <h3 className="mt-2 font-serif text-xl font-light tracking-tight text-[#171411] md:text-2xl">{member.name}</h3>
           {member.bio ? (
             <p className="mt-3 line-clamp-3 text-sm font-light leading-relaxed text-[#6d625b]">{member.bio}</p>

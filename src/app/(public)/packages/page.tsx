@@ -1,28 +1,29 @@
 import Link from 'next/link';
-import { PublicLayout } from '@/modules/public-site/components/public-layout';
+import { SiteShell } from '@/modules/public-site/components/site-shell';
 import { PageHero } from '@/modules/public-site/components/page-hero';
 import { Section } from '@/modules/public-site/components/section';
 import { PackageCard } from '@/modules/public-site/components/cards';
-import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import { getSiteContext, staticPageMetadata } from '@/modules/public-site/services/seo';
 import type { PublicPackage } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  const cms = await getPublicWebsiteData();
-  return { title: `Packages | ${cms.info.name}`, description: cms.sections.packages.description };
+  return staticPageMetadata(await getSiteContext(), '/packages');
 }
 
 export default async function PackagesPage() {
-  const cms = await getPublicWebsiteData();
+  const context = await getSiteContext();
+  const { cms } = context;
   const section = cms.sections.packages;
   return (
-    <PublicLayout info={cms.info}>
+    <SiteShell>
       <PageHero
+        breadcrumbs={[{ name: 'Packages', href: '/packages' }]}
         eyebrow={section.subtitle || 'Fast grooming'}
         title={section.title || "Men's packages"}
         description={section.description || 'Choose a package for a complete grooming visit.'}
-        imageUrl={section.imageUrl || cms.info.assets.services}
+        imageUrl={section.imageUrl || context.info.assets.services}
       />
       <Section hideHeader className="!py-10 md:!py-14">
         <div className="grid gap-6 lg:grid-cols-3">
@@ -45,6 +46,6 @@ export default async function PackagesPage() {
           </Link>
         </div>
       </Section>
-    </PublicLayout>
+    </SiteShell>
   );
 }

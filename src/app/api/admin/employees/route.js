@@ -127,13 +127,14 @@ export async function GET(request) {
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
       LEFT JOIN (
-        SELECT staff_id,
-               COALESCE(SUM(CASE WHEN item_type = 'service' THEN subtotal ELSE 0 END), 0) as service_revenue,
-               COALESCE(SUM(commission_amount), 0) as commission_earned,
-               COUNT(DISTINCT bill_id)::int as invoice_count
-        FROM salon_bill_items
-        WHERE staff_id IS NOT NULL
-        GROUP BY staff_id
+        SELECT i.staff_id,
+               COALESCE(SUM(CASE WHEN i.item_type = 'service' THEN i.subtotal ELSE 0 END), 0) as service_revenue,
+               COALESCE(SUM(i.commission_amount), 0) as commission_earned,
+               COUNT(DISTINCT i.bill_id)::int as invoice_count
+        FROM salon_bill_items i
+        JOIN salon_bills b ON b.id = i.bill_id AND b.status = 'paid'
+        WHERE i.staff_id IS NOT NULL
+        GROUP BY i.staff_id
       ) agg ON agg.staff_id = u.id
       ORDER BY u.is_active DESC, u.full_name ASC
     `);

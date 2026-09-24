@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, DoorClosed, DoorOpen, Loader2, Lock, RefreshCw, X,
@@ -329,10 +330,10 @@ export default function StoreStatusBar({
             <button type="button" className={BTN_PRIMARY} onClick={() => openModal('open')}>Open Store</button>
           ) : null}
           {showOpeningClosingLink ? (
-            <a href="/store/opening-closing" className={BTN_SECONDARY}>Opening &amp; Closing</a>
+            <Link href="/store/opening-closing" className={BTN_SECONDARY}>Opening &amp; Closing</Link>
           ) : null}
           {showManageLink && role === 'admin' ? (
-            <a href="/dashboard/admin/business-days" className={BTN_SECONDARY}>Business Day History</a>
+            <Link href="/dashboard/admin/business-days" className={BTN_SECONDARY}>Business Day History</Link>
           ) : null}
         </div>
       </div>

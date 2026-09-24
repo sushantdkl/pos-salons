@@ -299,9 +299,11 @@ async function getControls(db, period, scope) {
 
   const voidFilter = eventScope('fc', period, scope);
   const voids = await db.get(`
-    SELECT COUNT(*)::int AS voids, COALESCE(SUM(fc.amount), 0) AS voided
+    SELECT COUNT(*) FILTER (WHERE fc.correction_type = 'void')::int AS voids,
+           COALESCE(SUM(fc.amount) FILTER (WHERE fc.correction_type = 'void'), 0) AS voided,
+           COUNT(*) FILTER (WHERE fc.correction_type = 'payment_method_change')::int AS method_changes
     FROM financial_corrections fc
-    WHERE fc.source_type = 'salon_bill' AND fc.correction_type = 'void' AND ${voidFilter.clause}
+    WHERE fc.source_type = 'salon_bill' AND fc.correction_type IN ('void', 'payment_method_change') AND ${voidFilter.clause}
   `, voidFilter.params);
 
   const sessionFilter = scope.businessDayId
@@ -328,6 +330,7 @@ async function getControls(db, period, scope) {
     backdatedBills: Number(discounts?.backdated_bills || 0),
     voids: Number(voids?.voids || 0),
     voidedAmount: round2(voids?.voided),
+    paymentMethodChanges: Number(voids?.method_changes || 0),
     sessions: Number(sessions?.sessions || 0),
     reopenedSessions: Number(sessions?.reopened || 0),
     shortages: Number(sessions?.shortages || 0),

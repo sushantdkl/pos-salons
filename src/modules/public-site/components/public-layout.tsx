@@ -4,23 +4,42 @@ import Link from 'next/link';
 import { ReactNode, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Facebook, Menu, MessageCircle, Music2, X } from 'lucide-react';
+import { CalendarCheck, Facebook, MapPin, Menu, MessageCircle, Music2, Phone, X } from 'lucide-react';
 import { salonInfo } from '../data/salon-info';
 import { createWhatsAppLink } from '../utils/whatsapp';
 
-const navLinks = [
+const baseNavLinks = [
   ['Home', '/'],
   ['Services', '/services'],
   ['Packages', '/packages'],
-  ['Staff', '/staff'],
+  ['Team', '/staff'],
   ['Gallery', '/gallery'],
   ['Contact', '/contact'],
 ];
 
 type PublicLayoutInfo = typeof salonInfo;
+type FooterService = { slug: string; name: string };
 
-export function PublicLayout({ children, info = salonInfo, isHome = false }: { children: ReactNode; info?: PublicLayoutInfo; isHome?: boolean }) {
+export function PublicLayout({
+  children,
+  info = salonInfo,
+  isHome = false,
+  servicePages = [],
+  showGuides = false,
+  showReviews = false,
+  directionsUrl = '',
+}: {
+  children: ReactNode;
+  info?: PublicLayoutInfo;
+  isHome?: boolean;
+  servicePages?: FooterService[];
+  showGuides?: boolean;
+  showReviews?: boolean;
+  directionsUrl?: string;
+}) {
   const whatsappUrl = createWhatsAppLink(undefined, info.whatsappNumber);
+  const telUrl = `tel:${String(info.phone || '').replace(/[^\d+]/g, '')}`;
+  const navLinks = showGuides ? [...baseNavLinks.slice(0, 5), ['Guides', '/guides'], baseNavLinks[5]] : baseNavLinks;
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -191,7 +210,7 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
         href={whatsappUrl}
         target="_blank"
         rel="noreferrer"
-        className={`fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition hover:bg-green-700 ${
+        className={`fixed bottom-5 right-5 z-50 hidden h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition hover:bg-green-700 md:flex ${
           mobileOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
         aria-label="Chat on WhatsApp"
@@ -199,8 +218,33 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
         <MessageCircle className="h-6 w-6" />
       </a>
 
-      <footer className="border-t border-salon-border bg-salon-dark text-white">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 md:grid-cols-3">
+      {/* Mobile contact bar: the four things a local visitor wants, one tap each. */}
+      <nav
+        aria-label="Quick contact"
+        className={`fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-[#e8dcc4] bg-[#fbfaf7]/97 pb-[env(safe-area-inset-bottom)] text-[#171411] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden ${
+          mobileOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        {[
+          { href: telUrl, label: 'Call', Icon: Phone, external: false },
+          { href: whatsappUrl, label: 'WhatsApp', Icon: MessageCircle, external: true },
+          { href: '/book-appointment', label: 'Book', Icon: CalendarCheck, external: false },
+          { href: directionsUrl || '/contact', label: 'Directions', Icon: MapPin, external: Boolean(directionsUrl) },
+        ].map(({ href, label, Icon, external }) => (
+          <a
+            key={label}
+            href={href}
+            {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wider active:bg-[#f1e9dc]"
+          >
+            <Icon className={`h-5 w-5 ${label === 'WhatsApp' ? 'text-green-700' : 'text-[#8a6727]'}`} aria-hidden="true" />
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <footer className="border-t border-salon-border bg-salon-dark pb-16 text-white md:pb-0">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="flex items-center gap-3">
               <span className="relative h-12 w-12 overflow-hidden rounded-full bg-white">
@@ -214,14 +258,23 @@ export function PublicLayout({ children, info = salonInfo, isHome = false }: { c
             <h3 className="font-semibold">Quick Links</h3>
             <div className="mt-3 grid gap-2 text-sm text-white/70">
               {navLinks.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+              {showReviews ? <Link href="/reviews">Reviews</Link> : null}
               <Link href="/book-appointment">Book Appointment</Link>
-              <a href={whatsappUrl} target="_blank" rel="noreferrer">WhatsApp</a>
             </div>
           </div>
+          {servicePages.length ? (
+            <div>
+              <h3 className="font-semibold">Services</h3>
+              <div className="mt-3 grid gap-2 text-sm text-white/70">
+                {servicePages.slice(0, 6).map((page) => <Link key={page.slug} href={`/services/${page.slug}`}>{page.name}</Link>)}
+              </div>
+            </div>
+          ) : null}
           <div>
             <h3 className="font-semibold">Contact</h3>
-            <p className="mt-3 text-sm text-white/70">{info.address}</p>
-            <p className="mt-2 text-sm text-white/70">{info.phone}</p>
+            <address className="mt-3 text-sm not-italic text-white/70">{info.address}</address>
+            <p className="mt-2 text-sm text-white/70"><a href={telUrl} className="hover:text-white">{info.phone}</a></p>
+            {info.openingHours ? <p className="mt-2 text-sm text-white/70">{info.openingHours}</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#171411]">WhatsApp</a>
               <a href={info.social.facebook} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"><Facebook className="h-4 w-4" />Facebook</a>

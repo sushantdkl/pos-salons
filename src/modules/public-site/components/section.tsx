@@ -5,7 +5,7 @@ type SectionTheme = 'light' | 'dark';
 const themeStyles: Record<SectionTheme, { section: string; eyebrow: string; title: string; description: string }> = {
   light: {
     section: 'border-b border-[#e7ded2]/40 bg-[#fbfaf7] text-[#171411]',
-    eyebrow: 'text-[#9b742d]',
+    eyebrow: 'text-[#8a6727]',
     title: 'text-[#171411]',
     description: 'text-[#6d625b]',
   },

@@ -22,4 +22,6 @@ export const TRACKED_MIGRATIONS = [
   '2026-09-29-permission-modules.sql',
   '2026-09-30-permissions-frontdesk-cash-inventory.sql',
   '2026-10-01-crm-public-join.sql',
+  '2026-10-02-seo-local-search.sql',
+  '2026-10-03-bill-payment-method-change.sql',
 ];

@@ -87,10 +87,10 @@
 }
 
 @theme inline {
-  --font-sans: 'Outfit', 'Geist', 'Geist Fallback', sans-serif;
-  --font-serif: 'Cormorant Garamond', 'Playfair Display', serif;
-  --font-dashboard-heading: 'Manrope', system-ui, sans-serif;
-  --font-dashboard-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-sans: var(--font-outfit), 'Outfit', sans-serif;
+  --font-serif: var(--font-cormorant), 'Cormorant Garamond', serif;
+  --font-dashboard-heading: var(--font-manrope), 'Manrope', system-ui, sans-serif;
+  --font-dashboard-body: var(--font-plex), 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);

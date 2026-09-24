@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import { money } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
+import { buildStatementHtml } from '@/lib/documents/statement';
 
 const FIELD = 'mt-1 block h-11 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm text-stone-900 focus:border-stone-500 focus:outline-none';
 const LABEL = 'block text-[13px] font-semibold text-stone-700';
@@ -185,40 +186,23 @@ export function OpenItemPopup({ kind, item, dateText, onClose, onPay, onOpenBill
   );
 }
 
-const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
 /**
- * Print a clean statement. mode 'all' = every transaction with running balance;
- * mode 'due' = only what is still owed (open bills / invoices).
+ * Print a statement (mode 'all' = every entry with a running balance, 'due' = only what is
+ * still owed) using the layout from Printer & Documents (A4 or 80 / 58 mm, titles, column
+ * labels, footer). The window opens first so the browser does not block it as a pop-up.
  */
-export function printStatement(view, mode, fmtDate) {
+export async function printStatement(view, mode, fmtDate, kind = 'customer') {
   const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) return;
-  const generated = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const rows = mode === 'due'
-    ? view.open.map((row) => `<tr><td>${escape(fmtDate(row.date))}</td><td>${escape(row.label)}</td><td class="r">${escape(money(row.total))}</td><td class="r due">${escape(money(row.due))}</td></tr>`).join('')
-    : view.statement.map((row) => `<tr><td>${escape(fmtDate(row.date))}</td><td>${escape(row.detail)}</td><td class="r">${Number(row.added) ? escape(money(row.added)) : ''}</td><td class="r">${Number(row.removed) ? escape(money(row.removed)) : ''}</td><td class="r b">${row.balance === null || row.balance === undefined ? '—' : escape(money(row.balance))}</td></tr>`).join('');
-  const head = mode === 'due'
-    ? '<tr><th>Date</th><th>Bill / invoice</th><th class="r">Total</th><th class="r">Still due</th></tr>'
-    : '<tr><th>Date</th><th>Details</th><th class="r">Added</th><th class="r">Removed</th><th class="r">Balance</th></tr>';
-  win.document.write(`<!doctype html><html><head><title>${escape(view.name)} — statement</title><style>
-    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#1c1917;margin:32px}
-    h1{font-size:20px;margin:0}.sub{color:#78716c;font-size:12px;margin:2px 0 16px}
-    .brand{font-weight:800;letter-spacing:.02em;font-size:13px;color:#9b742d;margin-bottom:6px}
-    .owed{border:1px solid #fecdd3;background:#fff1f2;border-radius:10px;padding:10px 14px;display:inline-block;margin-bottom:16px}
-    .owed b{display:block;font-size:22px;color:#be123c}
-    table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;border-bottom:2px solid #1c1917;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#57534e}
-    td{border-bottom:1px solid #e7e5e4;padding:6px 8px}.r{text-align:right}.b{font-weight:700}.due{color:#be123c;font-weight:700}
-    tfoot td{border-top:2px solid #1c1917;font-weight:800}
-  </style></head><body>
-    <div class="brand">THE HAIR CUT</div>
-    <h1>${escape(view.name)}</h1>
-    <p class="sub">${escape(view.subtitle)} · ${mode === 'due' ? 'What is still due' : 'All transactions (paid &amp; due)'} · Printed ${escape(generated)} (Nepal time)</p>
-    <div class="owed">Total still owed<b>${escape(money(view.owed))}</b></div>
-    <table><thead>${head}</thead><tbody>${rows || '<tr><td colspan="5">Nothing to show.</td></tr>'}</tbody>
-    <tfoot><tr><td colspan="${mode === 'due' ? 3 : 4}">Balance now</td><td class="r">${escape(money(view.owed))}</td></tr></tfoot></table>
-  </body></html>`);
+  win.document.write('<p style="font-family:system-ui,sans-serif;padding:32px;color:#57534e">Preparing statement…</p>');
+  let settings = {};
+  try { settings = (await erpFetch('/api/admin/settings?mode=documents')).settings || {}; } catch { /* print with defaults */ }
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' });
+  const printedAt = `${fmtDate(now.toISOString())} ${time}`;
+  win.document.open();
+  win.document.write(buildStatementHtml({ view, kind, mode, settings, fmtDate, printedAt }));
   win.document.close();
   win.focus();
-  setTimeout(() => win.print(), 250);
+  setTimeout(() => win.print(), 300);
 }

@@ -51,7 +51,7 @@ test('Admin can find settings, printer, and distinct report destinations', async
     await expect(page.getByRole('heading', { name: 'Payment Reconciliation' })).toBeVisible();
     if (viewport.name === 'desktop') {
       await expect(page.getByRole('link', { name: 'Sales & Invoices' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Compare Reports' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Compare report' })).toBeVisible();
     }
     await page.screenshot({ path: `test-results/report-center-${viewport.name}.png`, fullPage: true });
     await context.close();

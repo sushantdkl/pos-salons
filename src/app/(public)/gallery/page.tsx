@@ -1,27 +1,28 @@
 import Link from 'next/link';
-import { PublicLayout } from '@/modules/public-site/components/public-layout';
+import { SiteShell } from '@/modules/public-site/components/site-shell';
 import { PageHero } from '@/modules/public-site/components/page-hero';
 import { Section } from '@/modules/public-site/components/section';
 import { CmsImage } from '@/modules/public-site/components/cms-image';
-import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import { getSiteContext, staticPageMetadata } from '@/modules/public-site/services/seo';
 import type { GalleryItem } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  const cms = await getPublicWebsiteData();
-  return { title: `Gallery | ${cms.info.name}`, description: 'Photos from the salon space, services, opening moments, customers, and hygiene setup.' };
+  return staticPageMetadata(await getSiteContext(), '/gallery');
 }
 
 export default async function GalleryPage() {
-  const cms = await getPublicWebsiteData();
+  const context = await getSiteContext();
+  const { cms } = context;
   return (
-    <PublicLayout info={cms.info}>
+    <SiteShell>
       <PageHero
+        breadcrumbs={[{ name: 'Gallery', href: '/gallery' }]}
         eyebrow="Gallery"
         title="Salon gallery"
         description="Real moments from The Hair Cut, including the salon space, services, opening day, customers, and hygiene setup."
-        imageUrl={cms.info.assets.banner}
+        imageUrl={context.info.assets.banner}
       />
       <Section hideHeader className="!py-10 md:!py-14">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -40,7 +41,7 @@ export default async function GalleryPage() {
                 />
               </div>
               <div className="p-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9b742d]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a6727]">
                   {item.category || 'Salon'}
                 </p>
                 <h3 className="mt-2 font-serif text-xl font-light text-[#171411]">{item.title}</h3>
@@ -58,6 +59,6 @@ export default async function GalleryPage() {
           </Link>
         </div>
       </Section>
-    </PublicLayout>
+    </SiteShell>
   );
 }

@@ -96,7 +96,7 @@ const billA = await bill(cashier, {
   services: [{ id: svc('QA Haircut'), staff_id: barber.id }], customer_name: 'QA Walk-in',
   discount_type: 'amount', discount_value: 500, payment_method: 'cash', amount_paid: 4500,
 });
-await bill(cashier, {
+const billB = await bill(cashier, {
   services: [{ id: svc('QA Colour'), staff_id: barber.id }], customer_name: 'QA Walk-in',
   payment_method: 'online', qr_type: 'ESEWA_PHONEPAY',
 });
@@ -109,7 +109,42 @@ check('Bill A total after discount', billA?.grand_total, 4500);
 await call(cashier, 'POST', '/api/cashier/daily-expenses', { title: 'QA cleaning', category: 'CLEANING', paymentMethod: 'CASH', amount: 500 });
 await call(cashier, 'POST', '/api/savings', { depositType: 'BANK_DEPOSIT', sourceAccount: 'CASH', amount: 1000, institutionName: 'QA Bank' });
 await call(cashier, 'POST', '/api/payroll/advances', { staffId: barber.id, amount: 1000, paymentMethod: 'cash' }, { 'idempotency-key': randomUUID() });
+// ---- payment method change (rush-hour slip): B was eSewa, cashier fixes it to cash, then back.
+const changeMethod = (token, id, body, extra = {}) => call(token, 'POST', `/api/admin/billing/${id}/payment-method`, body, { 'idempotency-key': randomUUID(), ...extra });
+const drawer = async () => (await call(cashier, 'GET', '/api/store')).json.status.session.expectedCash;
+const drawerBefore = await drawer();
+const shortReason = await changeMethod(cashier, billB.id, { reason: 'no', allocations: [{ method: 'cash', amount: 3000 }] }, { 'x-expect-error': '1' });
+check('Payment change needs a reason', shortReason.status, 400);
+const wrongTotal = await changeMethod(cashier, billB.id, { reason: 'Customer paid cash', allocations: [{ method: 'cash', amount: 2000 }] }, { 'x-expect-error': '1' });
+check('Payment change must equal the collected amount', wrongTotal.status, 400);
+const sameMethod = await changeMethod(cashier, billB.id, { reason: 'Customer paid eSewa', allocations: [{ method: 'online', amount: 3000, provider: 'ESEWA_PHONEPAY' }] }, { 'x-expect-error': '1' });
+check('Payment change to the same method is rejected', sameMethod.status, 400);
+const barberToken = await login('qa_barber');
+const barberChange = await changeMethod(barberToken, billB.id, { reason: 'Customer paid cash', allocations: [{ method: 'cash', amount: 3000 }] }, { 'x-expect-error': '1' });
+check('Service staff cannot change payment methods', barberChange.status, 403);
+const barberVoid = await call(barberToken, 'POST', `/api/admin/billing/${billB.id}/corrections`, { reason: 'QA barber void' }, { 'idempotency-key': randomUUID(), 'x-expect-error': '1' });
+check('Service staff cannot cancel bills', barberVoid.status, 403);
+const toCash = await changeMethod(cashier, billB.id, { reason: 'Wrong method selected in rush', allocations: [{ method: 'cash', amount: 3000 }] });
+check('Cashier changed B to cash', toCash.status, 201);
+check('Drawer expects the moved cash', await drawer(), drawerBefore + 3000);
+const billBCash = (await call(cashier, 'GET', `/api/admin/billing/${billB.id}`)).json;
+check('Bill B now paid in cash', billBCash.bill.paymentMethod, (value) => value === 'cash');
+check('Bill B allocations are cash', billBCash.payments.map((row) => row.method).join(','), (value) => value === 'cash');
+const splitBack = await changeMethod(cashier, billB.id, { reason: 'Customer split the payment', allocations: [{ method: 'cash', amount: 1000 }, { method: 'online', amount: 2000, provider: 'BANK' }] });
+check('Cashier changed B to a split', splitBack.status, 201);
+check('Drawer after split', await drawer(), drawerBefore + 1000);
+await changeMethod(cashier, billB.id, { reason: 'Customer paid by eSewa after all', allocations: [{ method: 'online', amount: 3000, provider: 'ESEWA_PHONEPAY' }] });
+check('Drawer back to the original', await drawer(), drawerBefore);
+const billBBack = (await call(cashier, 'GET', `/api/admin/billing/${billB.id}`)).json;
+check('Bill B back to eSewa', `${billBBack.bill.paymentMethod}:${billBBack.payments[0]?.provider}`, (value) => value === 'online:ESEWA_PHONEPAY');
+check('Bill B keeps 3 payment-change records', billBBack.corrections.filter((row) => row.type === 'payment_method_change').length, 3);
+check('Payment changes are not voids', billBBack.bill.status, (value) => value === 'paid');
+
+const voidNoReason = await call(admin, 'POST', `/api/admin/billing/${billD.id}/corrections`, { reason: '' }, { 'idempotency-key': randomUUID(), 'x-expect-error': '1' });
+check('Cancelling a bill needs a reason', voidNoReason.status, 400);
 await call(admin, 'POST', `/api/admin/billing/${billD.id}/corrections`, { reason: 'QA void same session' }, { 'idempotency-key': randomUUID() });
+const billDView = (await call(admin, 'GET', `/api/admin/billing/${billD.id}`)).json;
+check('Cancelled bill offers no more corrections', billDView.actions.canVoid || billDView.actions.canChangePayment, (value) => value === false);
 
 // ---- every screen must agree while the session is open
 const status1 = (await call(cashier, 'GET', '/api/store')).json.status;
@@ -216,6 +251,8 @@ check('S2 same business day', status2.businessDayId, statusClosed.businessDayId)
 check('S2 is session 2', status2.session.sessionNumber, 2);
 
 await bill(cashier, { services: [{ id: svc('QA Trim'), staff_id: barber.id }], customer_name: 'QA Walk-in', payment_method: 'cash', amount_paid: 700 });
+const lateChange = await changeMethod(cashier, billB.id, { reason: 'Too late to change', allocations: [{ method: 'cash', amount: 3000 }] }, { 'x-expect-error': '1' });
+check('Closed-session bill cannot change method', lateChange.status, 409);
 const status2b = (await call(cashier, 'GET', '/api/store')).json.status;
 const exec2 = (await call(admin, 'GET', '/api/admin/executive-summary?period=today')).json;
 const e2 = exec2.summary || exec2;

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
-import { DOCUMENT_DEFAULTS, SETTING_KEYS, normalizeDocumentSettings } from '@/lib/documents/settings';
+import { DOCUMENT_DEFAULTS, QR_PRINT_SIZES, QR_SHEET_SIZES, SETTING_KEYS, STATEMENT_PAPER_SIZES, normalizeDocumentSettings } from '@/lib/documents/settings';
 
 const DEFAULT_KEYS = [
   'vat_percentage',
@@ -86,12 +86,22 @@ async function seedDefaultsIfEmpty(db) {
   }
 }
 
+/** Until the Printer page saves its own QR sheet wording, keep the wording set earlier in CRM. */
+async function withQrFallback(db, stored, normalized) {
+  if (stored.qr_title) return normalized;
+  const crm = await db.get('SELECT qr_headline, qr_subtext, qr_footer FROM crm_settings WHERE id = 1').catch(() => null);
+  if (crm?.qr_headline) normalized.qr_title = crm.qr_headline;
+  if (crm?.qr_subtext && !stored.qr_instruction) normalized.qr_instruction = crm.qr_subtext;
+  if (crm?.qr_footer && !stored.qr_footer) normalized.qr_footer = crm.qr_footer;
+  return normalized;
+}
+
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('mode') || '';
-    await requireRole(request, db, mode === 'payment-qr' ? ['admin', 'cashier'] : 'admin');
+    await requireRole(request, db, mode === 'payment-qr' || mode === 'documents' ? ['admin', 'cashier'] : 'admin');
     await seedDefaultsIfEmpty(db);
 
     const settingsArray = await db.all('SELECT setting_key, setting_value FROM system_settings');
@@ -146,7 +156,22 @@ export async function GET(request) {
       });
     }
 
-    return NextResponse.json({ settings: normalizeDocumentSettings({ ...DOCUMENT_DEFAULTS, ...settings }) });
+    // Printed documents (credit statements, Review QR sheets) for Admin and Cashier: layout and
+    // wording plus the salon letterhead — no payment or bank details.
+    if (mode === 'documents') {
+      const documentKeys = Object.keys(DOCUMENT_DEFAULTS).filter((key) => key.startsWith('statement_') || key.startsWith('qr_'));
+      const normalized = await withQrFallback(db, settings, normalizeDocumentSettings({ ...DOCUMENT_DEFAULTS, ...settings }));
+      return NextResponse.json({
+        settings: {
+          salon_name: settings.salon_name || 'The Hair Cut', salon_address: settings.salon_address || '', salon_phone: settings.salon_phone || '',
+          salon_email: settings.salon_email || '', pan_number: settings.pan_number || '', vat_number: settings.vat_number || '',
+          calendar_system: normalized.calendar_system,
+          ...Object.fromEntries(documentKeys.map((key) => [key, normalized[key]])),
+        },
+      });
+    }
+
+    return NextResponse.json({ settings: await withQrFallback(db, settings, normalizeDocumentSettings({ ...DOCUMENT_DEFAULTS, ...settings })) });
   } catch (error) {
     console.error('Get settings error:', error);
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: error.status || 500 });
@@ -171,6 +196,18 @@ export async function PUT(request) {
       }
       if (key === 'receipt_paper_size' && !['58', '80'].includes(String(value))) {
         return NextResponse.json({ error: 'Receipt paper must be 58 mm or 80 mm' }, { status: 400 });
+      }
+      if (key === 'statement_paper_size' && !STATEMENT_PAPER_SIZES.includes(String(value))) {
+        return NextResponse.json({ error: 'Statement page must be A4, 80 mm or 58 mm' }, { status: 400 });
+      }
+      if (key === 'qr_sheet_size' && !QR_SHEET_SIZES.includes(String(value))) {
+        return NextResponse.json({ error: 'QR sheet must be A4, A5 or A6' }, { status: 400 });
+      }
+      if (key === 'qr_print_size_mm' && !QR_PRINT_SIZES.includes(String(value))) {
+        return NextResponse.json({ error: 'Choose a listed QR size' }, { status: 400 });
+      }
+      if ((key.startsWith('statement_') || key.startsWith('qr_')) && String(value ?? '').length > 200) {
+        return NextResponse.json({ error: 'Printed text must be 200 characters or fewer' }, { status: 400 });
       }
       if (key === 'advance_ceiling_percent' && value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0 || Number(value) > 100)) {
         return NextResponse.json({ error: 'Advance ceiling must be greater than 0 and no more than 100' }, { status: 400 });

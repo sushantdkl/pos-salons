@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Check, ChevronLeft, Gift, Loader2, Star, Ticket } from 'lucide-react';
+import { Check, ChevronLeft, ExternalLink, Gift, Loader2, Star, Ticket } from 'lucide-react';
 
 const GOLD = '#d7b56d';
 
@@ -73,6 +73,25 @@ function RewardCard({ program }) {
           : `${program.remaining} more paid visit${program.remaining === 1 ? '' : 's'} until your ${program.rewardLabel.replace(/^Free /i, 'FREE ')}.`}
       </p>
     </div>
+  );
+}
+
+/**
+ * "Review us on Google" — deliberately separate from the private feedback form and from rewards.
+ * It is shown to EVERY visitor in the same place whatever rating they give (no review gating),
+ * and nothing is earned for it. Loyalty comes only from paid visits.
+ */
+function GoogleReviewCard({ url }) {
+  if (!url) return null;
+  return (
+    <section className="rounded-2xl border border-stone-800 bg-[#1f1b17] p-5 text-center">
+      <h2 className="text-lg font-semibold text-white">Review us on Google</h2>
+      <p className="mt-1 text-sm text-stone-400">Optional. Your honest review helps other people in Surkhet find us.</p>
+      <a href={url} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-600 text-sm font-semibold text-white hover:border-[#d7b56d]">
+        Open Google reviews <ExternalLink className="h-4 w-4" aria-hidden="true" />
+      </a>
+      <p className="mt-2 text-[11px] text-stone-500">No reward is given for Google reviews, and your rewards never depend on it.</p>
+    </section>
   );
 }
 
@@ -196,6 +215,7 @@ export default function ReviewRewardsPage() {
               </section>
             ) : null}
             {error ? <p role="alert" className="rounded-xl bg-rose-950/60 p-3 text-center text-sm text-rose-200">{error}</p> : null}
+            <GoogleReviewCard url={config.googleReviewUrl} />
           </div>
         ) : null}
 
@@ -270,6 +290,7 @@ export default function ReviewRewardsPage() {
               </section>
             ) : null}
             {error ? <p role="alert" className="rounded-xl bg-rose-950/60 p-3 text-center text-sm text-rose-200">{error}</p> : null}
+            <GoogleReviewCard url={config.googleReviewUrl} />
           </div>
         ) : null}
 
@@ -325,6 +346,7 @@ export default function ReviewRewardsPage() {
             <h1 className="text-2xl font-semibold text-white">Thank you for your feedback.</h1>
             <p className="text-sm text-stone-400">It goes straight to the salon team.</p>
             {config.rewardsEnabled && card?.programs?.length ? card.programs.map((program) => <RewardCard key={program.programId} program={program} />) : null}
+            <GoogleReviewCard url={config.googleReviewUrl} />
             {card ? <button type="button" onClick={() => { setStep('card'); setRating(0); setText(''); setAnswers({}); setConsent(false); }} className="text-sm text-stone-400 underline">Back to my card</button> : null}
           </div>
         ) : null}

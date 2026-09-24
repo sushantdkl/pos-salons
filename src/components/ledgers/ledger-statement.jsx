@@ -70,6 +70,7 @@ export function LedgerStatement({ kind, id, onClose, onChanged, calendarSystem =
       const billDates = new Map((data.bills || []).map((bill) => [String(bill.id), bill.createdAt]));
       view = {
         name: data.customer.name,
+        phone: data.customer.phone || '',
         subtitle: `Customer credit account${data.customer.phone ? ` · ${data.customer.phone}` : ''}`,
         owed: data.summary.creditOutstanding,
         openCount: data.summary.openBills,
@@ -90,6 +91,7 @@ export function LedgerStatement({ kind, id, onClose, onChanged, calendarSystem =
       const s = data.supplier;
       view = {
         name: s.name,
+        phone: s.phone || '',
         subtitle: `Supplier account${s.phone ? ` · ${s.phone}` : ''}${s.contactPerson ? ` · ${s.contactPerson}` : ''}`,
         owed: data.summary.outstanding,
         openCount: data.summary.openInvoices,
@@ -142,8 +144,8 @@ export function LedgerStatement({ kind, id, onClose, onChanged, calendarSystem =
                   <button type="button" onClick={() => setPrintMenu((open) => !open)} aria-expanded={printMenu} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Printer className="h-4 w-4" />Print statement<ChevronDown className="h-3.5 w-3.5" /></button>
                   {printMenu ? (
                     <div className="absolute left-0 top-full z-10 mt-1 w-60 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg" role="menu">
-                      <button type="button" role="menuitem" onClick={() => { setPrintMenu(false); printStatement(view, 'all', fmtDate); }} className="block w-full px-4 py-2.5 text-left text-sm text-stone-700 hover:bg-stone-50">All transactions (paid &amp; due)</button>
-                      <button type="button" role="menuitem" onClick={() => { setPrintMenu(false); printStatement(view, 'due', fmtDate); }} className="block w-full px-4 py-2.5 text-left text-sm text-stone-700 hover:bg-stone-50">Only what&apos;s due</button>
+                      <button type="button" role="menuitem" onClick={() => { setPrintMenu(false); printStatement(view, 'all', fmtDate, kind); }} className="block w-full px-4 py-2.5 text-left text-sm text-stone-700 hover:bg-stone-50">All transactions (paid &amp; due)</button>
+                      <button type="button" role="menuitem" onClick={() => { setPrintMenu(false); printStatement(view, 'due', fmtDate, kind); }} className="block w-full px-4 py-2.5 text-left text-sm text-stone-700 hover:bg-stone-50">Only what&apos;s due</button>
                     </div>
                   ) : null}
                 </div>

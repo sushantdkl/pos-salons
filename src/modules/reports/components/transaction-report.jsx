@@ -79,6 +79,12 @@ export default function TransactionReport({ basePath, backPath, title }) {
     load();
   }, [load]);
 
+  // Bill cancelled / payment method changed from the bill drawer: reload the list and totals.
+  useEffect(() => {
+    window.addEventListener('salon:bill-changed', load);
+    return () => window.removeEventListener('salon:bill-changed', load);
+  }, [load]);
+
   const changePeriod = (next) => {
     setPeriod(next);
     // Non-custom periods drop any lingering custom dates from the URL.

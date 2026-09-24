@@ -7,6 +7,7 @@ import { getCrmSettings, listPrograms } from '@/lib/loyalty/service';
 import { claimVisit, joinRewards, lookupRewards } from '@/lib/loyalty/public';
 import { publicForm, submitReview } from '@/lib/reviews/service';
 import { normalizePhone } from '@/lib/validation/phone';
+import { readSeoSettings } from '@/modules/public-site/services/seo';
 import { publicErrorMessage } from '@/lib/api/errors';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,7 @@ export async function GET(request) {
     await ensureSalonSchema();
     const settings = await getCrmSettings(db);
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+    const seo = await readSeoSettings(db);
     const programs = settings.publicRewardsEnabled ? (await listPrograms(db, { activeOn: today })).map((p) => ({ name: p.name, requiredVisits: p.requiredVisits, rewardLabel: p.rewardLabel })) : [];
     return NextResponse.json({
       rewardsEnabled: settings.publicRewardsEnabled,
@@ -42,6 +44,8 @@ export async function GET(request) {
       joinEnabled: settings.publicJoinEnabled && settings.publicRewardsEnabled,
       programs,
       form: settings.publicReviewsEnabled ? await publicForm(db) : null,
+      // Independent of rating, rewards and anything the visitor does on the page — shown the same to everyone.
+      googleReviewUrl: seo.googleReviewEnabled && seo.googleReviewUrl ? seo.googleReviewUrl : null,
     }, { headers: NO_STORE });
   } catch (error) {
     return fail(error, 'Unable to load this page.');

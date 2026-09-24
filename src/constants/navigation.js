@@ -10,7 +10,7 @@
 import {
   Award, BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, ClipboardPen, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle, MessageSquareHeart,
-  PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
+  PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText, SearchCheck,
   Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Ticket, Timer, TrendingUp, Truck, UserCheck, Users, Wallet, WalletCards, Warehouse,
 } from 'lucide-react';
 
@@ -120,8 +120,9 @@ const ADMIN_NAV = [
   ]),
   // Administration: main links, no System dropdown.
   link('Staff Permissions', '/admin/permissions', ShieldCheck, { separatorBefore: true }),
-  link('Website CMS', '/dashboard/admin/website', Globe),
-  link('Printer', '/admin/printer', Printer),
+  link('Website CMS', '/dashboard/admin/website', Globe, { exact: true }),
+  link('SEO & Local Search', '/dashboard/admin/website/seo', SearchCheck, { color: 'blue' }),
+  link('Printer & Documents', '/admin/printer', Printer),
   link('Settings', '/admin/settings', Settings),
 ];
 

@@ -10,10 +10,11 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Gift, Printer, ReceiptText, Star, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Ban, CheckCircle2, Gift, History, Printer, ReceiptText, Star, X } from 'lucide-react';
 import { money, StatusBadge } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
 import { buildCustomerReceiptHtml } from '@/lib/documents/customer-receipt';
+import { CancelBillPanel, ChangePaymentPanel, describeSplit } from '@/components/bills/bill-corrections';
 
 const METHOD = { cash: 'Cash', online: 'Online / QR', credit: 'Customer credit' };
 const PROVIDER = { ESEWA_PHONEPAY: 'eSewa / PhonePay', BANK: 'Bank QR' };
@@ -32,21 +33,36 @@ function Row({ label, value, strong = false, tone = '' }) {
   );
 }
 
-export function BillDetailDrawer({ billId, onClose }) {
+export function BillDetailDrawer({ billId, onClose, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [mode, setMode] = useState(''); // '' | 'payment' | 'void'
+  const [notice, setNotice] = useState('');
+  const [version, setVersion] = useState(0);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
     let alive = true;
-    setData(null);
     setError('');
     erpFetch(`/api/admin/billing/${billId}`).then((json) => { if (alive) setData(json); }).catch((err) => { if (alive) setError(err.message); });
+    return () => { alive = false; };
+  }, [billId, version]);
+
+  useEffect(() => {
     const onKey = (event) => { if (event.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
-    return () => { alive = false; window.removeEventListener('keydown', onKey); };
-  }, [billId]);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const corrected = (message) => {
+    setMode('');
+    setNotice(message);
+    setVersion((value) => value + 1);
+    onChanged?.();
+    // Other open screens (dashboards, reports) listen for this and refresh their figures.
+    window.dispatchEvent(new CustomEvent('salon:bill-changed', { detail: { billId } }));
+  };
 
   const reprint = () => {
     if (!data) return;
@@ -73,6 +89,9 @@ export function BillDetailDrawer({ billId, onClose }) {
 
   const b = data?.bill;
   const voided = b?.status === 'cancelled';
+  const voidEntry = data?.corrections.find((row) => row.type === 'void');
+  const methodChanges = data?.corrections.filter((row) => row.type === 'payment_method_change') || [];
+  const actions = data?.actions || {};
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal="true" aria-label="Bill details" onClick={onClose}>
       <aside className="flex h-full w-full max-w-lg flex-col bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -93,10 +112,11 @@ export function BillDetailDrawer({ billId, onClose }) {
           {!data && !error ? <p className="py-10 text-center text-sm text-stone-400">Loading…</p> : null}
           {b ? (
             <>
-              {voided && data.corrections.length ? (
+              {notice ? <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800"><CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />{notice}</p> : null}
+              {voided && voidEntry ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
-                  <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" aria-hidden="true" />Voided {when(data.corrections[0].at)}{data.corrections[0].by ? ` by ${data.corrections[0].by}` : ''}</p>
-                  <p className="mt-1">Reason: {data.corrections[0].reason}</p>
+                  <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" aria-hidden="true" />Cancelled {when(voidEntry.at)}{voidEntry.by ? ` by ${voidEntry.by}` : ''}</p>
+                  <p className="mt-1">Reason: {voidEntry.reason}</p>
                   {data.refunds.length ? <p className="mt-1 text-rose-800">Refunded {data.refunds.map((r) => `${money(r.amount)} ${METHOD[r.method] || r.method}`).join(' + ')}</p> : null}
                 </div>
               ) : null}
@@ -154,6 +174,23 @@ export function BillDetailDrawer({ billId, onClose }) {
                 ) : <p className="text-sm text-stone-500">Nothing collected — fully covered by {b.loyaltyDiscount > 0 ? 'a loyalty reward' : 'discount'}.</p>}
               </section>
 
+              {methodChanges.length ? (
+                <section>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"><History className="h-3.5 w-3.5" aria-hidden="true" />Payment method changes</p>
+                  <ul className="space-y-1.5">
+                    {methodChanges.map((row, index) => (
+                      <li key={index} className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs text-indigo-950">
+                        <p className="font-semibold">{describeSplit(row.before || [])} → {describeSplit(row.after || [])}</p>
+                        <p className="mt-0.5 text-indigo-900/80">“{row.reason}” · {row.by || 'staff'} · {when(row.at)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              {mode === 'payment' ? <ChangePaymentPanel billId={billId} actions={actions} payments={data.payments} onDone={corrected} onCancel={() => setMode('')} /> : null}
+              {mode === 'void' ? <CancelBillPanel billId={billId} bill={b} payments={data.payments} actions={actions} onDone={corrected} onCancel={() => setMode('')} /> : null}
+
               {data.loyalty.length || data.claimCode ? (
                 <section className="rounded-xl border border-pink-200 bg-pink-50/60 p-3 text-sm">
                   <p className="flex items-center gap-2 font-semibold text-pink-900"><Gift className="h-4 w-4" aria-hidden="true" />Loyalty</p>
@@ -177,9 +214,12 @@ export function BillDetailDrawer({ billId, onClose }) {
           ) : null}
         </div>
         {b ? (
-          <footer className="flex justify-end gap-2 border-t border-stone-200 px-5 py-3">
+          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
+            {!voided && actions.canChangePayment && mode !== 'payment' ? <button type="button" onClick={() => { setMode('payment'); setNotice(''); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"><ArrowRightLeft className="h-4 w-4" />Change payment</button> : null}
+            {!voided && actions.canVoid && mode !== 'void' ? <button type="button" onClick={() => { setMode('void'); setNotice(''); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-rose-200 bg-white px-3.5 text-sm font-semibold text-rose-700 hover:bg-rose-50"><Ban className="h-4 w-4" />Cancel bill</button> : null}
+            <span className="hidden flex-1 sm:block" />
             <button type="button" onClick={reprint} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Printer className="h-4 w-4" />Reprint receipt</button>
-            <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center rounded-lg bg-stone-900 px-4 text-sm font-semibold text-white hover:bg-stone-800">Close</button>
+            <button type="button" onClick={onClose} className="hidden min-h-10 items-center rounded-lg bg-stone-900 px-4 text-sm font-semibold text-white hover:bg-stone-800 sm:inline-flex">Close</button>
           </footer>
         ) : null}
       </aside>

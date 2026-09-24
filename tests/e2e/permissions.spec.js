@@ -35,7 +35,7 @@ test('Admin can inspect responsive salon role permissions and history', async ({
     await page.goto('/admin/permissions');
     await expect(page.getByRole('heading', { name: 'Staff permissions' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Cashier/i })).toBeVisible();
-    await expect(page.getByText('Mandatory cashier restriction').first()).toBeVisible();
+    await expect(page.getByTitle('Mandatory cashier restriction').first()).toBeVisible();
     await page.screenshot({ path: `test-results/permissions-${viewport.name}.png`, fullPage: true });
     await page.getByRole('button', { name: /Change history/i }).click();
     await expect(page.getByRole('heading', { name: 'Permission change history' })).toBeVisible();

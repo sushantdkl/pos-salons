@@ -29,7 +29,7 @@ export async function CustomerReviews() {
           </figure>
         ))}
       </div>
-      <p className="mt-8 text-center text-sm"><Link href="/review" className="font-semibold text-[#9b742d] underline-offset-4 hover:underline">Visited us? Leave a review</Link></p>
+      <p className="mt-8 text-center text-sm"><Link href="/review" className="font-semibold text-[#8a6727] underline-offset-4 hover:underline">Visited us? Leave a review</Link></p>
     </Section>
   );
 }

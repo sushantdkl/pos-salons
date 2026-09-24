@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  CheckCircle2, MessageCircle, Minus, Plus, Printer, QrCode, Receipt, Search, Sparkles, Trash2, User, UserPlus, Wallet, X, Ticket
+  CheckCircle2, MessageCircle, Minus, Plus, Printer, QrCode, Receipt, Scissors, Search, Sparkles, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { buildCustomerReceiptHtml } from '@/lib/documents/customer-receipt';
@@ -504,27 +504,30 @@ function BillingContent() {
 
   return (
     <>
-      <header className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-950">Salon Billing</h1>
-            <p className="text-sm text-gray-600">Add items, assign staff, and complete payment.</p>
+      <header className="border-b border-[#ECE4D8] bg-white px-4 py-5 sm:px-6">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#171E2D] text-[#E9C77B]"><Scissors className="h-5 w-5" /></span>
+            <div>
+              <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-stone-950">Salon Billing</h1>
+              <p className="text-sm text-stone-500">Add services, assign the stylist, and take payment.</p>
+            </div>
           </div>
           {cartCount > 0 ? (
-            <span className="inline-flex w-fit items-center rounded-full bg-gray-900 px-3 py-1 text-sm font-semibold text-white">
-              {cartCount} item{cartCount === 1 ? '' : 's'} in cart
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#E6DDCF] bg-[#FBF7EF] px-3 py-1.5 text-sm font-bold text-[#6B5321]">
+              <Receipt className="h-4 w-4" />{cartCount} item{cartCount === 1 ? '' : 's'} · {formatCurrency(total)}
             </span>
           ) : null}
         </div>
       </header>
 
-      <div className="bg-gray-50 p-4 sm:p-6">
-        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[1fr_400px]">
+      <div className="bg-[#F7F5F2] p-4 sm:p-6">
+        <div className="mx-auto grid max-w-[1440px] gap-5 xl:grid-cols-[minmax(0,1fr)_440px] 2xl:grid-cols-[minmax(0,1fr)_480px]">
           <div className="space-y-5">
             {/* Customer */}
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-[20px] border border-[#ECE4D8] bg-white p-5 shadow-[0_2px_10px_rgba(34,28,20,0.04)] sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-base font-semibold text-gray-950">Customer</h2>
+                <h2 className="flex items-center gap-2 text-base font-extrabold text-stone-900"><User className="h-4 w-4 text-[#8A6A2F]" />Customer</h2>
                 {!isWalkIn ? (
                   <button
                     type="button"
@@ -625,15 +628,15 @@ function BillingContent() {
             </section>
 
             {/* Catalog */}
-            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 p-4">
+            <section className="rounded-[20px] border border-[#ECE4D8] bg-white shadow-[0_2px_10px_rgba(34,28,20,0.04)]">
+              <div className="border-b border-[#F0EBE3] p-4 sm:p-5">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Search services or products…"
-                    className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-gray-900"
+                    className="min-h-12 w-full rounded-xl border border-stone-300 bg-stone-50/60 py-2.5 pl-10 pr-4 text-[15px] text-gray-950 outline-none transition focus:border-stone-500 focus:bg-white focus:ring-2 focus:ring-stone-900/10"
                   />
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -645,10 +648,10 @@ function BillingContent() {
                       key={tab}
                       type="button"
                       onClick={() => setCatalogTab(tab)}
-                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                      className={`min-h-10 rounded-xl px-4 text-sm font-bold transition ${
                         catalogTab === tab
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-[#171E2D] text-white shadow-sm'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                       }`}
                     >
                       {label}
@@ -657,25 +660,25 @@ function BillingContent() {
                 </div>
               </div>
 
-              <div className="max-h-[52vh] overflow-y-auto p-4">
+              <div className="max-h-[56vh] overflow-y-auto p-4 sm:p-5">
                 {catalogTab === 'services' ? (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
                     {filteredServices.map((service) => (
                       <button
                         key={service.id}
                         type="button"
                         onClick={() => addService(service)}
-                        className="rounded-lg border border-gray-200 p-3 text-left transition hover:border-gray-900 hover:bg-gray-50"
+                        className="group min-h-[76px] rounded-2xl border border-stone-200 bg-white p-3.5 text-left transition hover:-translate-y-px hover:border-[#B08D4A] hover:shadow-[0_6px_16px_rgba(34,28,20,0.08)] active:translate-y-0"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-950">{service.name}</p>
+                            <p className="font-bold leading-snug text-stone-900">{service.name}</p>
                             <p className="mt-0.5 text-xs text-gray-500">
                               {service.category} · {service.duration_minutes} min
                               {service.is_package ? ' · Package' : ''}
                             </p>
                           </div>
-                          <span className="shrink-0 text-sm font-semibold text-gray-950">{formatCurrency(service.price)}</span>
+                          <span className="shrink-0 rounded-lg bg-[#FBF7EF] px-2 py-1 text-sm font-extrabold tabular-nums text-[#6B5321] group-hover:bg-[#F4EDE0]">{formatCurrency(service.price)}</span>
                         </div>
                       </button>
                     ))}
@@ -684,23 +687,23 @@ function BillingContent() {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
                     {filteredProducts.map((product) => (
                       <button
                         key={product.id}
                         type="button"
                         disabled={product.current_stock <= 0}
                         onClick={() => addProduct(product)}
-                        className="rounded-lg border border-gray-200 p-3 text-left transition hover:border-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="group min-h-[76px] rounded-2xl border border-stone-200 bg-white p-3.5 text-left transition hover:-translate-y-px hover:border-[#B08D4A] hover:shadow-[0_6px_16px_rgba(34,28,20,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-950">{product.name}</p>
+                            <p className="font-bold leading-snug text-stone-900">{product.name}</p>
                             <p className="mt-0.5 text-xs text-gray-500">
                               {product.category} · Stock {product.current_stock}
                             </p>
                           </div>
-                          <span className="shrink-0 text-sm font-semibold text-gray-950">{formatCurrency(product.selling_price)}</span>
+                          <span className="shrink-0 rounded-lg bg-sky-50 px-2 py-1 text-sm font-extrabold tabular-nums text-sky-800">{formatCurrency(product.selling_price)}</span>
                         </div>
                       </button>
                     ))}
@@ -715,71 +718,88 @@ function BillingContent() {
 
           {/* Current order */}
           <aside className="h-fit xl:sticky xl:top-4">
-            <div className="flex max-h-[calc(100vh-2rem)] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-gradient-to-r from-[#FBF7EF] to-white px-5 py-4">
-                <div className="min-w-0">
-                  <h2 className="flex items-center gap-2 text-lg font-extrabold text-stone-900"><Receipt className="h-5 w-5 text-[#9B742D]" />Current Order</h2>
-                  <p className="text-xs text-stone-500">{cartCount ? `${cartCount} item${cartCount === 1 ? '' : 's'} · ${isWalkIn ? 'Walk-in' : customer.name}` : 'Ready — pick a token or add services'}</p>
+            <div className="flex flex-col overflow-hidden rounded-[20px] xl:max-h-[calc(100vh-2rem)] xl:min-h-[600px] border border-[#E6DDCF] bg-white shadow-[0_14px_36px_rgba(34,28,20,0.10)]">
+              <div className="relative flex items-center justify-between gap-3 bg-[#171E2D] px-5 py-5 text-white">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#E9C77B]/15 text-[#E9C77B] ring-1 ring-[#E9C77B]/30"><Receipt className="h-5 w-5" /></span>
+                  <div className="min-w-0">
+                    <h2 className="whitespace-nowrap text-lg font-extrabold tracking-[-0.01em] sm:text-xl">Current Order</h2>
+                    <p className="truncate text-[13px] text-white/65">{cartCount ? `${isWalkIn ? 'Walk-in customer' : customer.name}${selectedToken ? ` · Token ${selectedToken.token_number}` : ''}` : 'Ready — pick a token or add services'}</p>
+                  </div>
                 </div>
-                {cartCount > 0 ? (
-                  <button type="button" onClick={clearCart} className="text-xs font-semibold text-rose-600 hover:text-rose-700">Clear all</button>
-                ) : null}
+                <div className="flex shrink-0 items-center gap-2">
+                  {cartCount > 0 ? <span className="rounded-full bg-[#E9C77B] px-2.5 py-1 text-xs font-extrabold text-[#171E2D]">{cartCount} item{cartCount === 1 ? '' : 's'}</span> : null}
+                  {cartCount > 0 ? (
+                    <button type="button" onClick={clearCart} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-white/10 hover:text-white">Clear all</button>
+                  ) : null}
+                </div>
+                <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-[#B08D4A] via-[#E9C77B] to-[#B08D4A]" />
               </div>
 
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-                  {cartServices.map((service) => (
-                    <div key={service.cart_id} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-950">{service.name}</p>
-                          <p className="text-sm text-gray-600">{formatCurrency(service.price)}</p>
+              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#FBF9F6] p-4">
+                  {cartServices.map((service, index) => (
+                    <div key={service.cart_id} className="rounded-2xl border border-[#ECE4D8] bg-white p-3.5 shadow-[0_1px_2px_rgba(34,28,20,0.04)]">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#F4EDE0] text-xs font-extrabold text-[#8A6A2F]">{index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[15px] font-bold leading-snug text-stone-900">{service.name}</p>
+                          <p className="text-xs font-medium uppercase tracking-[0.06em] text-stone-400">Service</p>
                         </div>
+                        <p className="shrink-0 text-[15px] font-extrabold tabular-nums text-stone-900">{formatCurrency(service.price)}</p>
                         <button
                           type="button"
                           aria-label={`Remove ${service.name}`}
                           onClick={() => setCartServices((items) => items.filter((item) => item.cart_id !== service.cart_id))}
-                          className="shrink-0 p-1 text-red-600 hover:text-red-700"
+                          className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-stone-400 transition hover:bg-rose-50 hover:text-rose-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <select
-                        value={service.staff_id || ''}
-                        onChange={(event) => setCartServices((items) => items.map((item) => (
-                          item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item
-                        )))}
-                        className={`mt-2 w-full rounded-lg border px-2.5 py-2 text-sm text-gray-950 ${
-                          service.staff_id ? 'border-gray-300' : 'border-amber-300 bg-amber-50'
-                        }`}
-                      >
-                        <option value="">Assign staff *</option>
-                        {staffForService(service).map((employee) => (
-                          <option key={employee.id} value={employee.id}>
-                            {employee.full_name} ({employee.salon_role})
-                          </option>
-                        ))}
-                        {staffForService(service).length === 0 ? (
-                          <option value="" disabled>No active service staff available</option>
-                        ) : null}
-                      </select>
+                      <label className={`mt-3 flex items-center gap-2 rounded-xl border px-3 ${service.staff_id ? 'border-stone-200 bg-stone-50' : 'border-amber-300 bg-amber-50'}`}>
+                        <Scissors className={`h-4 w-4 shrink-0 ${service.staff_id ? 'text-[#8A6A2F]' : 'text-amber-600'}`} aria-hidden="true" />
+                        <select
+                          value={service.staff_id || ''}
+                          aria-label={`Staff for ${service.name}`}
+                          onChange={(event) => setCartServices((items) => items.map((item) => (
+                            item.cart_id === service.cart_id ? { ...item, staff_id: event.target.value } : item
+                          )))}
+                          className="min-h-11 w-full min-w-0 bg-transparent text-sm font-semibold text-stone-900 outline-none"
+                        >
+                          <option value="">Assign staff *</option>
+                          {staffForService(service).map((employee) => (
+                            <option key={employee.id} value={employee.id}>
+                              {employee.full_name} ({employee.salon_role})
+                            </option>
+                          ))}
+                          {staffForService(service).length === 0 ? (
+                            <option value="" disabled>No active service staff available</option>
+                          ) : null}
+                        </select>
+                      </label>
                     </div>
                   ))}
 
-                  {cartProducts.map((product) => (
-                    <div key={product.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-950">{product.name}</p>
-                        <p className="text-sm text-gray-600">{formatCurrency(product.selling_price)} each</p>
+                  {cartProducts.map((product, index) => (
+                    <div key={product.id} className="rounded-2xl border border-[#ECE4D8] bg-white p-3.5 shadow-[0_1px_2px_rgba(34,28,20,0.04)]">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sky-50 text-xs font-extrabold text-sky-700">{cartServices.length + index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[15px] font-bold leading-snug text-stone-900">{product.name}</p>
+                          <p className="text-xs text-stone-500">{formatCurrency(product.selling_price)} each</p>
+                        </div>
+                        <p className="shrink-0 text-[15px] font-extrabold tabular-nums text-stone-900">{formatCurrency(Number(product.selling_price) * Number(product.quantity))}</p>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => updateProductQty(product.id, -1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50">
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-6 text-center text-sm font-semibold">{product.quantity}</span>
-                        <button type="button" onClick={() => updateProductQty(product.id, 1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50">
-                          <Plus className="h-4 w-4" />
-                        </button>
-                        <button type="button" aria-label={`Remove ${product.name}`} onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="p-1 text-red-600">
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 p-0.5">
+                          <button type="button" aria-label={`One less ${product.name}`} onClick={() => updateProductQty(product.id, -1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-stone-700 hover:bg-white">
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center text-sm font-extrabold tabular-nums">{product.quantity}</span>
+                          <button type="button" aria-label={`One more ${product.name}`} onClick={() => updateProductQty(product.id, 1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-stone-700 hover:bg-white">
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <button type="button" aria-label={`Remove ${product.name}`} onClick={() => setCartProducts((items) => items.filter((item) => item.id !== product.id))} className="rounded-lg p-2 text-stone-400 transition hover:bg-rose-50 hover:text-rose-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -787,39 +807,42 @@ function BillingContent() {
                   ))}
 
                   {cartCount === 0 ? (
-                    <div className="flex h-full min-h-[220px] flex-col items-center justify-center text-center text-stone-400">
-                      <Receipt className="mb-2 h-9 w-9 text-stone-300" />
-                      <p className="text-sm font-semibold text-stone-500">Order is empty</p>
-                      <p className="text-xs">Tap a service or product to add it here.</p>
+                    <div className="flex h-full min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed xl:min-h-[260px] border-[#E3D9CA] bg-white/60 text-center text-stone-400">
+                      <span className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-[#F4EDE0] text-[#B08D4A]"><Receipt className="h-7 w-7" /></span>
+                      <p className="text-[15px] font-bold text-stone-600">Order is empty</p>
+                      <p className="mt-0.5 text-sm">Tap a service or product to add it here.</p>
                     </div>
                   ) : null}
               </div>
 
-              <div className="space-y-3 border-t border-stone-100 bg-[#FCFAF6] p-4">
+              <div className="space-y-3 border-t border-[#ECE4D8] bg-white p-4">
                 {error && !payOpen ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-700">{error}</div>
                 ) : null}
-                <div className="space-y-1.5 rounded-xl border border-stone-200 bg-white p-3 text-sm">
-                  <div className="flex justify-between text-stone-600"><span>Subtotal</span><span className="font-semibold text-stone-900">{formatCurrency(subtotal)}</span></div>
-                  {safeDiscount > 0 ? <div className="flex justify-between text-rose-600"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div> : null}
-                  {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward</span><span>-{formatCurrency(rewardDiscount)}</span></div> : null}
-                  {tax > 0 ? <div className="flex justify-between text-stone-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div> : null}
-                  <div className="flex justify-between border-t border-stone-100 pt-2 text-lg font-extrabold text-stone-900"><span>Total</span><span className="text-emerald-700">{formatCurrency(total)}</span></div>
+                <div className="space-y-2 rounded-2xl bg-[#FBF9F6] p-4 text-sm ring-1 ring-[#ECE4D8]">
+                  <div className="flex justify-between text-stone-600"><span>Subtotal</span><span className="font-semibold tabular-nums text-stone-900">{formatCurrency(subtotal)}</span></div>
+                  {safeDiscount > 0 ? <div className="flex justify-between text-rose-600"><span>Discount</span><span className="tabular-nums">-{formatCurrency(safeDiscount)}</span></div> : null}
+                  {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward</span><span className="tabular-nums">-{formatCurrency(rewardDiscount)}</span></div> : null}
+                  {tax > 0 ? <div className="flex justify-between text-stone-600"><span>Tax</span><span className="tabular-nums">{formatCurrency(tax)}</span></div> : null}
+                  <div className="flex items-end justify-between border-t border-dashed border-[#DCCFBC] pt-3">
+                    <span className="text-base font-extrabold text-stone-900">Total</span>
+                    <span className="text-[28px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-emerald-700">{formatCurrency(total)}</span>
+                  </div>
                 </div>
                 {loyalty.programs.some((program) => program.available > 0) ? (
-                  <p className="rounded-lg bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-800">This customer has a loyalty reward ready — apply it in Bill Payment.</p>
+                  <p className="rounded-xl bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-800">This customer has a loyalty reward ready — apply it in Bill Payment.</p>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => { setError(''); setPayOpen(true); }}
                   disabled={cartCount === 0 || processingBill}
-                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-700/40"
+                  className="inline-flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-emerald-700 px-4 text-base font-extrabold text-white shadow-[0_10px_22px_rgba(4,120,87,0.25)] transition hover:bg-emerald-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-emerald-700/40 disabled:shadow-none"
                 >
-                  <Wallet className="h-4 w-4" />
-                  Bill Payment{cartCount ? ` · ${formatCurrency(total)}` : ''}
+                  <Wallet className="h-5 w-5" />
+                  Bill Payment{cartCount ? <span className="tabular-nums"> · {formatCurrency(total)}</span> : null}
                 </button>
                 {lastBill && !successBill ? (
-                  <button type="button" onClick={sendDigitalReceipt} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-sm font-semibold text-stone-700 hover:bg-stone-50">
+                  <button type="button" onClick={sendDigitalReceipt} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-sm font-semibold text-stone-700 hover:bg-stone-50">
                     <MessageCircle className="h-4 w-4" />Send last receipt on WhatsApp
                   </button>
                 ) : null}
@@ -828,7 +851,7 @@ function BillingContent() {
           </aside>
 
           {payOpen ? (
-            <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Bill payment" onClick={() => !processingBill && setPayOpen(false)}>
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Bill payment" onClick={() => { if (!processingBill) { setPayOpen(false); setError(''); } }}>
               <div className="flex max-h-[96vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
                 <div className="flex items-center justify-between gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-white px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -838,7 +861,7 @@ function BillingContent() {
                       <p className="text-xs text-stone-500">Choose customer and collect payment</p>
                     </div>
                   </div>
-                  <button type="button" onClick={() => setPayOpen(false)} disabled={processingBill} aria-label="Close" className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700"><X className="h-5 w-5" /></button>
+                  <button type="button" onClick={() => { setPayOpen(false); setError(''); }} disabled={processingBill} aria-label="Close" className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700"><X className="h-5 w-5" /></button>
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -941,7 +964,7 @@ function BillingContent() {
                   {paymentMethod === 'online' ? (
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
                       <p className="mb-2 text-sm font-semibold text-blue-950">Show QR to customer</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
                         <label className="text-xs font-semibold text-blue-950 sm:col-span-2">
                           QR Type
                           <select
@@ -1059,7 +1082,7 @@ function BillingContent() {
                 </div>
 
                 <div className="grid grid-cols-[1fr_1.4fr] gap-2 border-t border-stone-100 px-5 py-4">
-                  <button type="button" onClick={() => setPayOpen(false)} disabled={processingBill} className="min-h-12 rounded-xl border border-stone-300 bg-white text-sm font-bold text-stone-700 hover:bg-stone-50">Cancel</button>
+                  <button type="button" onClick={() => { setPayOpen(false); setError(''); }} disabled={processingBill} className="min-h-12 rounded-xl border border-stone-300 bg-white text-sm font-bold text-stone-700 hover:bg-stone-50">Cancel</button>
                   <button type="button" onClick={completeBill} disabled={cartCount === 0 || processingBill} className="min-h-12 rounded-xl bg-emerald-700 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
                     {processingBill ? 'Completing…' : `Pay ${formatCurrency(total)}`}
                   </button>

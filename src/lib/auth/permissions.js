@@ -6,6 +6,7 @@ export const PERMISSIONS = Object.freeze({
   BILLING_CREDIT_CREATE: 'billing.credit.create',
   BILLING_CREDIT_OVERRIDE: 'billing.credit.override',
   BILLING_CORRECT: 'billing.correct',
+  BILLING_PAYMENT_METHOD_CHANGE: 'billing.payment_method.change',
   REPORTS_VIEW: 'reports.view',
   PAYROLL_VIEW: 'payroll.view',
   ADVANCES_CREATE: 'payroll.advances.create',

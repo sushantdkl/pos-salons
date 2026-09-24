@@ -156,7 +156,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
           </div>
 
           <div className="min-w-0">
-            <SectionHeading title="Recent bills" />
+            <SectionHeading title="Recent bills" note="Tap a bill to reprint it, fix its payment method or cancel it — a reason is always required." />
             <FinancialTable
               caption="Recent bills"
               rows={data.recentBills || []}
@@ -166,7 +166,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
                 { key: 'bill_number', label: 'Bill', render: (bill) => <BillLink billId={bill.id} number={bill.bill_number} /> },
                 { key: 'time', label: 'Time', render: (bill) => timeLabel(bill.transaction_date) },
                 { key: 'customer_name', label: 'Customer', render: (bill) => bill.customer_name || 'Walk-in' },
-                { key: 'payment_method', label: 'Paid by', render: (bill) => <span className="capitalize">{bill.payment_method}</span> },
+                { key: 'payment_method', label: 'Paid by', render: (bill) => ({ cash: 'Cash', online: 'Online / QR', credit: 'Credit', split: 'Split' }[bill.payment_method] || bill.payment_method) },
                 { key: 'status', label: 'Status', render: (bill) => <StatusBadge status={String(bill.status).toLowerCase() === 'cancelled' ? 'CANCELLED' : 'PAID'} /> },
                 { key: 'grand_total', label: 'Total', align: 'right', render: (bill) => money(bill.grand_total) },
               ]}

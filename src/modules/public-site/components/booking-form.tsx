@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { CalendarCheck2, Loader2, MessageCircle } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
@@ -51,11 +51,14 @@ export function BookingForm({
   services,
   packages,
   staff,
+  layout = {},
 }: {
   info: BookingInfo;
   services: PublicService[];
   packages: PublicPackage[];
   staff: PublicStaffMember[];
+  /** Footer/nav extras for the shared public layout (service links, directions). */
+  layout?: Omit<ComponentProps<typeof PublicLayout>, 'children' | 'info'>;
 }) {
   const [options, setOptions] = useState<Options | null>(null);
   const [serviceIds, setServiceIds] = useState<number[]>([]);
@@ -157,7 +160,7 @@ export function BookingForm({
   const legacyServices = useMemo(() => [...services.map((service) => service.name), ...packages.map((item) => item.name)], [services, packages]);
 
   return (
-    <PublicLayout info={info}>
+    <PublicLayout info={info} {...layout}>
       <main className="relative min-h-screen bg-salon-dark">
         <div className="absolute inset-0 h-full w-full">
           <Image src={info.assets.booking} alt={`Booking an appointment at ${info.name}`} fill sizes="100vw" className="object-cover opacity-50" priority />

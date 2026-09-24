@@ -14,6 +14,7 @@ import {
 } from '@/components/erp';
 import { erpFetch, useReport } from '@/components/erp/use-report';
 import { FIELD, LABEL, Modal } from '@/components/hrm/ui';
+import { buildReviewQrSheetHtml } from '@/lib/documents/review-qr-sheet';
 
 const TABS = [['overview', 'Overview'], ['responses', 'Responses'], ['published', 'Published'], ['forms', 'Feedback Forms'], ['qr', 'QR Codes'], ['settings', 'Settings']];
 const TONE = { PENDING: 'cash', PUBLISHED: 'inflow', PRIVATE: 'online', REJECTED: 'outflow', ARCHIVED: 'neutral' };
@@ -84,23 +85,16 @@ function ReviewsTable({ reviews, onOpen }) {
   );
 }
 
-function QrPanel({ settings }) {
-  const [format, setFormat] = useState('a4');
+function QrPanel() {
+  // Wording, sheet size and QR size come from Printer & Documents → Review QR sheets.
+  const documents = useReport('/api/admin/settings?mode=documents');
+  const sheet = documents.data?.settings;
   const print = () => {
-    const win = window.open('', '_blank');
+    if (!sheet) return;
+    const win = window.open('', '_blank', 'width=900,height=1100');
     if (!win) return;
-    const sizes = { a4: { qr: '120mm', head: '40px', page: 'A4' }, card: { qr: '60mm', head: '22px', page: 'A6' }, sticker: { qr: '32mm', head: '12px', page: '50mm 70mm' } }[format];
-    const esc = (value) => String(value || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    win.document.write(`<!doctype html><html><head><title>Review &amp; Rewards QR</title><style>
-      @page { size: ${sizes.page}; margin: 8mm; } body { font-family: Georgia, serif; text-align: center; color: #171411; margin: 0; }
-      h1 { font-size: ${sizes.head}; letter-spacing: .08em; margin: 0 0 .3em; } p { font-family: Arial, sans-serif; margin: .3em 0; }
-      img { width: ${sizes.qr}; height: ${sizes.qr}; margin: .6em auto; display: block; } .brand { font-size: .8em; letter-spacing: .3em; margin-top: .6em; }
-      .foot { font-weight: bold; } .url { font-size: .7em; color: #57534e; }
-    </style></head><body>
-      <p class="brand">THE HAIR CUT</p><h1>${esc(settings.qrHeadline)}</h1><p>${esc(settings.qrSubtext)}</p>
-      <img src="${window.location.origin}/api/public/qr" alt="QR code" onload="setTimeout(function(){window.print()},200)" />
-      ${settings.qrFooter ? `<p class="foot">${esc(settings.qrFooter)}</p>` : ''}<p class="url">${window.location.host}/review</p>
-    </body></html>`);
+    const origin = window.location.origin;
+    win.document.write(buildReviewQrSheetHtml(sheet, { qrSrc: `${origin}/api/public/qr`, reviewUrl: `${window.location.host}/review` }));
     win.document.close();
   };
   return (
@@ -112,18 +106,20 @@ function QrPanel({ settings }) {
       </div>
       <div className="space-y-3">
         <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Print copy (edit in Settings)</p>
-          <p className="mt-2 font-serif text-xl font-bold">{settings.qrHeadline}</p>
-          <p className="text-sm text-stone-600">{settings.qrSubtext}</p>
-          {settings.qrFooter ? <p className="mt-1 text-sm font-semibold">{settings.qrFooter}</p> : null}
+          <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Printed sheet</p>
+          {sheet ? (
+            <>
+              <p className="mt-2 font-serif text-xl font-bold">{sheet.qr_title}</p>
+              {sheet.qr_station_label ? <p className="text-sm font-bold uppercase tracking-wide text-stone-700">{sheet.qr_station_label}</p> : null}
+              <p className="text-sm text-stone-600">{sheet.qr_instruction}</p>
+              {sheet.qr_footer ? <p className="mt-1 text-sm font-semibold">{sheet.qr_footer}</p> : null}
+              <p className="mt-2 text-xs text-stone-500">{String(sheet.qr_sheet_size).toUpperCase()} sheet · {sheet.qr_print_size_mm} mm QR</p>
+            </>
+          ) : <p className="mt-2 text-sm text-stone-400">Loading…</p>}
+          <Link href="/admin/printer" className="mt-3 inline-flex text-sm font-semibold text-pink-700 hover:underline">Edit wording &amp; layout in Printer &amp; Documents →</Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" value={format} onChange={(event) => setFormat(event.target.value)} aria-label="Print size">
-            <option value="a4">A4 poster</option>
-            <option value="card">Counter card (A6)</option>
-            <option value="sticker">Small sticker</option>
-          </select>
-          <ErpButton icon={Printer} variant="primary" onClick={print}>Print</ErpButton>
+          <ErpButton icon={Printer} variant="primary" onClick={print} disabled={!sheet}>Print QR sheet</ErpButton>
           <a href="/api/public/qr?format=png&size=1200" download="review-rewards-qr.png" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Download className="h-4 w-4" />PNG</a>
           <a href="/api/public/qr" download="review-rewards-qr.svg" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Download className="h-4 w-4" />SVG</a>
           <a href="/review" target="_blank" rel="noreferrer" className="text-sm font-semibold text-pink-700 hover:underline">Open the customer page</a>
@@ -160,9 +156,7 @@ function SettingsPanel({ settings, onSaved }) {
         <label className={LABEL}>Code valid (days)<input type="number" min="1" max="60" className={FIELD} value={form.claimCodeValidDays} onChange={(event) => set('claimCodeValidDays', event.target.value)} /></label>
         <label className={LABEL}>Low-rating alert at ≤<select className={FIELD} value={form.lowRatingThreshold} onChange={(event) => set('lowRatingThreshold', event.target.value)}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}★</option>)}</select></label>
       </div>
-      <label className={LABEL}>QR headline<input className={FIELD} value={form.qrHeadline} onChange={(event) => set('qrHeadline', event.target.value)} /></label>
-      <label className={LABEL}>QR line<input className={FIELD} value={form.qrSubtext} onChange={(event) => set('qrSubtext', event.target.value)} /></label>
-      <label className={LABEL}>QR footer<input className={FIELD} value={form.qrFooter} onChange={(event) => set('qrFooter', event.target.value)} /></label>
+      <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600">The printed QR sheet&apos;s headline, instruction and footer are set in <Link href="/admin/printer" className="font-semibold text-pink-700 hover:underline">Printer &amp; Documents → Review QR sheets</Link>.</p>
       <p className="text-xs text-stone-500">Using the QR, reviewing or checking rewards never signs anyone up for marketing messages.</p>
       {error ? <AlertBanner tone="outflow">{error}</AlertBanner> : null}
       {message ? <AlertBanner tone="inflow">{message}</AlertBanner> : null}
@@ -178,7 +172,7 @@ export default function CustomerReviewsPage() {
   const overview = useReport('/api/crm/reviews');
   const responses = useReport(`/api/crm/reviews?view=responses${status !== 'ALL' ? `&status=${status}` : ''}`, { enabled: tab === 'responses' });
   const published = useReport('/api/crm/reviews?view=responses&status=PUBLISHED', { enabled: tab === 'published' });
-  const settings = useReport('/api/crm/reviews?view=settings', { enabled: tab === 'qr' || tab === 'settings' });
+  const settings = useReport('/api/crm/reviews?view=settings', { enabled: tab === 'settings' });
   useEffect(() => { const wanted = new URLSearchParams(window.location.search).get('tab'); if (wanted) setTab(wanted); }, []);
   const refresh = () => { setOpen(null); overview.reload(); responses.reload(); published.reload(); };
   const o = overview.data;
@@ -269,7 +263,7 @@ export default function CustomerReviewsPage() {
           </>
         ) : null}
 
-        {tab === 'qr' ? (settings.data ? <QrPanel settings={settings.data.settings} /> : <LoadingState />) : null}
+        {tab === 'qr' ? <QrPanel /> : null}
         {tab === 'settings' ? (settings.data ? <SettingsPanel settings={settings.data.settings} onSaved={settings.reload} /> : <LoadingState />) : null}
       </div>
       {open ? <ReviewDetail review={open} onClose={() => setOpen(null)} onChanged={refresh} /> : null}

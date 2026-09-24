@@ -12,7 +12,8 @@ export const PERMISSION_GROUPS = [
       { key: 'billing.create', label: 'Create bills', description: 'Finalize salon service and product invoices.' },
       { key: 'billing.credit.create', label: 'Issue and collect customer credit', description: 'Use customer credit within the configured limit and record collections.' },
       { key: 'billing.credit.override', label: 'Override customer credit limits', description: 'Exceed a customer limit with a recorded reason. Admin-sensitive.' },
-      { key: 'billing.correct', label: 'Correct settled bills', description: 'Void a paid bill through an immutable correction and refund record.' },
+      { key: 'billing.payment_method.change', label: 'Change payment method', description: 'Fix a wrong cash / online choice on a bill from the open session. A reason is required and kept.' },
+      { key: 'billing.correct', label: 'Cancel (void) settled bills', description: 'Void a paid bill through an immutable correction and refund record. A reason is required.' },
     ],
   },
   {
@@ -99,7 +100,7 @@ export const PERMISSION_MODULE = Object.fromEntries(PERMISSION_GROUPS.flatMap((g
 export const ALL_PERMISSION_KEYS = [...MODULE_KEYS, ...PERMISSION_KEYS];
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request',
+  cashier: ['billing.create', 'billing.credit.create', 'billing.payment_method.change', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request',
     'tokens.manage', 'appointments.manage', 'customers.manage', 'expenses.daily', 'savings.deposit', 'stock.manage'],
   barber: ['leave.request'], stylist: ['leave.request'], beautician: ['leave.request'],
 };
