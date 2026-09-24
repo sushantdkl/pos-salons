@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { logAction } from '@/lib/db/helpers';
 import { mapApiError } from '@/lib/db/api-errors';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
@@ -200,7 +201,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SAVINGS_DEPOSIT);
     const { searchParams } = new URL(request.url);
 
     // A cashier sees only the deposits they recorded; an admin sees everything.
@@ -238,7 +239,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SAVINGS_DEPOSIT);
     const data = await request.json();
     const input = validateDepositInput(data);
     const { sessionId, businessDayId } = await requireOpenSession(db);

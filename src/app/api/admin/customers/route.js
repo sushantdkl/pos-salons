@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { isUniqueViolation, publicErrorMessage } from '@/lib/api/errors';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
@@ -101,7 +102,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const data = await request.json();
     const validationError = validateCustomer(data);
     if (validationError) {
@@ -153,7 +154,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     const validationError = validateCustomer(data);
@@ -208,7 +209,7 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });

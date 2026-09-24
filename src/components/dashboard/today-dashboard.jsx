@@ -9,6 +9,7 @@
  */
 
 import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { AlertTriangle, ArrowRight, CalendarClock, LayoutDashboard, Store } from 'lucide-react';
 import StoreStatusBar from '@/components/store/store-status-bar';
 import {
@@ -159,7 +160,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
               rows={data.recentBills || []}
               empty="No bills yet today."
               columns={[
-                { key: 'bill_number', label: 'Bill', render: (bill) => <span className="font-semibold text-stone-900">{bill.bill_number}</span> },
+                { key: 'bill_number', label: 'Bill', render: (bill) => <BillLink billId={bill.id} number={bill.bill_number} /> },
                 { key: 'time', label: 'Time', render: (bill) => timeLabel(bill.transaction_date) },
                 { key: 'customer_name', label: 'Customer', render: (bill) => bill.customer_name || 'Walk-in' },
                 { key: 'payment_method', label: 'Paid by', render: (bill) => <span className="capitalize">{bill.payment_method}</span> },

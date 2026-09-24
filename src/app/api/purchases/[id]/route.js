@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { getPurchase, voidPurchase } from '@/lib/suppliers/service';
 import { supplierError } from '@/app/api/suppliers/_shared';
 
@@ -21,7 +22,7 @@ export async function GET(request, { params }) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     return NextResponse.json({ purchase: await getPurchase(db, purchaseId(await params)) });
   } catch (error) {
     return supplierError(error, 'Unable to load the purchase.');
@@ -33,7 +34,7 @@ export async function POST(request, { params }) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const data = await request.json();
     if (data.action !== 'void') return NextResponse.json({ error: 'Unknown purchase action' }, { status: 400 });
     const id = purchaseId(await params);

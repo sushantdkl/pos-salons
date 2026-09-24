@@ -6,6 +6,7 @@
  */
 
 import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, BadgeCheck, Download, MessageSquareHeart, Printer, RotateCcw, Star } from 'lucide-react';
 import {
@@ -53,7 +54,8 @@ function ReviewDetail({ review, onClose, onChanged }) {
         </dl>
       ) : null}
       <p className="text-xs text-stone-500">
-        {[review.customerName && `Customer: ${review.customerName}${review.customerPhone ? ` (${review.customerPhone})` : ''}`, review.serviceName && `Service: ${review.serviceName}`, review.staffName && `Staff: ${review.staffName}`, review.billNumber && `Bill ${review.billNumber}`].filter(Boolean).join(' · ')}
+        {[review.customerName && `Customer: ${review.customerName}${review.customerPhone ? ` (${review.customerPhone})` : ''}`, review.serviceName && `Service: ${review.serviceName}`, review.staffName && `Staff: ${review.staffName}`].filter(Boolean).join(' · ')}
+        {review.billId ? <> · Bill <BillLink billId={review.billId} number={review.billNumber} /></> : null}
       </p>
       {review.customerId ? <Link href={`/admin/customers/${review.customerId}`} className="text-xs font-semibold text-pink-700 hover:underline">Open customer profile</Link> : null}
       <label className={LABEL}>Internal note (required to reject or archive)<input className={FIELD} value={note} onChange={(event) => setNote(event.target.value)} /></label>

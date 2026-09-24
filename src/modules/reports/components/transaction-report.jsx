@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Download } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
@@ -228,7 +229,7 @@ export default function TransactionReport({ basePath, backPath, title }) {
                   pageTransactions.map((transaction) => (
                     <tr key={transaction.id} className="align-top hover:bg-gray-50">
                       <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">{formatDateTime(transaction.transactionDate)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900">{transaction.billNumber}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900"><BillLink billId={transaction.id} number={transaction.billNumber} /></td>
                       <td className="px-3 py-3 text-sm">
                         <div className="font-medium text-gray-900">{transaction.customerName}</div>
                         {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
@@ -330,7 +331,7 @@ export default function TransactionReport({ basePath, backPath, title }) {
         </div>
       </div>
 
-      <TransactionDetail transaction={selected} onClose={() => setSelected(null)} />
+      {selected?.id ? <BillDetailDrawer billId={selected.id} onClose={() => setSelected(null)} /> : <TransactionDetail transaction={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

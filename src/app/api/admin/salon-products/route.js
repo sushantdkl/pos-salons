@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 
 function validateProduct(data) {
@@ -50,7 +51,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.STOCK_MANAGE);
     const data = await request.json();
     const validationError = validateProduct(data);
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
@@ -86,7 +87,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.STOCK_MANAGE);
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
 
@@ -142,7 +143,7 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.STOCK_MANAGE);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });

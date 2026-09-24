@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useMemo, useState } from 'react';
 import { BookUser, Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
@@ -289,7 +290,7 @@ export default function AdminCustomers() {
               {selectedBills.map((bill) => (
                 <div key={bill.id} className="rounded-lg border border-gray-200 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-950">{bill.bill_number}</p>
+                    <p className="font-medium text-gray-950"><BillLink billId={bill.id} number={bill.bill_number} /></p>
                     <p className="font-semibold text-gray-950">{formatCurrency(bill.grand_total)}</p>
                   </div>
                   <p className="mt-1 text-sm text-gray-600">{new Date(bill.created_at).toLocaleString()} • {bill.payment_method}</p>

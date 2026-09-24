@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock, CalendarPlus, ChevronLeft, ChevronRight, Clock, ListPlus, Receipt, Search, Settings2, X,
@@ -412,7 +413,7 @@ function AppointmentDetail({ id, isAdmin, onClose, onChanged, onEdit, onWaitlist
           <StatusBadge status={appointment.status} label={meta.label} tone={meta.tone} />
           <span className="text-xs text-stone-500">Source: {appointment.source.toLowerCase().replace('_', ' ')}</span>
           {appointment.tokenNumber ? <span className="rounded-md bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-800">Token {appointment.tokenNumber}</span> : null}
-          {appointment.billNumber ? <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">Bill {appointment.billNumber} · {money(appointment.billTotal)}</span> : null}
+          {appointment.billNumber ? <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">Bill <BillLink billId={appointment.billId} number={appointment.billNumber} className="text-emerald-800" /> · {money(appointment.billTotal)}</span> : null}
         </div>
 
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useMemo, useState } from 'react';
 import { Award, Gift, Pencil, Plus, Search, SlidersHorizontal } from 'lucide-react';
 import {
@@ -193,7 +194,7 @@ export default function LoyaltyPage() {
               { key: 'program', label: 'Program', render: (row) => row.programName },
               { key: 'type', label: 'Type', render: (row) => (row.type === 'REVERSAL' ? `Reversal of ${TYPE_LABEL[row.reversedType]?.toLowerCase() || 'entry'}` : TYPE_LABEL[row.type]) },
               { key: 'visits', label: 'Visits', align: 'right', render: (row) => <span className={row.visits > 0 ? 'text-emerald-700' : 'text-rose-700'}>{row.visits > 0 ? `+${row.visits}` : row.visits}</span> },
-              { key: 'bill', label: 'Bill / service', render: (row) => [row.billNumber, row.itemName].filter(Boolean).join(' · ') || '—' },
+              { key: 'bill', label: 'Bill / service', render: (row) => (row.billId ? <span><BillLink billId={row.billId} number={row.billNumber} />{row.itemName ? ` · ${row.itemName}` : ''}</span> : row.itemName || '—') },
               { key: 'ba', label: 'Before → after', render: (row) => (row.balanceBefore !== null && row.balanceBefore !== undefined ? `${row.balanceBefore} → ${row.balanceAfter}` : '—') },
               { key: 'note', label: 'Note / by', render: (row) => [row.note, row.by].filter(Boolean).join(' · ') || row.source.toLowerCase() },
             ]} />

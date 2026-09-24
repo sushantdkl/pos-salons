@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { createAppointment, listAppointments } from '@/lib/appointments/service';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
@@ -36,7 +37,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, MANAGER_ROLES);
+    const user = await requireRoleWithPermission(request, db, MANAGER_ROLES, PERMISSIONS.APPOINTMENTS_MANAGE);
     const data = await request.json();
     const idempotencyKey = request.headers.get('idempotency-key') || data.idempotencyKey;
     const result = await createAppointment(db, user, { ...data, idempotencyKey });

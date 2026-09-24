@@ -73,6 +73,8 @@ export function canAccessPath(role, pathname) {
   // enforce the same pair server-side.
   if (pathname.startsWith('/store')) return ['admin', 'cashier'].includes(normalized);
 
+  // Suppliers & purchases can be delegated to the cashier in Staff Permissions (APIs enforce it).
+  if (pathname.startsWith('/admin/suppliers') || pathname.startsWith('/admin/purchases') || pathname.startsWith('/admin/supplier-ledger')) return ['admin', 'cashier'].includes(normalized);
   if (pathname.startsWith('/admin')) return normalized === 'admin';
 
   return true;

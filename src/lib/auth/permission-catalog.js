@@ -16,6 +16,28 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'frontdesk', label: 'Front desk & customers', description: 'Queue tokens, appointments and the customer list.',
+    permissions: [
+      { key: 'tokens.manage', label: 'Manage queue tokens', description: 'Issue, cancel and mark tokens no-show.' },
+      { key: 'appointments.manage', label: 'Manage appointments', description: 'Book, confirm, check in, reschedule and cancel appointments; manage the waitlist.' },
+      { key: 'customers.manage', label: 'Add and edit customers', description: 'Create, edit and delete customer records. (Picking a customer while billing needs only “Create bills”.)' },
+    ],
+  },
+  {
+    key: 'cash', label: 'Daily cash — expenses & savings', description: 'Money leaving the drawer during the day.',
+    permissions: [
+      { key: 'expenses.daily', label: 'Record daily expenses', description: 'Tea, water, cleaning and other petty expenses from the drawer.' },
+      { key: 'savings.deposit', label: 'Record savings deposits', description: 'Move cash or online money to a bank / sahakari deposit.' },
+    ],
+  },
+  {
+    key: 'inventory', label: 'Inventory & suppliers', description: 'Products, stock and buying from suppliers.',
+    permissions: [
+      { key: 'stock.manage', label: 'Manage products & stock', description: 'Add products and adjust stock. (Selling products needs only “Create bills”.)' },
+      { key: 'suppliers.manage', label: 'Suppliers & purchases', description: 'Suppliers, purchases received, supplier payments and the supplier ledger. Admin-sensitive.' },
+    ],
+  },
+  {
     key: 'reports', label: 'Reports', description: 'Salon reporting center and comparison tools.',
     permissions: [
       { key: 'reports.view', label: 'View operational reports', description: 'Open permitted sales, service, product, payment, credit, and expense reports.' },
@@ -77,7 +99,8 @@ export const PERMISSION_MODULE = Object.fromEntries(PERMISSION_GROUPS.flatMap((g
 export const ALL_PERMISSION_KEYS = [...MODULE_KEYS, ...PERMISSION_KEYS];
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request'],
+  cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request',
+    'tokens.manage', 'appointments.manage', 'customers.manage', 'expenses.daily', 'savings.deposit', 'stock.manage'],
   barber: ['leave.request'], stylist: ['leave.request'], beautician: ['leave.request'],
 };
 

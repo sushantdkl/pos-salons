@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { createPurchase, listPurchases } from '@/lib/suppliers/service';
 import { supplierError } from '@/app/api/suppliers/_shared';
 import { getDashboardPeriodMeta } from '@/lib/reports/dashboard-period';
@@ -12,7 +13,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const params = new URL(request.url).searchParams;
     // ?period=… (same vocabulary as every report) or explicit ?from&to.
     const range = params.get('period') ? getDashboardPeriodMeta(params.get('period'), params.get('startDate'), params.get('endDate')) : {};
@@ -29,7 +30,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const data = await request.json();
     const idempotencyKey = request.headers.get('idempotency-key') || data.idempotencyKey;
     const result = await createPurchase(db, user, { ...data, idempotencyKey });

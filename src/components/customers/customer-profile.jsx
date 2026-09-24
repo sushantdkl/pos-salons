@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AlertBanner, ErpButton, ErrorState, LoadingState, money, PrintHeader, StatusBadge } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import {
   CreditTimeline, formatDate, formatDateTime, PayStatus, ProfileStat, ProfileTable, ProfileTabs, TabActions,
 } from '@/components/profiles';
@@ -89,38 +90,6 @@ function CollectDialog({ customer, balance, onClose, onDone }) {
   );
 }
 
-function BillDrawer({ bill, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Bill detail">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-xl sm:rounded-2xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-stone-200 bg-white px-5 py-3">
-          <div>
-            <h2 className="text-base font-bold">Bill {bill.number}</h2>
-            <p className="text-xs text-stone-500">{formatDateTime(bill.createdAt)}{bill.cashier ? ` · billed by ${bill.cashier}` : ''}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="space-y-4 px-5 py-4">
-          {bill.status === 'cancelled' ? <AlertBanner tone="cash" title="Voided">{bill.voidReason || 'This bill was voided.'}</AlertBanner> : null}
-          <ProfileTable
-            empty="No lines"
-            align={{ 2: 'right', 3: 'right' }}
-            headers={['Item', 'Staff', 'Qty', 'Amount']}
-            rows={bill.items.map((item) => [`${item.name}${item.type === 'product' ? ' (product)' : ''}`, item.staff || '—', item.quantity, money(item.subtotal)])}
-          />
-          <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1 text-sm">
-            <dt className="text-stone-500">Discount</dt><dd className="text-right tabular-nums">− {money(bill.discount)}</dd>
-            <dt className="text-stone-500">Tax</dt><dd className="text-right tabular-nums">{money(bill.tax)}</dd>
-            <dt className="font-bold">Total</dt><dd className="text-right font-bold tabular-nums">{money(bill.total)}</dd>
-            <dt className="text-stone-500">Payment</dt><dd className="text-right capitalize">{String(bill.paymentMethod || '').toLowerCase()}</dd>
-            {bill.creditAmount > 0 ? (<><dt className="text-stone-500">On credit</dt><dd className="text-right tabular-nums">{money(bill.creditAmount)}</dd><dt className="text-stone-500">Still owed</dt><dd className="text-right font-semibold tabular-nums text-rose-700">{money(bill.creditOpen)}</dd></>) : null}
-          </dl>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function CustomerProfileView({ customerId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -139,7 +108,6 @@ export default function CustomerProfileView({ customerId }) {
   const { customer, summary, bills, services, ledger, payments, appointments, timeline, openInvoices } = data;
   const loyalty = data.loyalty || { programs: [], transactions: [] };
   const reviews = data.reviews || { items: [], total: 0, average: null, latest: null };
-  const openBill = billId ? bills.find((bill) => bill.id === billId) : null;
 
   const tabs = [
     { key: 'timeline', label: `Timeline (${timeline.length})`, icon: History },
@@ -272,7 +240,7 @@ export default function CustomerProfileView({ customerId }) {
             align={{ 3: 'right', 4: 'right', 5: 'right' }}
             headers={['When', 'Activity', 'Bill', 'Credit given (+)', 'Reduced (−)', 'Balance', 'Note']}
             rows={ledger.map((row) => [
-              formatDateTime(row.createdAt), row.title, row.billNumber || '—',
+              formatDateTime(row.createdAt), row.title, row.billId ? <BillLink key="bill" billId={row.billId} number={row.billNumber} /> : '—',
               row.debit ? money(row.debit) : '—', row.credit ? money(row.credit) : '—',
               <span key="b" className="font-semibold text-stone-900">{money(row.balance)}</span>, row.note || '—',
             ])}
@@ -340,7 +308,7 @@ export default function CustomerProfileView({ customerId }) {
           onDone={() => { setCollecting(false); setNotice('Credit collected. The ledger is updated.'); load(); }}
         />
       ) : null}
-      {openBill ? <BillDrawer bill={openBill} onClose={() => setBillId(null)} /> : null}
+      {billId ? <BillDetailDrawer billId={billId} onClose={() => setBillId(null)} /> : null}
     </div>
   );
 }

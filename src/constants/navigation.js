@@ -126,28 +126,31 @@ const CASHIER_NAV = [
   link('Dashboard', '/dashboard/cashier', LayoutDashboard, { exact: true }),
   link('POS', '/admin/billing', Store),
   link('Summary', '/cashier/executive-summary', ScrollText),
-  link('Customers', '/admin/customers', Contact),
+  link('Customers', '/admin/customers', Contact, { permission: 'customers.manage' }),
   link('Customer Ledger', '/admin/customer-ledger', BookUser),
   // Reports appear only when the owner grants them in Staff Permissions.
   group('reports', 'Reports', 'reports', ChartPie, [
     link('Attendance Reports', '/admin/hrm/reports', ClipboardList, { permission: 'attendance.view' }),
   ]),
   group('operations', 'Salon Operations', 'operations', Scissors, [
-    link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo),
+    link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo, { permission: 'tokens.manage' }),
     link('Services', '/admin/products', Sparkles),
     link('Reminders', '/admin/reminders', MessageCircle),
   ]),
   group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
-    link('Appointments', '/admin/appointments', CalendarClock),
+    link('Appointments', '/admin/appointments', CalendarClock, { permission: 'appointments.manage' }),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
-    link('Products & Stock', '/admin/stock', Warehouse),
+    link('Products & Stock', '/admin/stock', Warehouse, { permission: 'stock.manage' }),
+    link('Purchases', '/admin/purchases', PackagePlus, { permission: 'suppliers.manage' }),
+    link('Suppliers', '/admin/suppliers', Truck, { permission: 'suppliers.manage' }),
+    link('Supplier Ledger', '/admin/supplier-ledger', BookOpen, { permission: 'suppliers.manage' }),
   ]),
   group('finance', 'Finance', 'finance', Wallet, [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
-    link('Daily Expenses', '/dashboard/cashier/daily-expenses', Receipt),
-    link('Savings', '/dashboard/cashier/savings', PiggyBank),
-    link('Credit Collection', '/cashier/credit', Wallet),
+    link('Daily Expenses', '/dashboard/cashier/daily-expenses', Receipt, { permission: 'expenses.daily' }),
+    link('Savings', '/dashboard/cashier/savings', PiggyBank, { permission: 'savings.deposit' }),
+    link('Credit Collection', '/cashier/credit', Wallet, { permission: 'billing.credit.create' }),
   ]),
   group('hrm', 'HRM', 'hrm', Users, [
     link('My Attendance', '/attendance/my', UserCheck),
@@ -156,7 +159,7 @@ const CASHIER_NAV = [
     link('Shifts & Roster', '/admin/hrm/shifts', Clock, { permission: 'shift.manage' }),
     link('Leave Management', '/admin/hrm/leave', CalendarOff, { permission: 'leave.view' }),
     link('Overtime', '/admin/hrm/overtime', Timer, { permission: 'overtime.view' }),
-    link('Salary Advance', '/cashier/advances', Coins),
+    link('Salary Advance', '/cashier/advances', Coins, { permission: 'payroll.advances.create' }),
   ]),
 ];
 

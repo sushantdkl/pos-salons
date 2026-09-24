@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { addToWaitlist, listWaitlist, removeFromWaitlist } from '@/lib/appointments/service';
 import { appointmentError, MANAGER_ROLES } from '../_shared';
 
@@ -11,7 +12,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, MANAGER_ROLES);
+    await requireRoleWithPermission(request, db, MANAGER_ROLES, PERMISSIONS.APPOINTMENTS_MANAGE);
     const params = new URL(request.url).searchParams;
     return NextResponse.json({ waitlist: await listWaitlist(db, { from: params.get('from'), to: params.get('to') }) });
   } catch (error) {
@@ -23,7 +24,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, MANAGER_ROLES);
+    const user = await requireRoleWithPermission(request, db, MANAGER_ROLES, PERMISSIONS.APPOINTMENTS_MANAGE);
     const id = await addToWaitlist(db, user, await request.json());
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
@@ -35,7 +36,7 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, MANAGER_ROLES);
+    const user = await requireRoleWithPermission(request, db, MANAGER_ROLES, PERMISSIONS.APPOINTMENTS_MANAGE);
     const id = Number(new URL(request.url).searchParams.get('id') || 0);
     if (!id) return NextResponse.json({ error: 'Waitlist entry is required' }, { status: 400 });
     await removeFromWaitlist(db, user, id);

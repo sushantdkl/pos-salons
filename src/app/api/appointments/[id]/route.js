@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { assertPermission, PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getAppointment, transitionAppointment, updateAppointment } from '@/lib/appointments/service';
 import { SERVICE_STAFF_ROLES } from '@/lib/staff/service-staff';
@@ -39,7 +40,7 @@ export async function PATCH(request, { params }) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, MANAGER_ROLES);
+    const user = await requireRoleWithPermission(request, db, MANAGER_ROLES, PERMISSIONS.APPOINTMENTS_MANAGE);
     const data = await request.json();
     const appointment = await updateAppointment(db, user, appointmentId(await params), data);
     return NextResponse.json({ appointment });
@@ -54,6 +55,8 @@ export async function POST(request, { params }) {
     const db = Database.getInstance();
     await ensureSalonSchema();
     const user = await requireRole(request, db, SCHEDULE_VIEW_ROLES);
+    // The front desk acts on any appointment only with the appointments permission.
+    if (user.role === 'cashier') await assertPermission(db, user, PERMISSIONS.APPOINTMENTS_MANAGE);
     const data = await request.json();
     const result = await transitionAppointment(db, user, appointmentId(await params), String(data.action || ''), {
       reason: data.reason,

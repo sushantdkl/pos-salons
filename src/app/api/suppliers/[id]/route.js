@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { updateSupplier } from '@/lib/suppliers/service';
 import { getSupplierProfile } from '@/lib/suppliers/profile';
 import { supplierError } from '../_shared';
@@ -23,7 +24,7 @@ export async function GET(request, { params }) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const id = supplierId(await params);
     return NextResponse.json(await getSupplierProfile(db, id));
   } catch (error) {
@@ -35,7 +36,7 @@ export async function PATCH(request, { params }) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const supplier = await updateSupplier(db, user, supplierId(await params), await request.json());
     return NextResponse.json({ supplier });
   } catch (error) {

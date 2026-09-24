@@ -259,6 +259,17 @@ const orphan = await call(admin, 'PUT', '/api/admin/permissions', { role: 'barbe
 check('I a permission cannot be allowed while its module is off', orphan.status === 409, orphan.json.error);
 const together = await call(admin, 'PATCH', '/api/admin/permissions', { role: 'barber', changes: [{ permission: 'module.hrm', allowed: true }, { permission: 'leave.request', allowed: true }] });
 check('I module and its permission can be switched on together', together.status === 200, together.json.error);
+// Newer modules are delegable too: front desk, daily cash, inventory & suppliers.
+await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'customers.manage', allowed: false });
+const noCustomers = await call(cashier, 'POST', '/api/admin/customers', { name: 'QA Blocked Customer' });
+check('I cashier without “Add and edit customers” cannot create a customer', noCustomers.status === 403, noCustomers.status);
+const stillLists = await call(cashier, 'GET', '/api/admin/customers');
+check('I …but can still pick customers while billing (list stays readable)', stillLists.status === 200, stillLists.status);
+await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'customers.manage', allowed: true });
+check('I suppliers stay admin-only for the cashier by default', (await call(cashier, 'GET', '/api/suppliers')).status === 403);
+await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'suppliers.manage', allowed: true });
+check('I granting “Suppliers & purchases” opens suppliers to the cashier', (await call(cashier, 'GET', '/api/suppliers')).status === 200);
+await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'suppliers.manage', allowed: false });
 const cashierPayrollModule = await call(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'module.payroll', allowed: true });
 check('I full payroll module stays locked for the cashier', cashierPayrollModule.status === 422, cashierPayrollModule.status);
 const auditActions = (await db.query('SELECT DISTINCT action, entity_type FROM hr_audit_log')).rows.map((row) => `${row.entity_type}:${row.action}`);

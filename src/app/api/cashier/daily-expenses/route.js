@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { logAction } from '@/lib/db/helpers';
 import { mapApiError } from '@/lib/db/api-errors';
-import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { cleanText, ensureSalonSchema } from '@/lib/salon-schema';
 import { assertDrawerCashAvailable, requireOpenSession } from '@/lib/business-day/service';
 
 export const runtime = 'nodejs';
@@ -113,7 +114,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['cashier', 'admin']);
+    const user = await requireRoleWithPermission(request, db, ['cashier', 'admin'], PERMISSIONS.EXPENSES_DAILY);
     const { searchParams } = new URL(request.url);
     const userId = user.role === 'admin' && searchParams.get('createdBy')
       ? Number(searchParams.get('createdBy'))
@@ -138,7 +139,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['cashier', 'admin']);
+    const user = await requireRoleWithPermission(request, db, ['cashier', 'admin'], PERMISSIONS.EXPENSES_DAILY);
     const { sessionId, businessDayId } = await requireOpenSession(db);
     const data = await request.json();
     const title = cleanText(data.title, '');

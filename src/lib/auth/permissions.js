@@ -29,6 +29,13 @@ export const PERMISSIONS = Object.freeze({
   REVIEWS_VIEW: 'reviews.view',
   REVIEWS_MODERATE: 'reviews.moderate',
   REVIEWS_MANAGE: 'reviews.manage',
+  TOKENS_MANAGE: 'tokens.manage',
+  APPOINTMENTS_MANAGE: 'appointments.manage',
+  CUSTOMERS_MANAGE: 'customers.manage',
+  EXPENSES_DAILY: 'expenses.daily',
+  SAVINGS_DEPOSIT: 'savings.deposit',
+  STOCK_MANAGE: 'stock.manage',
+  SUPPLIERS_MANAGE: 'suppliers.manage',
 });
 
 /**
@@ -55,4 +62,28 @@ export async function requirePermission(request, db, permission) {
     throw error;
   }
   return user;
+}
+
+/**
+ * Role gate + delegated permission: the user must have one of `roles`, and (unless admin) the
+ * permission must be allowed for their role in Staff Permissions (module on + permission on).
+ */
+export async function requireRoleWithPermission(request, db, roles, permission) {
+  const user = await requireAuth(request, db);
+  const allowed = Array.isArray(roles) ? roles : [roles];
+  if (!allowed.includes(user.role) || !(await hasPermission(db, user, permission))) {
+    const error = new Error('Access denied');
+    error.status = 403;
+    throw error;
+  }
+  return user;
+}
+
+/** For a user already authenticated: throws 403 unless the permission applies. */
+export async function assertPermission(db, user, permission) {
+  if (!(await hasPermission(db, user, permission))) {
+    const error = new Error('Access denied');
+    error.status = 403;
+    throw error;
+  }
 }

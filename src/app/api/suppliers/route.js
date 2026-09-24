@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { createSupplier, listSuppliers } from '@/lib/suppliers/service';
 import { supplierError } from './_shared';
 
@@ -11,7 +12,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const params = new URL(request.url).searchParams;
     return NextResponse.json(await listSuppliers(db, { includeInactive: params.get('all') === '1', q: params.get('q') || '' }));
   } catch (error) {
@@ -23,7 +24,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const supplier = await createSupplier(db, user, await request.json());
     return NextResponse.json({ supplier }, { status: 201 });
   } catch (error) {

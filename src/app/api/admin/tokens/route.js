@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { normalizePhone as normalizeCustomerPhone } from '@/lib/validation/phone';
@@ -220,7 +221,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.TOKENS_MANAGE);
     const { sessionId, businessDayId } = await requireOpenSession(db);
     const data = await request.json();
     const serviceId = Number(data.service_id || 0);
@@ -254,7 +255,7 @@ export async function PATCH(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.TOKENS_MANAGE);
     const data = await request.json();
     const tokenId = Number(data.id || data.token_id || 0);
     const action = String(data.action || '').toLowerCase();

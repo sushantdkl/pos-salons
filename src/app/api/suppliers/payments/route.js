@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
+import { ensureSalonSchema } from '@/lib/salon-schema';
 import { paySupplier, voidSupplierPayment } from '@/lib/suppliers/service';
 import { supplierError } from '../_shared';
 
@@ -16,7 +17,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SUPPLIERS_MANAGE);
     const data = await request.json();
     if (data.action === 'void') {
       return NextResponse.json(await voidSupplierPayment(db, user, Number(data.paymentId), data.reason));

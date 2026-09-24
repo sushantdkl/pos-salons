@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -359,7 +360,7 @@ export default function ReportsPage() {
                       reports.transactions.map((transaction) => (
                         <tr key={transaction.id || transaction.billNumber} className="hover:bg-gray-50">
                           <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900 sm:px-4">{formatDateTime(transaction.transactionDate)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.billNumber || '-'}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4"><BillLink billId={transaction.id} number={transaction.billNumber || '-'} /></td>
                           <td className="px-3 py-3 text-sm sm:px-4">
                             <div className="font-medium text-gray-900">{transaction.customerName || 'Walk-in Customer'}</div>
                             {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
@@ -520,7 +521,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <TransactionDetail transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
+      {selectedTransaction?.id ? <BillDetailDrawer billId={selectedTransaction.id} onClose={() => setSelectedTransaction(null)} /> : <TransactionDetail transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />}
     </div>
   );
 }
