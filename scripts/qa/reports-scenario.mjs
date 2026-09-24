@@ -92,6 +92,22 @@ check('D advances: table = KPIs', near(tableOf(adv, 'advances').totals.amount ??
 const only = (await ws(admin, 'sales', { metricsOnly: '1' })).json;
 check('E1 metricsOnly returns the same KPIs without tables', !only.tables && near(only.metrics.finalized_total, m.finalized_total));
 
+// F. Analytics owner dashboard reconciles with itself and with the workspace.
+const an = (await get(admin, `/api/admin/analytics?period=custom&startDate=${START}&endDate=${END}`)).json.analytics;
+if (an) {
+  const r = an.money.revenue;
+  const ps = an.paymentSummary;
+  check('F1 sales by source = bill total', near(an.sourceTotals.total, r.finalizedTotal) && an.sourceTotals.bills === an.kpis.bills, [an.sourceTotals.total, r.finalizedTotal]);
+  check('F2 cash + online + split + credit bills = bill total', near(ps.cash.total + ps.online.total + ps.split.total + ps.credit.total, r.finalizedTotal));
+  check('F3 money received − refunds = net collection', near(an.money.totalReceived - an.money.payments.refunds, an.money.payments.netReceived), [an.money.totalReceived, an.money.payments.refunds, an.money.payments.netReceived]);
+  check('F4 cash in − cash out = net cash movement', near(an.money.cashFlow.cashIn - an.money.cashFlow.cashOut, an.money.cashPosition.netCashMovement));
+  check('F5 analytics bill total = workspace net sales', near(r.finalizedTotal, m.finalized_total), [r.finalizedTotal, m.finalized_total]);
+  check('F6 expenses excl. purchases + purchases = expenses', near(an.money.expenses.excludingPurchases + an.money.purchases.total, an.money.expenses.total));
+  check('F7 payment records match the bill count', an.paymentRecords.truncated || an.paymentRecords.records.length === an.kpis.bills);
+  check('F8 voided list total = voids KPI', near(an.cancellations.totals.voidedAmount, r.voids));
+  check('F9 cashier cannot open analytics', (await get(cashier, '/api/admin/analytics?period=today')).status === 403);
+} else check('F analytics loads', false);
+
 const failed = results.filter((r) => !r.ok);
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.label}${r.ok || !r.detail ? '' : ` — ${r.detail}`}`);
 console.log(`\nReports: ${results.length - failed.length}/${results.length} checks passed`);

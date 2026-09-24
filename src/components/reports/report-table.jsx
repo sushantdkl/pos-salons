@@ -13,7 +13,7 @@ const STATUS_TONES = {
   paid: 'inflow', active: 'inflow', collection: 'inflow', payment: 'inflow', recovered: 'inflow', service: 'ops', product: 'inflow',
   void: 'outflow', voided: 'outflow', cancelled: 'outflow', refund: 'outflow', credit_sale: 'outflow',
   cash: 'cash', online: 'online', esewa_phonepay: 'online', bank: 'online', qr: 'online', credit: 'ledger', split: 'ops', mixed: 'ops',
-  pending: 'cash', partial: 'cash', issued: 'hrm', credit_collection: 'inflow', collection_reversal: 'outflow',
+  pending: 'cash', partial: 'cash', issued: 'hrm', no_show: 'outflow', completed: 'inflow', confirmed: 'online', credit_collection: 'inflow', collection_reversal: 'outflow',
 };
 const LABELS = { esewa_phonepay: 'eSewa / PhonePay', bank: 'Bank QR' };
 

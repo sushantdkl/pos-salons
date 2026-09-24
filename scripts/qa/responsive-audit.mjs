@@ -233,9 +233,9 @@ for (const [role, pages] of Object.entries(PAGES)) {
       await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle', timeout: 90000 });
       await page.waitForTimeout(800);
       const text = await page.evaluate(() => document.body.innerText);
-      record(`${route} @${width} shows the scenario's data`, /9,200\.00/.test(text), 'expected Rs 9,200.00 net sales');
+      record(`${route} @${width} shows the scenario's data`, /Rs 9,200(\.00)?/.test(text), 'expected Rs 9,200 net sales');
       if (route.includes('analytics')) {
-        for (const tab of ['Overview', 'Sales & Money', 'Services', 'Customers', 'Staff', 'Products & Inventory', 'Tokens / Front Desk', 'Appointments', 'Controls & Activity']) {
+        for (const tab of ['Overview', 'Sales & Money', 'Services', 'Customers & Loyalty', 'Staff & Team', 'Products & Stock', 'Front Desk', 'Controls & Activity', 'Cancellations & Changes']) {
           errors.length = 0;
           await page.getByRole('tab', { name: tab, exact: true }).click();
           await page.waitForTimeout(500);

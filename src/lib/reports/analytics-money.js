@@ -29,7 +29,7 @@ async function getSources(db, bills) {
   `, bills.params);
   const by = Object.fromEntries(rows.map((row) => [row.source, row]));
   const total = rows.reduce((sum, row) => sum + numeric(row.total), 0);
-  return ['walkin', 'token', 'appointment'].map((key) => ({
+  const list = ['walkin', 'token', 'appointment'].map((key) => ({
     key,
     label: { walkin: 'Walk-in (direct bill)', token: 'Token queue', appointment: 'Appointment' }[key],
     bills: Number(by[key]?.bills || 0),
@@ -38,6 +38,15 @@ async function getSources(db, bills) {
     total: round2(by[key]?.total),
     share: pct(by[key]?.total, total),
   }));
+  return {
+    rows: list,
+    totals: {
+      bills: list.reduce((sum, row) => sum + row.bills, 0),
+      services: list.reduce((sum, row) => sum + row.services, 0),
+      gross: round2(list.reduce((sum, row) => sum + row.gross, 0)),
+      total: round2(total),
+    },
+  };
 }
 
 async function getPaymentSummary(db, bills) {
@@ -50,7 +59,9 @@ async function getPaymentSummary(db, bills) {
   `, bills.params);
   const by = Object.fromEntries(rows.map((row) => [row.method, row]));
   const line = (key) => ({ bills: Number(by[key]?.bills || 0), total: round2(by[key]?.total), cash: round2(by[key]?.cash), online: round2(by[key]?.online), credit: round2(by[key]?.credit) });
-  return { cash: line('cash'), online: line('online'), split: line('split'), credit: line('credit') };
+  const summary = { cash: line('cash'), online: line('online'), split: line('split'), credit: line('credit') };
+  summary.receivedBills = summary.cash.bills + summary.online.bills + summary.split.bills;
+  return summary;
 }
 
 async function getPatterns(db, bills) {
@@ -173,5 +184,5 @@ export async function getAnalyticsExtras(db, period, scope) {
     getCancellations(db, period, scope, bills),
     listSuppliers(db),
   ]);
-  return { sources, paymentSummary, ...patterns, paymentRecords, cancellations, payables: suppliers.totals.payable };
+  return { sources: sources.rows, sourceTotals: sources.totals, paymentSummary, ...patterns, paymentRecords, cancellations, payables: suppliers.totals.payable };
 }
