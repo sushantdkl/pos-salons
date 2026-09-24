@@ -54,3 +54,6 @@ yarn-error.log*
 next-env.d.ts
 /.next-demo/
 /.next-dev3014/
+
+# local scratch scripts
+.tmp-*

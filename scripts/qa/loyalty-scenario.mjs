@@ -221,6 +221,24 @@ let limited = false;
 for (let n = 0; n < 25 && !limited; n += 1) limited = (await call(null, 'POST', '/api/public/rewards', { action: 'lookup', phone: phone() })).status === 429;
 check('K repeated phone lookups are rate-limited', limited);
 
+// L. Join rewards from the QR page: creates an empty card, never a visit, never a duplicate.
+{
+  const joinPhone = phone();
+  const first = await call(null, 'POST', '/api/public/rewards', { action: 'join', phone: joinPhone, name: 'QA Joiner' });
+  check('L1 a new number can join rewards from the QR page', first.status === 201 && first.json.card?.found === true, first);
+  const created = await db.query('SELECT id, name, notes FROM customers WHERE phone = $1', [joinPhone]);
+  check('L2 joining creates the customer with a note', created.rows.length === 1 && /Joined rewards/.test(created.rows[0].notes || ''));
+  const earned = await db.query('SELECT COUNT(*)::int AS n FROM loyalty_ledger WHERE customer_id = $1', [created.rows[0]?.id || 0]);
+  check('L3 joining never earns a visit', earned.rows[0].n === 0 && (first.json.card?.programs || []).every((program) => program.progress === 0));
+  const again = await call(null, 'POST', '/api/public/rewards', { action: 'join', phone: joinPhone, name: 'Someone Else' });
+  const after = await db.query('SELECT COUNT(*)::int AS n, MAX(name) AS name FROM customers WHERE phone = $1', [joinPhone]);
+  check('L4 joining again neither duplicates nor renames the customer', again.status === 201 && after.rows[0].n === 1 && after.rows[0].name === 'QA Joiner');
+  check('L5 join rejects a bad number', (await call(null, 'POST', '/api/public/rewards', { action: 'join', phone: '123', name: 'Bad Number' })).status === 400);
+  await db.query('UPDATE crm_settings SET public_join_enabled = FALSE WHERE id = 1');
+  check('L6 the owner can switch joining off', (await call(null, 'POST', '/api/public/rewards', { action: 'join', phone: phone(), name: 'Off Switch' })).status === 403);
+  await db.query('UPDATE crm_settings SET public_join_enabled = TRUE WHERE id = 1');
+}
+
 await db.end();
 const failed = results.filter((item) => !item.ok);
 for (const item of results) console.log(`${item.ok ? 'PASS' : 'FAIL'}  ${item.label}${item.ok ? '' : `  ${item.detail}`}`);
