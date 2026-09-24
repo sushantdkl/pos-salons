@@ -48,6 +48,26 @@ export async function lookupRewards(db, phone) {
 }
 
 /**
+ * Join the rewards programme from the QR page before a first paid visit: name + mobile only.
+ * Creates the customer with an empty card (visits still come only from paid bills). An existing
+ * number is never changed or duplicated — the same safe card is returned either way, so this
+ * reveals nothing about whether a number was already a customer.
+ */
+export async function joinRewards(db, { phone, name }) {
+  const settings = await getCrmSettings(db);
+  if (!settings.publicRewardsEnabled || !settings.publicJoinEnabled) throw httpError('Joining from this page is not available right now. Please ask at the counter.', 403);
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw httpError('Enter a valid 10-digit mobile number', 400);
+  const cleanName = String(name || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (cleanName.length < 2) throw httpError('Enter your name', 400);
+  await db.transaction(async (tx) => {
+    const existing = await tx.get('SELECT id FROM customers WHERE phone = ? FOR UPDATE', [normalized]);
+    if (!existing) await tx.run('INSERT INTO customers (name, phone, notes) VALUES (?, ?, ?)', [cleanName, normalized, 'Joined rewards via Review & Rewards QR']);
+  });
+  return { joined: true, card: await lookupRewards(db, normalized) };
+}
+
+/**
  * Attach a walk-in visit to this phone number with the one-time code printed on the receipt.
  * The code is single use, expires, and only earns what that paid bill's lines would have earned.
  */

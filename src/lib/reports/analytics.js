@@ -531,6 +531,8 @@ export async function getSalonAnalytics(db, period, options = {}) {
         cashRefunds: payments.cashRefunds,
         onlineRefunds: payments.onlineRefunds,
         refunds: round2(numeric(payments.cashRefunds) + numeric(payments.onlineRefunds)),
+        // Money received for bills (cash + online), before credit collections and refunds.
+        salesReceived: round2(numeric(payments.grossCashCollected) + numeric(payments.grossQrCollected)),
         netCash: payments.netCashReceived,
         netOnline: payments.netOnlineReceived,
         netReceived: payments.netReceived,

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-20T21:21:45.4100340+05:45",
+  "title": "Design System: The Hair Cut POS",
+  "extensions": {
+    "colorMeta": {
+      "workspace-warm": { "role": "neutral", "displayName": "Warm Workspace", "canonical": "#f7f5f2", "tonalRamp": ["#292621", "#4a453e", "#6d675f", "#918b83", "#b5b0a9", "#d7d3ce", "#ebe8e4", "#f7f5f2"] },
+      "workspace-cool": { "role": "neutral", "displayName": "Cool Workspace", "canonical": "#f7f8fa", "tonalRamp": ["#25272b", "#454950", "#686d76", "#8d929b", "#b2b6bd", "#d5d8dd", "#e9ebee", "#f7f8fa"] },
+      "surface": { "role": "neutral", "displayName": "Clean Surface", "canonical": "#ffffff", "tonalRamp": ["#262626", "#474747", "#6b6b6b", "#919191", "#b7b7b7", "#d9d9d9", "#eeeeee", "#ffffff"] },
+      "ink": { "role": "neutral", "displayName": "Operational Ink", "canonical": "#111827", "tonalRamp": ["#111827", "#273141", "#465064", "#687286", "#8d96a7", "#b4bbc7", "#d9dde4", "#f0f2f5"] },
+      "text": { "role": "neutral", "displayName": "Working Text", "canonical": "#374151", "tonalRamp": ["#1b2029", "#374151", "#566175", "#778297", "#9aa3b3", "#bec4cf", "#dfe2e7", "#f2f3f5"] },
+      "muted-text": { "role": "neutral", "displayName": "Muted Text", "canonical": "#6b7280", "tonalRamp": ["#252a32", "#414751", "#606772", "#808793", "#a1a7b0", "#c2c6cc", "#e1e3e6", "#f3f4f5"] },
+      "border": { "role": "neutral", "displayName": "Hairline Border", "canonical": "#e5e7eb", "tonalRamp": ["#25272a", "#45484d", "#686c72", "#8c9097", "#b0b4bb", "#cfd2d7", "#e5e7eb", "#f4f5f6"] },
+      "primary": { "role": "primary", "displayName": "Action Blue", "canonical": "#2563eb", "tonalRamp": ["#08245c", "#0d3b91", "#1452c5", "#2563eb", "#5d8cf2", "#91b3f7", "#c5d8fb", "#eff6ff"] },
+      "primary-hover": { "role": "primary", "displayName": "Action Blue Deep", "canonical": "#1d4ed8", "tonalRamp": ["#071d53", "#0b327f", "#1246b0", "#1d4ed8", "#567ce7", "#8ba7f0", "#bfd0f8", "#eef3ff"] },
+      "allowed": { "role": "secondary", "displayName": "Allowed Emerald", "canonical": "#047857", "tonalRamp": ["#022c22", "#034638", "#046148", "#047857", "#33a57e", "#70c9a7", "#b7e7d3", "#ecfdf5"] },
+      "allowed-soft": { "role": "secondary", "displayName": "Allowed Mist", "canonical": "#ecfdf5", "tonalRamp": ["#153d31", "#2d5d4d", "#4c7e6c", "#70a08c", "#98c1ae", "#bee0d0", "#dcf2e8", "#ecfdf5"] },
+      "blocked": { "role": "tertiary", "displayName": "Blocked Red", "canonical": "#b91c1c", "tonalRamp": ["#4a0909", "#730d0d", "#9b1414", "#b91c1c", "#d94b4b", "#e98686", "#f5c1c1", "#fef2f2"] },
+      "blocked-soft": { "role": "tertiary", "displayName": "Error Blush", "canonical": "#fef2f2", "tonalRamp": ["#4a2020", "#714040", "#986464", "#bd8a8a", "#dab1b1", "#edd0d0", "#f8e5e5", "#fef2f2"] },
+      "caution": { "role": "tertiary", "displayName": "Policy Amber", "canonical": "#b45309", "tonalRamp": ["#3d1b03", "#652d05", "#8d4107", "#b45309", "#d47a2a", "#e8a463", "#f5cf9f", "#fffbeb"] },
+      "caution-soft": { "role": "tertiary", "displayName": "Caution Wash", "canonical": "#fffbeb", "tonalRamp": ["#413813", "#645927", "#887b42", "#ad9e61", "#cfc48a", "#e8dfb7", "#f6f0d7", "#fffbeb"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Dashboard Headline", "purpose": "Major administrative and dashboard titles." },
+      "title": { "displayName": "Operational Title", "purpose": "Cards, roles, permission groups, and row labels." },
+      "body": { "displayName": "Operational Body", "purpose": "Descriptions, history metadata, and helper copy." },
+      "label": { "displayName": "Compact Label", "purpose": "Eyebrows, summary labels, and terse metadata." }
+    },
+    "shadows": [
+      { "name": "selected-control", "value": "0 1px 2px rgba(0,0,0,0.05)", "purpose": "Active segmented tabs and compact selected controls." },
+      { "name": "operational-card", "value": "0 8px 28px rgba(17,24,39,0.05)", "purpose": "Major summary containers only." },
+      { "name": "brand-mark", "value": "0 8px 22px rgba(17,24,39,0.16)", "purpose": "Small high-contrast identity marks." }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "150ms ease", "purpose": "Color, border, and shadow changes on operational controls." },
+      { "name": "drawer-transition", "value": "300ms ease-out", "purpose": "Mobile sidebar entry and exit." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Committed operational action with strong focus visibility.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary{min-height:48px;padding:12px 16px;border:1px solid #1d4ed8;border-radius:12px;background:#2563eb;color:#fff;font:600 14px/1.25 Outfit,Geist,sans-serif;transition:background-color 150ms ease,box-shadow 150ms ease}.ds-btn-primary:hover{background:#1d4ed8}.ds-btn-primary:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}.ds-btn-primary:active{background:#1e40af}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral bulk, reset, or supporting action.",
+      "html": "<button class=\"ds-btn-secondary\">Reset defaults</button>",
+      "css": ".ds-btn-secondary{min-height:48px;padding:12px 16px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151;font:600 14px/1.25 Outfit,Geist,sans-serif;transition:background-color 150ms ease,border-color 150ms ease}.ds-btn-secondary:hover{background:#f9fafb;border-color:#9ca3af}.ds-btn-secondary:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}.ds-btn-secondary:active{background:#f3f4f6}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Full-width permission filtering field with leading search icon space.",
+      "html": "<label class=\"ds-search-wrap\"><svg class=\"ds-search-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"m20 20-4-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg><input class=\"ds-search-input\" placeholder=\"Search permissions…\"></label>",
+      "css": ".ds-search-wrap{position:relative;display:block;max-width:520px}.ds-search-icon{position:absolute;left:16px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:#9ca3af}.ds-search-input{width:100%;min-height:48px;padding:12px 16px 12px 44px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#111827;font:400 14px/1.5 Outfit,Geist,sans-serif;outline:none;transition:border-color 150ms ease,box-shadow 150ms ease}.ds-search-input:hover{border-color:#9ca3af}.ds-search-input:focus{border-color:#3b82f6;box-shadow:0 0 0 2px #dbeafe}"
+    },
+    {
+      "name": "Permission State Chips",
+      "kind": "chip",
+      "description": "Semantic text labels for allowed, blocked, and mixed access.",
+      "html": "<div class=\"ds-chip-row\"><span class=\"ds-chip ds-chip-allowed\">Allowed</span><span class=\"ds-chip ds-chip-blocked\">Blocked</span><span class=\"ds-chip ds-chip-mixed\">Mixed</span></div>",
+      "css": ".ds-chip-row{display:flex;gap:8px;flex-wrap:wrap}.ds-chip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:9999px;font:700 12px/1.25 Outfit,Geist,sans-serif}.ds-chip-allowed{background:#ecfdf5;color:#065f46;box-shadow:inset 0 0 0 1px #a7f3d0}.ds-chip-blocked{background:#f3f4f6;color:#374151;box-shadow:inset 0 0 0 1px #e5e7eb}.ds-chip-mixed{background:#fffbeb;color:#92400e;box-shadow:inset 0 0 0 1px #fcd34d}.ds-chip:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}"
+    },
+    {
+      "name": "Operational Card",
+      "kind": "card",
+      "refersTo": "card-operational",
+      "description": "Quiet white container for dense summaries and grouped work.",
+      "html": "<section class=\"ds-card\"><p class=\"ds-card-label\">Editing role</p><h3 class=\"ds-card-title\">Cashier access</h3><p class=\"ds-card-copy\">Allow only the work this role should perform.</p></section>",
+      "css": ".ds-card{padding:20px;border:1px solid #e5e7eb;border-radius:16px;background:#fff;color:#111827;box-shadow:0 8px 28px rgba(17,24,39,.05);font-family:Outfit,Geist,sans-serif}.ds-card-label{margin:0 0 8px;color:#6b7280;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}.ds-card-title{margin:0;font-size:16px;line-height:1.5;font-weight:600}.ds-card-copy{margin:4px 0 0;color:#6b7280;font-size:14px;line-height:1.5}"
+    },
+    {
+      "name": "Dashboard Navigation Item",
+      "kind": "nav",
+      "description": "Compact sidebar row with a strong, non-color-only active state.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item\" href=\"#\">Dashboard</a><a class=\"ds-nav-item ds-nav-active\" href=\"#\" aria-current=\"page\">Staff Permissions</a></nav>",
+      "css": ".ds-nav{display:grid;gap:4px;width:240px;padding:12px;background:#fff}.ds-nav-item{display:flex;min-height:44px;align-items:center;padding:10px 12px;border-left:3px solid transparent;border-radius:10px;color:#3a342d;text-decoration:none;font:500 14px/1.25 Outfit,Geist,sans-serif;transition:background-color 150ms ease}.ds-nav-item:hover{background:#f5f2ee}.ds-nav-item:focus-visible{outline:2px solid rgba(107,70,229,.35);outline-offset:1px}.ds-nav-active{border-left-color:#17140f;background:#f3f1ec;color:#17140f;font-weight:600}"
+    },
+    {
+      "name": "Permission Group",
+      "kind": "custom",
+      "description": "Role-scoped capability group with count and semantic state.",
+      "html": "<section class=\"ds-permission-group\"><button class=\"ds-permission-head\" aria-expanded=\"true\"><span><strong>Billing</strong><small>Invoices, checkout, and payments</small></span><span class=\"ds-chip ds-chip-mixed\">Mixed</span></button><div class=\"ds-permission-row\"><span><strong>Create invoices</strong><small>Start and complete customer billing.</small></span><span class=\"ds-chip ds-chip-allowed\">Allowed</span></div></section>",
+      "css": ".ds-permission-group{overflow:hidden;border:1px solid #fcd34d;border-radius:16px;background:#fff;color:#111827;font-family:Outfit,Geist,sans-serif}.ds-permission-head,.ds-permission-row{display:flex;width:100%;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px}.ds-permission-head{border:0;background:#fff;text-align:left;color:inherit}.ds-permission-head:hover{background:#f9fafb}.ds-permission-head:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px}.ds-permission-row{border-top:1px solid #e5e7eb}.ds-permission-group strong,.ds-permission-group small{display:block}.ds-permission-group strong{font-size:14px;line-height:1.5}.ds-permission-group small{margin-top:4px;color:#6b7280;font-size:14px;line-height:1.5}.ds-chip{display:inline-flex;flex:none;padding:6px 12px;border-radius:9999px;font-size:12px;font-weight:700}.ds-chip-allowed{background:#ecfdf5;color:#065f46;box-shadow:inset 0 0 0 1px #a7f3d0}.ds-chip-mixed{background:#fffbeb;color:#92400e;box-shadow:inset 0 0 0 1px #fcd34d}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Control Desk",
+    "overview": "The Hair Cut POS is a compact operational workspace: quiet enough for long shifts, dense enough for counter work, and explicit about financial and access state. Warm dashboard chrome preserves the established salon identity, while white working surfaces and cool gray permission screens keep high-consequence tasks legible.\n\nThe system favors familiar controls, restrained neutrals, and color with a job. Blue marks functional focus and primary action; emerald confirms allowed or successful states; red is reserved for destructive or error meaning; gray communicates blocked or inactive state; amber identifies mixed access and policy locks. The permissions surface is role-first: choose the staff role, understand its access summary, then inspect or change grouped capabilities.",
+    "keyCharacteristics": [
+      "Compact, light, high-density operational composition.",
+      "Role and status are visible before individual controls.",
+      "White surfaces, fine borders, and restrained ambient shadow.",
+      "Responsive stacking that preserves touch targets and reading order.",
+      "Color is semantic, never ornamental."
+    ],
+    "rules": [
+      { "name": "The Color Has a Job Rule", "body": "Blue acts, emerald allows, red warns or destroys, gray blocks, and amber marks mixed or locked state; do not swap these meanings for variety.", "section": "colors" },
+      { "name": "The Neutral Block Rule", "body": "A routine denied permission is gray, not red. Red is reserved for destructive actions, errors, and summary emphasis so it retains urgency.", "section": "colors" },
+      { "name": "The Counter-Glance Rule", "body": "A page title, selected role, group state, and primary action must remain distinguishable without relying on color alone.", "section": "typography" },
+      { "name": "The Role-First Rule", "body": "Permission work always resolves the active role before exposing grouped permission changes or history.", "section": "layout" },
+      { "name": "The Stack, Don't Squeeze Rule", "body": "Below the component's comfortable width, stack labels, summaries, and controls vertically while retaining at least 40px controls and 44-48px primary touch targets.", "section": "layout" },
+      { "name": "The Border-Before-Shadow Rule", "body": "Establish hierarchy with background, border, spacing, and type before adding shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do lead permission work with role selection and an allowed/blocked/available summary.",
+      "Do preserve readable labels alongside every semantic color and icon.",
+      "Do use compact 4px-based spacing and 40-48px interactive targets.",
+      "Do stack controls responsively while preserving source order and full descriptions.",
+      "Do keep administrator access, policy locks, and immutable history explicit in the interface."
+    ],
+    "donts": [
+      "Don't use red for every denied permission; use neutral gray for routine blocked state.",
+      "Don't use amber as decoration; reserve it for mixed access, restrictions, or caution.",
+      "Don't replace the established dashboard shell, logo, or navigation behavior when extending the POS.",
+      "Don't rely on icon-only or color-only permission states.",
+      "Don't hide server-enforced authorization rules behind UI affordances or imply that UI visibility is enforcement."
+    ]
+  }
+}

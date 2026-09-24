@@ -37,7 +37,6 @@ export default function AdminLayout({ children }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [currentRole, setCurrentRole] = useState('admin');
-  const [userName, setUserName] = useState('');
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   // Group open state. Starts empty on the server and the first client paint (no hydration
@@ -89,7 +88,6 @@ export default function AdminLayout({ children }) {
       return false;
     }
     setCurrentRole(role);
-    setUserName(user.full_name || user.username || '');
     authInitialized = true;
     setLoading(false);
     return true;
@@ -256,7 +254,6 @@ export default function AdminLayout({ children }) {
       />
     </div>
   );
-  const userInitial = (userName || currentRole || 'U').trim().charAt(0).toUpperCase();
 
   /**
    * One nav link. Top-level links sit on white; group children sit on their family tint.
@@ -283,15 +280,13 @@ export default function AdminLayout({ children }) {
         }`}
       >
         {isActive && !iconOnly ? (
-          <span className={`absolute inset-y-1.5 left-0 w-[3px] rounded-full ${topLevel ? 'bg-white/80' : tint.bar}`} aria-hidden="true" />
+          <span className={`absolute inset-y-2 left-0 w-[3px] rounded-full ${tint.bar}`} aria-hidden="true" />
         ) : null}
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            isActive && topLevel ? 'bg-white/15 text-white' : topLevel ? tileFor(item) : tint.tile
-          } ${isActive && !topLevel ? 'shadow-sm' : ''}`}
+          className={`flex h-6 w-6 shrink-0 items-center justify-center ${topLevel ? tileFor(item) : tint.tile}`}
           aria-hidden="true"
         >
-          <item.icon className="h-4 w-4" />
+          <item.icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </span>
         {iconOnly ? null : <span className={`truncate text-sm ${isActive ? '' : 'font-medium'}`}>{item.label}</span>}
       </Link>
@@ -371,7 +366,7 @@ export default function AdminLayout({ children }) {
                     onClick={() => toggleGroup(entry.id)}
                     className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-900/30 ${tint.header} ${tint.hover}`}
                   >
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ${tint.icon}`} aria-hidden="true"><entry.icon className="h-4 w-4" /></span>
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center ${tint.icon}`} aria-hidden="true"><entry.icon className="h-[18px] w-[18px]" strokeWidth={1.8} /></span>
                     <span className="flex-1">{entry.label}</span>
                     {hasActive && !expanded ? <span className={`h-1.5 w-1.5 rounded-full ${tint.bar}`} aria-hidden="true" /> : null}
                     <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -391,20 +386,6 @@ export default function AdminLayout({ children }) {
         </nav>
 
         <div className="shrink-0 space-y-2 border-t border-[#F0ECE6] p-3">
-          {showExpanded ? (
-            <div className="flex items-center gap-2.5 rounded-[10px] bg-[#FAF8F5] px-2.5 py-2">
-              <span
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#DED3FB] text-[#5433C9]"
-                style={{ fontFamily: "'Manrope', system-ui, sans-serif", fontWeight: 700, fontSize: 12 }}
-              >
-                {userInitial}
-              </span>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-[12.5px] font-semibold text-[#1A1714]">{userName || 'Signed in'}</span>
-                <span className="text-[11px] capitalize text-[#8A837B]">{currentRole}</span>
-              </div>
-            </div>
-          ) : null}
           <button
             type="button"
             aria-label="Logout"

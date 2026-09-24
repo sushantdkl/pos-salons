@@ -11,11 +11,11 @@
 
 import { ScrollText } from 'lucide-react';
 import {
-  AlertBanner, BreakdownCard, count, ErpPage, humanize, ErrorState, line, LoadingState, MetricCard, MetricGroup, money, PageHeader,
-  PeriodFilter, PrintButton, PrintHeader, RefreshButton, ReportGroup, ReportSection, StatusBadge,
+  AlertBanner, BreakdownCard, count, ErpPage, humanize, ErrorState, line, LoadingState, money, PageHeader,
+  PeriodFilter, PrintButton, PrintHeader, RefreshButton, ReportGroup, ReportSection,
 } from '@/components/erp';
 import { usePeriod, useReport } from '@/components/erp/use-report';
-import { CASH_DENOMINATIONS } from '@/lib/business-day/denominations';
+import { CashPositionBoard } from '@/components/reports/cash-position-board';
 
 function generatedLabel(iso) {
   if (!iso) return '';
@@ -109,132 +109,11 @@ function MoneyOut({ s, isAdmin }) {
   );
 }
 
-/** The notes physically counted at the last close (Close Store saves them). */
-function DrawerCount({ c }) {
-  const counts = c.denominations;
-  if (!counts) return null;
-  const rows = CASH_DENOMINATIONS.map((note) => ({ note, n: Number(counts[note] ?? counts[String(note)] ?? 0) }));
-  const notes = rows.reduce((sum, row) => sum + row.n, 0);
-  const total = rows.reduce((sum, row) => sum + row.n * row.note, 0);
+function CashPosition({ s, isAdmin }) {
   return (
-    <ReportSection title={`Drawer count · ${c.lastCountedDate || ''}`} note="Notes counted when the store was closed.">
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="border-b border-stone-200 text-[11px] font-bold uppercase tracking-wide text-stone-500">
-            <th className="px-4 py-2 text-left">Note</th><th className="px-4 py-2 text-right">Count</th><th className="px-4 py-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.note} className={`border-b border-stone-100 ${row.n ? 'text-stone-800' : 'text-stone-300'}`}>
-              <td className="px-4 py-1.5 font-semibold">Rs {row.note.toLocaleString('en-IN')}</td>
-              <td className="px-4 py-1.5 text-right tabular-nums">{row.n}</td>
-              <td className="px-4 py-1.5 text-right tabular-nums">{row.note.toLocaleString('en-IN')} × {row.n} = {money(row.note * row.n)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-stone-300 font-bold text-stone-900">
-            <td className="px-4 py-2">Total</td><td className="px-4 py-2 text-right tabular-nums">{notes}</td><td className="px-4 py-2 text-right tabular-nums">{money(total)}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </ReportSection>
-  );
-}
-
-function CashPosition({ s }) {
-  const c = s.cashPosition;
-  const o = s.onlinePosition;
-  const drawerState = c.reconciliationState;
-  const counted = c.countedCash ?? c.lastCountedCash;
-  return (
-    <ReportGroup title="Cash position" tone="cash" note="Where the money is: the physical drawer, the cash movement for the period, and the online / bank side.">
-      <div className="mb-3">
-        <MetricGroup columns={4}>
-          <MetricCard
-            label="Cash in hand"
-            value={money(c.netCashInHand)}
-            tone="cash"
-            emphasis
-            sub={c.expectedCashSource === 'live' ? 'Live drawer — store is open' : c.expectedCashSource === 'snapshot' ? 'At the last close' : 'Net cash movement (no session)'}
-          />
-          <MetricCard
-            label="Counted cash"
-            value={counted === null || counted === undefined ? 'Not counted' : money(counted)}
-            tone="neutral"
-            sub={c.lastCountedAt ? `Counted at close · ${generatedLabel(c.lastCountedAt)}${c.expectedCashSource === 'live' ? ' (previous session)' : ''}` : 'Counted when the store closes'}
-          />
-          <MetricCard
-            label="Count difference"
-            value={c.cashDifference === null || c.cashDifference === undefined ? '—' : money(c.cashDifference)}
-            tone={c.cashDifference < 0 ? 'outflow' : c.cashDifference > 0 ? 'cash' : 'inflow'}
-            sub={c.cashDifference === null || c.cashDifference === undefined ? 'Shown after the store is closed' : c.cashDifference === 0 ? 'Drawer matched' : c.cashDifference < 0 ? 'Drawer short' : 'Drawer over'}
-          />
-          <MetricCard label="Online / bank balance" value={money(o.netOnlineBalance)} tone="online" sub="Online in less online out, this period" />
-        </MetricGroup>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-3">
-        <ReportSection
-          title="Cash drawer"
-          note={c.expectedCashSource === 'live'
-            ? `Live — Session ${c.liveDrawer?.sessionNumber || ''} is open.`
-            : c.expectedCashSource === 'snapshot'
-              ? `Closed — Session ${c.finalSessionNumber} close snapshot${c.closedBy ? ` by ${c.closedBy}` : ''}.`
-              : 'No store session in this period.'}
-          lines={c.liveDrawer ? [
-            line('Opening cash (this session)', c.liveDrawer.startingCash),
-            line('Cash in', Number(c.liveDrawer.cashCollections) + Number(c.liveDrawer.creditCollectionsCash), { sign: '+', tone: 'inflow' }),
-            line('Cash out', Number(c.liveDrawer.cashExpenses) + Number(c.liveDrawer.cashSavingsOut) + Number(c.liveDrawer.cashRefunds), { sign: '−', tone: 'outflow' }),
-            line('Expected cash (cash in hand)', c.expectedCash, { strong: true, tone: 'cash' }),
-            line('Counted cash', 'Counted at close', { muted: true }),
-            c.lastCountedCash !== null && c.lastCountedCash !== undefined ? line('Last counted (previous close)', c.lastCountedCash, { muted: true }) : null,
-          ] : [
-            line('Opening cash (first session)', c.startingCash),
-            line('Expected cash (cash in hand)', c.expectedCash ?? '—', { tone: 'cash' }),
-            line('Counted cash', c.countedCash ?? '—'),
-            line('Difference', c.cashDifference ?? '—', { strong: true, tone: c.cashDifference < 0 ? 'outflow' : c.cashDifference > 0 ? 'cash' : 'inflow' }),
-          ]}
-        >
-          {drawerState && drawerState !== 'PENDING' ? <div className="px-4 pb-3"><StatusBadge status={drawerState} /></div> : null}
-        </ReportSection>
-
-        <ReportSection
-          title="Cash movement"
-          note="Every cash in and out across the period (all sessions). Excludes the float already in the drawer."
-          lines={[
-            line('Cash sales', c.cashCollected, { sign: '+', tone: 'inflow' }),
-            line('Credit collected in cash', c.creditCollectionsCash, { sign: '+', tone: 'inflow' }),
-            line('Cash refunds', c.cashRefunds, { sign: '−', tone: 'outflow' }),
-            line('Expenses & wages in cash', c.cashPaidOut, { sign: '−', tone: 'outflow' }),
-            line('Cash to savings', c.cashSavings, { sign: '−' }),
-            c.cashAdded ? line('Float added at store open', c.cashAdded, { sign: '+', note: 'Non-P&L drawer transfer' }) : null,
-            c.cashRemoved ? line('Float removed at store open', c.cashRemoved, { sign: '−', note: 'Non-P&L drawer transfer' }) : null,
-            line('Net cash movement', c.netCashMovement, { strong: true, tone: 'cash' }),
-            c.sessionDifferences ? line('Count differences (short − / over +)', c.sessionDifferences, { tone: c.sessionDifferences < 0 ? 'outflow' : 'cash' }) : null,
-          ]}
-        />
-
-        <ReportSection
-          title="Online / bank"
-          note="Opening online balance is not tracked by this POS, so this is the period's movement."
-          lines={[
-            line('Online collections', o.totalOnlineIn, { sign: '+', tone: 'online' }),
-            line('Credit collected online', o.creditCollectionsOnline, { sign: '+', tone: 'online' }),
-            line('Online refunds', o.onlineRefunds, { sign: '−', tone: 'outflow' }),
-            line('Expenses & wages online', o.onlinePaidOut, { sign: '−', tone: 'outflow' }),
-            line('Online to savings', o.onlineSavings, { sign: '−' }),
-            line('Net online movement', o.netOnlineBalance, { strong: true, tone: 'online' }),
-          ]}
-        />
-      </div>
-      {c.denominations ? <div className="mt-3"><DrawerCount c={c} /></div> : null}
-      <p className="mt-2 px-1 text-xs leading-relaxed text-stone-600">
-        <strong>Cash movement is not the same as expected drawer cash.</strong> The drawer answers “what should be in the till right now” —
-        it starts from the float and resets to the counted cash after every close. Cash movement answers “how much cash did trading add
-        over the period”. Floats, reopens and count differences make them differ; both are correct.
-      </p>
-    </ReportGroup>
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+      <CashPositionBoard cash={s.cashPosition} online={s.onlinePosition} isAdmin={isAdmin} />
+    </div>
   );
 }
 
@@ -375,7 +254,7 @@ export default function SummaryReport({ scope = 'admin' }) {
           ) : null}
           <MoneyIn s={s} />
           <MoneyOut s={s} isAdmin={isAdmin} />
-          <CashPosition s={s} />
+          <CashPosition s={s} isAdmin={isAdmin} />
           <Savings s={s} />
           {isAdmin ? <Profitability s={s} /> : null}
           <Breakdown s={s} isAdmin={isAdmin} />

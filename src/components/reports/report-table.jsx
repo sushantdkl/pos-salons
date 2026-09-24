@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { count, humanize, money, StatusBadge, TONES } from '@/components/erp';
-import { BillLink } from '@/components/bills/bill-detail';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import { ExportButtons } from '@/components/exports/export-buttons';
 import { formatCalendarDate } from '@/lib/dates/calendar';
 
@@ -72,7 +72,7 @@ function Cell({ column, row, calendarSystem }) {
   if (column.type === 'date' || column.type === 'datetime') return <span className="tabular-nums text-stone-700">{cellText(column, row, calendarSystem)}</span>;
   const sub = column.subKey && row[column.subKey] ? <span className="block text-xs text-stone-400">{row[column.subKey]}</span> : null;
   if (column.type === 'customer' && row[column.idKey]) {
-    return <span><Link href={`/admin/customers/${row[column.idKey]}`} className="font-semibold text-indigo-700 hover:underline">{value}</Link>{sub}</span>;
+    return <span><Link href={`/admin/customers/${row[column.idKey]}`} onClick={(event) => event.stopPropagation()} className="font-semibold text-indigo-700 hover:underline">{value}</Link>{sub}</span>;
   }
   return (
     <span className={`${column.strong ? 'font-semibold text-stone-900' : column.muted ? 'text-stone-500' : 'text-stone-800'} ${column.muted ? 'block max-w-[260px] truncate' : ''}`} title={column.muted ? String(value) : undefined}>
@@ -111,6 +111,10 @@ export function ReportTable({
   const [sort, setSort] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  // A row that belongs to a bill opens that bill wherever it is clicked.
+  const [openBill, setOpenBill] = useState(null);
+  const billColumn = columns.find((column) => column.type === 'bill');
+  const billIdOf = (row) => (billColumn ? row[billColumn.idKey] : null);
 
   const needle = `${globalSearch} ${search}`.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -206,7 +210,14 @@ export function ReportTable({
             {visible.length === 0 ? (
               <tr><td colSpan={shown.length} className="px-4 py-12 text-center text-sm text-stone-400">{rows.length ? 'No records match your search.' : empty}</td></tr>
             ) : visible.map((row, index) => (
-              <tr key={row.id ?? `${current}-${index}`} className="hover:bg-stone-50/80">
+              <tr
+                key={row.id ?? `${current}-${index}`}
+                className={`hover:bg-stone-50/80 ${billIdOf(row) ? 'cursor-pointer focus:bg-indigo-50/60 focus:outline-none' : ''}`}
+                onClick={billIdOf(row) ? () => setOpenBill(billIdOf(row)) : undefined}
+                onKeyDown={billIdOf(row) ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenBill(billIdOf(row)); } } : undefined}
+                tabIndex={billIdOf(row) ? 0 : undefined}
+                title={billIdOf(row) ? 'Open bill details' : undefined}
+              >
                 {shown.map((column) => (
                   <td key={column.key} className={`whitespace-nowrap border-b border-stone-100 px-4 py-2.5 ${NUMERIC.has(column.type) ? 'text-right tabular-nums' : ''}`}>
                     <Cell column={column} row={row} calendarSystem={calendarSystem} />
@@ -263,6 +274,7 @@ export function ReportTable({
           <button type="button" className={pageButton} disabled={current >= pages} onClick={() => setPage(pages)} aria-label="Last page"><span className="hidden sm:inline">Last</span><ChevronsRight className="h-4 w-4" /></button>
         </div>
       </div>
+      {openBill ? <BillDetailDrawer billId={openBill} onClose={() => setOpenBill(null)} /> : null}
     </section>
   );
 }

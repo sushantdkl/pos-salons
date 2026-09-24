@@ -121,6 +121,18 @@ export default function ReviewRewardsPage() {
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
+  const join = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setClaimMessage('');
+    try {
+      const result = await api({ action: 'join', phone, name });
+      setCard(result.card);
+      setClaimMessage('Welcome! You have joined our rewards. Every paid visit now counts toward your reward.');
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
   const submitReview = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -194,7 +206,21 @@ export default function ReviewRewardsPage() {
             {claimMessage ? <p className="flex items-center gap-2 rounded-xl bg-emerald-950/60 p-3 text-sm text-emerald-200"><Check className="h-4 w-4" />{claimMessage}</p> : null}
             {config.rewardsEnabled ? (
               card.programs?.length ? card.programs.map((program) => <RewardCard key={program.programId} program={program} />)
-                : <p className="rounded-2xl border border-stone-800 bg-[#1f1b17] p-5 text-center text-sm text-stone-300">{card.found ? 'No reward visits yet. Your paid visits will show here.' : 'We could not find a reward card for this number yet. It starts with your first paid visit.'}</p>
+                : <p className="rounded-2xl border border-stone-800 bg-[#1f1b17] p-5 text-center text-sm text-stone-300">{card.found ? 'No reward visits yet. Your paid visits will show here.' : config.joinEnabled ? 'This number is not in our rewards yet — join below in a few seconds.' : 'We could not find a reward card for this number yet. It starts with your first paid visit.'}</p>
+            ) : null}
+
+            {config.joinEnabled && !card.found ? (
+              <section className="rounded-2xl border border-[#d7b56d]/40 bg-[#1f1b17] p-5">
+                <h2 className="text-center text-lg font-semibold text-white">Join our rewards</h2>
+                <p className="mt-1 text-center text-sm text-stone-400">Free to join. Your paid visits start counting from your next bill.</p>
+                <form onSubmit={join} className="mt-4 space-y-3">
+                  <input aria-label="Your name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name"
+                    className="h-12 w-full rounded-xl border border-stone-600 bg-[#171411] px-4 text-white placeholder:text-stone-600 focus:border-[#d7b56d] focus:outline-none" />
+                  <p className="text-center text-xs text-stone-500">Mobile number: {phone}</p>
+                  <button type="submit" disabled={busy || name.trim().length < 2} className="h-12 w-full rounded-xl text-sm font-bold text-[#171411] disabled:opacity-40" style={{ background: GOLD }}>{busy ? 'Joining…' : 'Join rewards'}</button>
+                </form>
+                <p className="mt-3 text-center text-[11px] text-stone-500">Tell us this number when you pay so your visit is added to your card.</p>
+              </section>
             ) : null}
 
             {config.claimCodesEnabled ? (

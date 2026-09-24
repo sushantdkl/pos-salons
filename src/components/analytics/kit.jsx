@@ -7,6 +7,8 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CHART_SERIES, count, money, moneyShort, tone, toNum } from '@/components/erp';
 
@@ -74,34 +76,49 @@ export function GroupHeading({ eyebrow, title, description }) {
   );
 }
 
+/** Makes a card a link (href) or an in-page action (onClick), with a hover arrow. */
+function Clickable({ href, onClick, label, className, children }) {
+  const cls = `group relative block text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A55C] ${className}`;
+  const arrow = <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-stone-300 transition-colors group-hover:text-[#9B742D]" aria-hidden="true" />;
+  if (href) return <Link href={href} className={cls} aria-label={`${label} — open details`}>{children}{arrow}</Link>;
+  if (onClick) return <button type="button" onClick={onClick} className={`${cls} w-full`} aria-label={`${label} — open details`}>{children}{arrow}</button>;
+  return <div className={className}>{children}</div>;
+}
+
 /** Money-flow card. `highlight` renders the charcoal + gold headline card. */
-export function FlowCard({ icon: Icon, tone: toneName = 'neutral', label, value, hint, highlight = false }) {
+export function FlowCard({ icon: Icon, tone: toneName = 'neutral', label, value, hint, highlight = false, href, onClick, children }) {
   if (highlight) {
     return (
-      <div className="relative col-span-2 min-w-0 overflow-hidden rounded-2xl bg-[#1C1917] p-5 text-white sm:col-span-1 shadow-[0_8px_24px_rgba(28,25,23,0.25)]">
+      <Clickable href={href} onClick={onClick} label={label} className="col-span-2 min-w-0 sm:col-span-1">
+      <div className="relative h-full min-w-0 overflow-hidden rounded-2xl bg-[#1C1917] p-5 text-white shadow-[0_8px_24px_rgba(28,25,23,0.25)]">
         {/* A quiet barber-pole stripe in the corner. */}
         <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rotate-12 rounded-2xl opacity-20" style={{ background: 'repeating-linear-gradient(135deg, #D7B56D 0 8px, transparent 8px 16px)' }} aria-hidden="true" />
         <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-[#E8CC8A] ring-1 ring-white/15">{Icon ? <Icon className="h-[18px] w-[18px]" aria-hidden="true" /> : null}</span>
         <p className="mt-5 text-sm font-semibold text-[#E8CC8A]">{label}</p>
         <p className="mt-0.5 truncate font-[family-name:var(--font-dashboard-heading)] text-[24px] font-extrabold tabular-nums">{value}</p>
         {hint ? <p className="mt-1 text-xs text-white/60">{hint}</p> : null}
+        {children}
       </div>
+      </Clickable>
     );
   }
   return (
-    <div className="min-w-0 rounded-2xl border border-stone-200/80 bg-white p-4 shadow-[0_1px_3px_rgba(28,25,23,0.05)] transition-shadow hover:shadow-[0_4px_14px_rgba(28,25,23,0.08)] sm:p-5">
+    <Clickable href={href} onClick={onClick} label={label} className="min-w-0">
+    <div className={`h-full min-w-0 rounded-2xl border border-stone-200/80 bg-white p-4 shadow-[0_1px_3px_rgba(28,25,23,0.05)] transition-all sm:p-5 ${href || onClick ? 'group-hover:-translate-y-0.5 group-hover:border-[#D9C089] group-hover:shadow-[0_6px_18px_rgba(28,25,23,0.10)]' : ''}`}>
       <IconBubble icon={Icon} tone={toneName} />
       <p className="mt-4 truncate text-[13px] font-medium text-stone-600 sm:mt-5 sm:text-sm">{label}</p>
       <p className="mt-0.5 truncate font-[family-name:var(--font-dashboard-heading)] text-[18px] font-extrabold tabular-nums text-stone-900 sm:text-[22px]">{value}</p>
       {hint ? <p className="mt-1 truncate text-xs text-stone-400" title={hint}>{hint}</p> : null}
+      {children}
     </div>
+    </Clickable>
   );
 }
 
 /** Icon + label + value, for the "How payment was recorded" rows. */
-export function MiniStat({ icon, tone: toneName = 'neutral', label, value, sub }) {
-  return (
-    <div className="flex min-w-0 items-start gap-3">
+export function MiniStat({ icon, tone: toneName = 'neutral', label, value, sub, href, onClick }) {
+  const body = (
+    <div className={`flex min-w-0 items-start gap-3 ${href || onClick ? 'rounded-xl p-1.5 -m-1.5 transition-colors group-hover:bg-stone-50' : ''}`}>
       <IconBubble icon={icon} tone={toneName} size="sm" />
       <div className="min-w-0">
         <p className="truncate text-xs font-medium text-stone-500">{label}</p>
@@ -110,6 +127,11 @@ export function MiniStat({ icon, tone: toneName = 'neutral', label, value, sub }
       </div>
     </div>
   );
+  if (!href && !onClick) return body;
+  const cls = 'group block min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A55C] rounded-xl';
+  return href
+    ? <Link href={href} className={cls} title={`${label} — open details`}>{body}</Link>
+    : <button type="button" onClick={onClick} className={cls} title={`${label} — open details`}>{body}</button>;
 }
 
 /** Money-control step card: label + big coloured value. */

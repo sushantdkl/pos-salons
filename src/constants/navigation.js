@@ -20,32 +20,35 @@ import {
  * tile: the coloured square behind each icon.
  */
 export const NAV_TINTS = {
-  reports: { bg: 'bg-indigo-50', header: 'text-indigo-800', hover: 'hover:bg-indigo-100', active: 'bg-indigo-100 text-indigo-950', bar: 'bg-indigo-600', icon: 'text-indigo-600', tile: 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100' },
-  operations: { bg: 'bg-teal-50', header: 'text-teal-800', hover: 'hover:bg-teal-100', active: 'bg-teal-100 text-teal-950', bar: 'bg-teal-600', icon: 'text-teal-600', tile: 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-100' },
-  inventory: { bg: 'bg-lime-50', header: 'text-lime-800', hover: 'hover:bg-lime-100', active: 'bg-lime-100 text-lime-950', bar: 'bg-lime-600', icon: 'text-lime-700', tile: 'bg-white text-lime-700 shadow-sm ring-1 ring-lime-100' },
-  finance: { bg: 'bg-amber-50', header: 'text-amber-800', hover: 'hover:bg-amber-100', active: 'bg-amber-100 text-amber-950', bar: 'bg-amber-600', icon: 'text-amber-600', tile: 'bg-white text-amber-600 shadow-sm ring-1 ring-amber-100' },
-  hrm: { bg: 'bg-violet-50', header: 'text-violet-800', hover: 'hover:bg-violet-100', active: 'bg-violet-100 text-violet-950', bar: 'bg-violet-600', icon: 'text-violet-600', tile: 'bg-white text-violet-600 shadow-sm ring-1 ring-violet-100' },
-  crm: { bg: 'bg-rose-50', header: 'text-rose-800', hover: 'hover:bg-rose-100', active: 'bg-rose-100 text-rose-950', bar: 'bg-rose-600', icon: 'text-rose-600', tile: 'bg-white text-rose-600 shadow-sm ring-1 ring-rose-100' },
-  system: { bg: 'bg-stone-100', header: 'text-stone-700', hover: 'hover:bg-stone-200', active: 'bg-stone-200 text-stone-950', bar: 'bg-stone-600', icon: 'text-stone-500', tile: 'bg-stone-200 text-stone-600' },
-  top: { bg: '', header: 'text-stone-700', hover: 'hover:bg-stone-100', active: 'bg-stone-900 text-white', bar: 'bg-stone-900', icon: 'text-stone-600', tile: 'bg-stone-100 text-stone-600' },
+  // Calm salon sidebar: each module group sits on its own muted tint (a soft wash of the colour
+  // that represents it), icons in the same hue, and the active row is a white chip with a gold
+  // marker. Muted on purpose — colour identifies the module without shouting.
+  reports: { bg: 'bg-[#EFF1F8] ring-1 ring-[#E1E5F2]', header: 'text-[#3F4A7A]', hover: 'hover:bg-[#E5E9F5]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#D9DEEE]', bar: 'bg-[#B8913F]', icon: 'text-[#5B67A8]', tile: 'text-[#5B67A8]' },
+  operations: { bg: 'bg-[#ECF5F3] ring-1 ring-[#DCEBE7]', header: 'text-[#2F6B61]', hover: 'hover:bg-[#E1EFEB]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#D2E6E0]', bar: 'bg-[#B8913F]', icon: 'text-[#3E8A7C]', tile: 'text-[#3E8A7C]' },
+  crm: { bg: 'bg-[#F9EFF1] ring-1 ring-[#F0DFE3]', header: 'text-[#8A3F52]', hover: 'hover:bg-[#F4E4E8]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#EBD5DB]', bar: 'bg-[#B8913F]', icon: 'text-[#B0566E]', tile: 'text-[#B0566E]' },
+  inventory: { bg: 'bg-[#F0F4EA] ring-1 ring-[#E2E9D8]', header: 'text-[#4F6B34]', hover: 'hover:bg-[#E6EDDD]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#D8E2CB]', bar: 'bg-[#B8913F]', icon: 'text-[#6A8C45]', tile: 'text-[#6A8C45]' },
+  finance: { bg: 'bg-[#FAF3E6] ring-1 ring-[#F0E4CB]', header: 'text-[#80602A]', hover: 'hover:bg-[#F5EAD4]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#EBDDBE]', bar: 'bg-[#B8913F]', icon: 'text-[#A77C2E]', tile: 'text-[#A77C2E]' },
+  hrm: { bg: 'bg-[#F3EFF8] ring-1 ring-[#E6DFF0]', header: 'text-[#5E4A86]', hover: 'hover:bg-[#EAE4F3]', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-[#DDD4EB]', bar: 'bg-[#B8913F]', icon: 'text-[#7A63A8]', tile: 'text-[#7A63A8]' },
+  system: { bg: 'bg-stone-100 ring-1 ring-stone-200', header: 'text-stone-600', hover: 'hover:bg-stone-200/70', active: 'bg-white text-stone-900 shadow-sm ring-1 ring-stone-200', bar: 'bg-[#B8913F]', icon: 'text-stone-500', tile: 'text-stone-500' },
+  top: { bg: '', header: 'text-stone-500', hover: 'hover:bg-stone-100', active: 'bg-[#F3EEE6] text-stone-900', bar: 'bg-[#B8913F]', icon: 'text-stone-500', tile: 'text-stone-500' },
 };
 
 const link = (label, href, icon, extra = {}) => ({ label, href, icon, ...extra });
 
-/** Colour tiles for main (top-level) links — each its own hue so the sidebar scans quickly. */
+/** Soft icon colours for main (top-level) links — each its own hue so the sidebar scans quickly. */
 export const ICON_TILES = {
-  sky: 'bg-sky-100 text-sky-600',
-  emerald: 'bg-emerald-100 text-emerald-600',
-  indigo: 'bg-indigo-100 text-indigo-600',
-  amber: 'bg-amber-100 text-amber-600',
-  rose: 'bg-rose-100 text-rose-600',
-  fuchsia: 'bg-fuchsia-100 text-fuchsia-600',
-  orange: 'bg-orange-100 text-orange-600',
-  cyan: 'bg-cyan-100 text-cyan-700',
-  blue: 'bg-blue-100 text-blue-600',
-  teal: 'bg-teal-100 text-teal-600',
-  slate: 'bg-slate-200 text-slate-600',
-  violet: 'bg-violet-100 text-violet-600',
+  sky: 'text-sky-600',
+  emerald: 'text-emerald-600',
+  indigo: 'text-indigo-500',
+  amber: 'text-amber-600',
+  rose: 'text-rose-500',
+  fuchsia: 'text-fuchsia-500',
+  orange: 'text-orange-500',
+  cyan: 'text-cyan-600',
+  blue: 'text-blue-500',
+  teal: 'text-teal-600',
+  slate: 'text-stone-500',
+  violet: 'text-violet-500',
 };
 const TOP_COLOURS = {
   Dashboard: 'sky', POS: 'emerald', Analytics: 'indigo', Summary: 'amber', Customers: 'rose', 'Customer Ledger': 'fuchsia',

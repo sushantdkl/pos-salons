@@ -152,6 +152,7 @@ function SettingsPanel({ settings, onSaved }) {
       {toggle('generalFeedbackEnabled', 'Allow feedback without a verified visit', 'Shown as “General feedback”, separate from verified visit reviews.')}
       {toggle('publicRewardsEnabled', 'Customers can see their reward card with their phone number', 'Shows first name and progress only. Rate-limited.')}
       {toggle('claimCodesEnabled', 'Print a one-time reward code on walk-in receipts')}
+      {toggle('publicJoinEnabled', 'Let new customers join rewards from the QR page (name + mobile, no visit earned)')}
       {toggle('receiptQrEnabled', 'Print the Review & Rewards QR on receipts')}
       {toggle('websiteReviewsEnabled', 'Show published reviews on the website')}
       <div className="grid gap-3 sm:grid-cols-3">

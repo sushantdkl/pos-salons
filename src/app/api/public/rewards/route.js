@@ -4,7 +4,7 @@ import Database from '@/lib/db/index';
 import { ensureSalonSchema } from '@/lib/salon-schema';
 import { clientIp, rateLimit } from '@/lib/security/rate-limit';
 import { getCrmSettings, listPrograms } from '@/lib/loyalty/service';
-import { claimVisit, lookupRewards } from '@/lib/loyalty/public';
+import { claimVisit, joinRewards, lookupRewards } from '@/lib/loyalty/public';
 import { publicForm, submitReview } from '@/lib/reviews/service';
 import { normalizePhone } from '@/lib/validation/phone';
 import { publicErrorMessage } from '@/lib/api/errors';
@@ -39,6 +39,7 @@ export async function GET(request) {
       reviewsEnabled: settings.publicReviewsEnabled,
       generalFeedbackEnabled: settings.generalFeedbackEnabled,
       claimCodesEnabled: settings.claimCodesEnabled && settings.publicRewardsEnabled,
+      joinEnabled: settings.publicJoinEnabled && settings.publicRewardsEnabled,
       programs,
       form: settings.publicReviewsEnabled ? await publicForm(db) : null,
     }, { headers: NO_STORE });
@@ -49,6 +50,7 @@ export async function GET(request) {
 
 /**
  * { action: 'lookup', phone } — safe reward card for a phone number
+ * { action: 'join', phone, name } — join rewards with an empty card (no visit is earned)
  * { action: 'claim', phone, code, name } — attach a walk-in visit with the receipt code (once)
  * { action: 'review', rating, text, answers, publicConsent, visitRef?, formId?, serviceId?, name? }
  */
@@ -68,6 +70,11 @@ export async function POST(request) {
         if (!byPhone.allowed) return tooMany(byPhone.retryAfterSeconds);
       }
       return NextResponse.json(await lookupRewards(db, data.phone), { headers: NO_STORE });
+    }
+    if (data.action === 'join') {
+      const limited = rateLimit(`rewards-join:${ip}`, { limit: 5, windowMs: 30 * 60_000 });
+      if (!limited.allowed) return tooMany(limited.retryAfterSeconds);
+      return NextResponse.json(await joinRewards(db, data), { status: 201, headers: NO_STORE });
     }
     if (data.action === 'claim') {
       const limited = rateLimit(`rewards-claim:${ip}`, { limit: 8, windowMs: 15 * 60_000 });

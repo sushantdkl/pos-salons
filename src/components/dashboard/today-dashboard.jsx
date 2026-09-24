@@ -8,8 +8,9 @@
  * payroll to a cashier, so this component shows only what it is given.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { BillLink } from '@/components/bills/bill-detail';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import { AlertTriangle, ArrowRight, CalendarClock, LayoutDashboard, Store } from 'lucide-react';
 import StoreStatusBar from '@/components/store/store-status-bar';
 import {
@@ -72,6 +73,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
   const s = data?.summary;
   const store = data?.store;
   const open = store?.state === 'OPEN';
+  const [openBill, setOpenBill] = useState(null);
 
   return (
     <ErpPage>
@@ -158,6 +160,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
             <FinancialTable
               caption="Recent bills"
               rows={data.recentBills || []}
+              onRowClick={(bill) => setOpenBill(bill.id)}
               empty="No bills yet today."
               columns={[
                 { key: 'bill_number', label: 'Bill', render: (bill) => <BillLink billId={bill.id} number={bill.bill_number} /> },
@@ -202,6 +205,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
           ) : null}
         </div>
       ) : null}
+      {openBill ? <BillDetailDrawer billId={openBill} onClose={() => setOpenBill(null)} /> : null}
     </ErpPage>
   );
 }

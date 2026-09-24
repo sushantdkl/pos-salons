@@ -105,8 +105,26 @@ if (an) {
   check('F6 expenses excl. purchases + purchases = expenses', near(an.money.expenses.excludingPurchases + an.money.purchases.total, an.money.expenses.total));
   check('F7 payment records match the bill count', an.paymentRecords.truncated || an.paymentRecords.records.length === an.kpis.bills);
   check('F8 voided list total = voids KPI', near(an.cancellations.totals.voidedAmount, r.voids));
+  const board = an.money.cashPosition.board;
+  check('F10 cash board: ledger = opening + net movement', near(board.ledgerBalance, an.money.cashPosition.startingCash + an.money.cashPosition.netCashMovement));
+  if (an.money.cashPosition.expectedCash !== null) check('F11 cash board: opening + in − out = drawer cash', near(board.drawerClosing, an.money.cashPosition.expectedCash), [board.drawerClosing, an.money.cashPosition.expectedCash]);
   check('F9 cashier cannot open analytics', (await get(cashier, '/api/admin/analytics?period=today')).status === 403);
 } else check('F analytics loads', false);
+
+// G. Ledger pages: ageing adds up to what is owed, and matches the existing balance lists.
+for (const kind of ['customer', 'supplier']) {
+  const body = (await get(admin, `/api/ledgers/overview?kind=${kind}`)).json;
+  const aged = body.ageing.reduce((sum, bucket) => sum + bucket.amount, 0);
+  check(`G ${kind} ledger: ageing buckets = total owed`, near(aged, body.outstanding), [aged, body.outstanding]);
+  check(`G ${kind} ledger: rows = total owed`, near(body.outstandingRows.reduce((sum, row) => sum + row.balance, 0), body.outstanding));
+  const reference = kind === 'customer'
+    ? (await get(admin, '/api/customers/ledger')).json.totals.outstanding
+    : (await get(admin, '/api/suppliers?all=1')).json.totals.payable;
+  check(`G ${kind} ledger: total = existing ${kind} balances`, near(reference, body.outstanding), [reference, body.outstanding]);
+  const history = (await get(admin, `/api/ledgers/overview?kind=${kind}&from=${START}&to=${END}`)).json;
+  check(`G ${kind} ledger: history period works`, Array.isArray(history.history));
+}
+check('G cashier without supplier permission cannot open the supplier ledger', (await get(cashier, '/api/ledgers/overview?kind=supplier')).status === 403);
 
 const failed = results.filter((r) => !r.ok);
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.label}${r.ok || !r.detail ? '' : ` — ${r.detail}`}`);

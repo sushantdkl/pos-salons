@@ -55,7 +55,11 @@ const all = async (sql, params = []) => (await q(sql, params)).rows;
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
 const firstDay = addDays(today, -DAYS);
-const at = (date, hhmm) => nepalInstant(date, hhmm);
+// Today is seeded live: nothing may be stamped later than "now".
+const NOW = new Date();
+const at = (date, hhmm) => { const t = nepalInstant(date, hhmm); return t > NOW ? new Date(NOW.getTime() - 120000) : t; };
+const nowParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit', hour12: false }).format(NOW).split(':').map(Number);
+const NOW_MINUTE = nowParts[0] * 60 + nowParts[1];
 const clock = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
 await q('BEGIN');
@@ -99,8 +103,8 @@ try {
       ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [name, phone, chance(0.25) ? 5000 : 0, at(addDays(firstDay, -between(0, 120)), '11:00')]);
     customers.push({ id: row.id, name, phone, creditLimit: 0, credit: 0, loyalty: 0, visits: 0, spent: 0 });
   }
-  await q('UPDATE customers SET credit_limit = 5000 WHERE id = ANY($1)', [customers.filter((_, i) => i % 4 === 0).map((c) => c.id)]);
-  customers.forEach((c, i) => { c.creditLimit = i % 4 === 0 ? 5000 : 0; });
+  await q('UPDATE customers SET credit_limit = 5000 WHERE id = ANY($1)', [customers.filter((_, i) => i % 3 === 0).map((c) => c.id)]);
+  customers.forEach((c, i) => { c.creditLimit = i % 3 === 0 ? 5000 : 0; });
   const regulars = customers.slice(0, 50); // come back often — they build loyalty cards
 
   /* ------------------------------------------------------------- loyalty, reviews, suppliers, HR setup */
@@ -144,8 +148,10 @@ try {
   const stats = { bills: 0, voids: 0, reviews: 0, appointments: 0, attendance: 0 };
 
   /* ------------------------------------------------------------- one day */
-  for (let dayIndex = 0; dayIndex < DAYS; dayIndex += 1) {
+  // DAYS closed days of history, then TODAY left open (live drawer, sales up to the current time).
+  for (let dayIndex = 0; dayIndex <= DAYS; dayIndex += 1) {
     const date = addDays(firstDay, dayIndex);
+    const isToday = date === today;
     const weekday = weekdayOf(date);
     const isHoliday = date === holidayDate;
     if (isHoliday) continue; // salon closed
@@ -160,11 +166,15 @@ try {
     // Tokens counter per day
     let tokenNo = 0;
     const busy = weekday === 6 ? 1.45 : weekday === 5 ? 1.2 : 1; // Saturday busiest
-    const billCount = Math.round(between(13, 26) * busy);
+    // Today only has the bills rung up so far.
+    const lastMinute = isToday ? Math.min(19 * 60 + 45, NOW_MINUTE - 3) : 19 * 60 + 45;
+    const firstMinute = lastMinute < 10 * 60 + 30 ? Math.max(0, lastMinute - 150) : 10 * 60 + 5;
+    const dayShare = isToday ? Math.min(1, Math.max(0.2, (lastMinute - 605) / (1180 - 605))) : 1;
+    const billCount = Math.max(isToday ? 4 : 1, Math.round(between(13, 26) * busy * dayShare));
     const dayBills = [];
 
     for (let b = 0; b < billCount; b += 1) {
-      const minute = between(10 * 60 + 5, 19 * 60 + 45);
+      const minute = between(firstMinute, Math.max(firstMinute, lastMinute));
       const when = at(date, clock(minute));
       const identified = chance(0.68);
       const customer = identified ? (chance(0.6) ? pick(regulars) : pick(customers)) : null;
@@ -192,7 +202,7 @@ try {
       const grandTotal = round2(subtotal - discount - loyaltyDiscount);
 
       // Payment mix
-      let method = weighted([['cash', 48], ['online', 40], ['split', 7], ['credit', 5]]);
+      let method = weighted([['cash', 46], ['online', 38], ['split', 7], ['credit', 9]]);
       if (method === 'credit' && !(customer && customer.creditLimit > 0 && customer.credit + grandTotal <= customer.creditLimit)) method = 'cash';
       if (grandTotal === 0) method = 'cash';
       let cash = 0; let online = 0; let credit = 0; let qrType = null;
@@ -357,7 +367,7 @@ try {
     }
 
     // Credit collections
-    for (const c of customers.filter((x) => x.credit > 0 && chance(0.12))) {
+    for (const c of customers.filter((x) => x.credit > 0 && chance(0.05))) {
       const amount = chance(0.6) ? c.credit : round2(Math.floor(c.credit / 2));
       if (amount <= 0) continue;
       const cashPaid = chance(0.6);
@@ -429,6 +439,9 @@ try {
         savingsCash += amount;
       }
     }
+
+    // Today stays open: no clock-outs, no close.
+    if (isToday) break;
 
     // HR attendance for everyone rostered today
     for (const member of staff) {

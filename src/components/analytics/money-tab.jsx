@@ -7,9 +7,9 @@ import {
 } from 'lucide-react';
 import { count, money, TONES } from '@/components/erp';
 import { TrendChart } from '@/components/erp/charts';
+import { CashPositionBoard } from '@/components/reports/cash-position-board';
 import { ReportTable } from '@/components/reports/report-table';
-import { CASH_DENOMINATIONS } from '@/lib/business-day/denominations';
-import { ChartPanel, ColumnBars, DashSection, GroupHeading, LedgerPanel, MiniStat, PlainTable, RingDonut, Step, StepCard, rupees } from './kit';
+import { ChartPanel, ColumnBars, DashSection, MiniStat, PlainTable, RingDonut, Step, StepCard, rupees } from './kit';
 import { SOURCE_COLOURS } from './overview-tab';
 
 const RECORD_COLUMNS = {
@@ -33,48 +33,12 @@ const RECORD_COLUMNS = {
   ],
 };
 
-function DrawerCountPanel({ c }) {
-  const counts = c.denominations;
-  const rows = counts ? CASH_DENOMINATIONS.map((note) => ({ note, n: Number(counts[note] ?? counts[String(note)] ?? 0) })) : [];
-  const counted = c.countedCash ?? c.lastCountedCash;
-  return (
-    <LedgerPanel
-      title={`Drawer count${c.lastCountedDate ? ` · ${c.lastCountedDate}` : ''}`}
-      tone="hrm"
-      rows={[
-        { label: 'Expected drawer cash', value: c.expectedCash ?? '—', sub: c.expectedCashSource === 'live' ? 'live' : 'at close' },
-        { label: 'Physically counted cash', value: counted ?? 'Not counted yet' },
-        c.cashDifference !== null && c.cashDifference !== undefined
-          ? { label: c.cashDifference < 0 ? 'Drawer cash short' : c.cashDifference > 0 ? 'Drawer cash over' : 'Drawer matched', value: c.cashDifference, strong: true, sign: c.cashDifference < 0 ? '-' : c.cashDifference > 0 ? '+' : '' }
-          : null,
-      ]}
-    >
-      {counts ? (
-        <table className="w-full border-t border-stone-100 text-[12.5px]">
-          <thead><tr className="text-[10.5px] font-bold uppercase tracking-wide text-stone-500"><th className="px-5 py-2 text-left">Note</th><th className="px-3 py-2 text-right">Count</th><th className="px-5 py-2 text-right">Calculation</th></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.note} className={`border-t border-stone-100 ${row.n ? 'text-stone-800' : 'text-stone-300'}`}>
-                <td className="px-5 py-1.5 font-semibold">{row.note.toLocaleString('en-IN')}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{row.n}</td>
-                <td className="px-5 py-1.5 text-right tabular-nums">{row.note.toLocaleString('en-IN')} × {row.n} = {money(row.note * row.n)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot><tr className="border-t-2 border-stone-800 font-bold text-stone-900"><td className="px-5 py-2">Total</td><td className="px-3 py-2 text-right tabular-nums">{rows.reduce((sum, row) => sum + row.n, 0)}</td><td className="px-5 py-2 text-right tabular-nums">{money(counted)}</td></tr></tfoot>
-        </table>
-      ) : <p className="border-t border-stone-100 px-5 py-4 text-xs text-stone-500">No note breakdown was recorded. Count notes at Close Store and the breakdown appears here.</p>}
-    </LedgerPanel>
-  );
-}
-
 export function MoneyTab({ a, calendarSystem }) {
   const m = a.money;
   const r = m.revenue;
   const p = m.payments;
   const c = m.cashPosition;
   const o = m.onlinePosition;
-  const f = m.cashFlow;
   const ps = a.paymentSummary;
   const pl = m.profitLoss;
   const records = a.paymentRecords.records;
@@ -145,68 +109,9 @@ export function MoneyTab({ a, calendarSystem }) {
         <p className="mt-3 text-xs text-stone-500">A bill counts as Appointment when it was raised from a checked-in booking, as Token when it closed a queue token, otherwise as a direct walk-in bill. Voids are not deducted here (see step 2).</p>
       </DashSection>
 
-      <div>
-        <GroupHeading title="Cash position" description="Where the money sits now, and how the drawer reconciles." />
-        <div className="grid gap-4 lg:grid-cols-3">
-          <LedgerPanel title="Money position" tone="ledger" rows={[
-            { section: 'Cash drawer' },
-            { label: 'Total cash in', value: f.cashIn, sign: '+' },
-            { label: 'Total cash out', value: f.cashOut, sign: '-' },
-            { label: 'Net cash movement', value: c.netCashMovement, strong: true, sub: 'this period' },
-            { label: 'Cash in hand', value: c.netCashInHand, strong: true, sub: c.expectedCashSource === 'live' ? 'live drawer' : 'at last close' },
-            { section: 'Online' },
-            { label: 'Online salon sales', value: o.totalOnlineIn, sub: `eSewa ${money(o.esewaPhonePay)} · Bank ${money(o.bankQr)}` },
-            { label: 'Credit collected online', value: o.creditCollectionsOnline },
-            { label: 'Total online received', value: f.onlineIn, strong: true },
-            { section: 'Online balance' },
-            { label: 'Net online movement', value: o.netOnlineBalance, strong: true, sub: 'online in less online out' },
-          ]} footnote="Cash in hand is the drawer the cashier reconciles (live while the store is open, otherwise the last close). Net cash movement is what trading added over the period; floats and count differences make the two differ." />
-          <LedgerPanel title="Cash in / cash out" tone="cash" rows={[
-            { label: 'Opening cash', value: c.startingCash, sub: 'first opening in the period' },
-            { section: 'Cash in' },
-            { label: 'Sales settled in cash', value: c.cashCollected, sign: '+' },
-            { label: 'Credit collected in cash', value: c.creditCollectionsCash, sign: '+' },
-            c.cashAdded ? { label: 'Float added at store open', value: c.cashAdded, sign: '+' } : null,
-            { label: 'Total in', value: f.cashIn, strong: true },
-            { section: 'Cash out' },
-            { label: 'Operating expenses & purchases', value: c.cashExpenses, sign: '-' },
-            c.cashSalary ? { label: 'Salary & advances', value: c.cashSalary, sign: '-' } : null,
-            { label: 'Moved to savings', value: c.cashSavings, sign: '-' },
-            { label: 'Refunds', value: c.cashRefunds, sign: '-' },
-            c.cashRemoved ? { label: 'Float removed at store open', value: c.cashRemoved, sign: '-' } : null,
-            { label: 'Total out', value: f.cashOut, strong: true },
-            c.sessionDifferences ? { label: c.sessionDifferences < 0 ? 'Cash short at closes' : 'Cash over at closes', value: Math.abs(c.sessionDifferences), sign: c.sessionDifferences < 0 ? '-' : '+' } : null,
-            { label: 'Closing cash (drawer)', value: c.expectedCash ?? c.netCashInHand, strong: true },
-          ]} />
-          <LedgerPanel title="Cash in bank / online" tone="online" rows={[
-            { label: 'Opening balance', value: 'Not tracked', muted: true },
-            { label: 'Online sales', value: o.totalOnlineIn, sign: '+' },
-            { label: 'Credit collected online', value: o.creditCollectionsOnline, sign: '+' },
-            { label: 'Refunds', value: o.onlineRefunds, sign: '-' },
-            { label: 'Expenses & purchases', value: o.onlineExpenses, sign: '-' },
-            o.onlineSalary ? { label: 'Salary & advances', value: o.onlineSalary, sign: '-' } : null,
-            { label: 'Moved to savings', value: o.onlineSavings, sign: '-' },
-            { label: 'Net online movement', value: o.netOnlineBalance, strong: true },
-          ]} footnote="The POS does not hold a bank opening balance, so this is the period's online movement." />
-        </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          <DrawerCountPanel c={c} />
-          <LedgerPanel title="Recorded cash movements" tone="neutral" rows={[
-            { label: 'Float added at store open', value: c.cashAdded, sign: c.cashAdded ? '+' : '' },
-            { label: 'Float removed at store open', value: c.cashRemoved, sign: c.cashRemoved ? '-' : '' },
-            { label: 'Savings deposits (cash)', value: m.savings.fromCash, strong: true },
-            { label: 'Savings deposits (online)', value: m.savings.fromOnline },
-          ]} footnote="Drawer transfers and savings move the salon's own money. They are not sales and not operating expenses." />
-          <LedgerPanel title="Sessions & closes" tone="neutral" rows={[
-            { label: 'Store sessions', value: count(a.controls.sessions) },
-            { label: 'Same-day reopens', value: count(a.controls.reopenedSessions) },
-            { label: 'Short closes', value: `${count(a.controls.shortages)} · ${money(a.controls.shortageTotal)}` },
-            { label: 'Over closes', value: `${count(a.controls.overages)} · ${money(a.controls.overageTotal)}` },
-            { label: 'Force-closed sessions', value: count(a.controls.forceClosed) },
-            { label: 'Last close by', value: c.closedBy || '—' },
-          ]} />
-        </div>
-      </div>
+      <DashSection padded>
+        <CashPositionBoard cash={c} online={o} isAdmin />
+      </DashSection>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartPanel title="Net sales trend" note="After discounts and voids">

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  CheckCircle2, CreditCard, MessageCircle, Minus, Plus, Printer, Receipt, Search, Trash2, User, UserPlus, Wallet, X, Ticket
+  CheckCircle2, MessageCircle, Minus, Plus, Printer, QrCode, Receipt, Search, Sparkles, Trash2, User, UserPlus, Wallet, X, Ticket
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { buildCustomerReceiptHtml } from '@/lib/documents/customer-receipt';
@@ -86,6 +86,7 @@ function BillingContent() {
   });
   const [qrModal, setQrModal] = useState(null);
   const [processingBill, setProcessingBill] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
   // Loyalty: the selected customer's cards; the cashier chooses to apply a reward (never automatic).
   const [loyalty, setLoyalty] = useState({ customerId: null, programs: [] });
   const [appliedRewardId, setAppliedRewardId] = useState(null);
@@ -472,6 +473,9 @@ function BillingContent() {
     }
   };
 
+  // A saved bill closes the payment pop-up; its receipt pop-up takes over.
+  useEffect(() => { if (successBill) setPayOpen(false); }, [successBill]);
+
   const closeSuccessBill = () => setSuccessBill(null);
 
   const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=360,height=720')) => {
@@ -709,33 +713,20 @@ function BillingContent() {
             </section>
           </div>
 
-          {/* Cart */}
+          {/* Current order */}
           <aside className="h-fit xl:sticky xl:top-4">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-950">
-                  <Receipt className="h-5 w-5" />
-                  Bill
-                </h2>
+            <div className="flex max-h-[calc(100vh-2rem)] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-gradient-to-r from-[#FBF7EF] to-white px-5 py-4">
+                <div className="min-w-0">
+                  <h2 className="flex items-center gap-2 text-lg font-extrabold text-stone-900"><Receipt className="h-5 w-5 text-[#9B742D]" />Current Order</h2>
+                  <p className="text-xs text-stone-500">{cartCount ? `${cartCount} item${cartCount === 1 ? '' : 's'} · ${isWalkIn ? 'Walk-in' : customer.name}` : 'Ready — pick a token or add services'}</p>
+                </div>
                 {cartCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={clearCart}
-                    className="text-sm font-medium text-red-600 hover:text-red-700"
-                  >
-                    Clear all
-                  </button>
+                  <button type="button" onClick={clearCart} className="text-xs font-semibold text-rose-600 hover:text-rose-700">Clear all</button>
                 ) : null}
               </div>
 
-              <div className="p-5">
-                {error ? (
-                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
-                    {error}
-                  </div>
-                ) : null}
-
-                <div className="max-h-[48vh] space-y-2 overflow-y-auto xl:max-h-[36vh]">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
                   {cartServices.map((service) => (
                     <div key={service.cart_id} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -796,13 +787,74 @@ function BillingContent() {
                   ))}
 
                   {cartCount === 0 ? (
-                    <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
-                      Tap a service or product to add it here.
+                    <div className="flex h-full min-h-[220px] flex-col items-center justify-center text-center text-stone-400">
+                      <Receipt className="mb-2 h-9 w-9 text-stone-300" />
+                      <p className="text-sm font-semibold text-stone-500">Order is empty</p>
+                      <p className="text-xs">Tap a service or product to add it here.</p>
                     </div>
                   ) : null}
+              </div>
+
+              <div className="space-y-3 border-t border-stone-100 bg-[#FCFAF6] p-4">
+                {error && !payOpen ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>
+                ) : null}
+                <div className="space-y-1.5 rounded-xl border border-stone-200 bg-white p-3 text-sm">
+                  <div className="flex justify-between text-stone-600"><span>Subtotal</span><span className="font-semibold text-stone-900">{formatCurrency(subtotal)}</span></div>
+                  {safeDiscount > 0 ? <div className="flex justify-between text-rose-600"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div> : null}
+                  {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward</span><span>-{formatCurrency(rewardDiscount)}</span></div> : null}
+                  {tax > 0 ? <div className="flex justify-between text-stone-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div> : null}
+                  <div className="flex justify-between border-t border-stone-100 pt-2 text-lg font-extrabold text-stone-900"><span>Total</span><span className="text-emerald-700">{formatCurrency(total)}</span></div>
+                </div>
+                {loyalty.programs.some((program) => program.available > 0) ? (
+                  <p className="rounded-lg bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-800">This customer has a loyalty reward ready — apply it in Bill Payment.</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => { setError(''); setPayOpen(true); }}
+                  disabled={cartCount === 0 || processingBill}
+                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-700/40"
+                >
+                  <Wallet className="h-4 w-4" />
+                  Bill Payment{cartCount ? ` · ${formatCurrency(total)}` : ''}
+                </button>
+                {lastBill && !successBill ? (
+                  <button type="button" onClick={sendDigitalReceipt} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-sm font-semibold text-stone-700 hover:bg-stone-50">
+                    <MessageCircle className="h-4 w-4" />Send last receipt on WhatsApp
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </aside>
+
+          {payOpen ? (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Bill payment" onClick={() => !processingBill && setPayOpen(false)}>
+              <div className="flex max-h-[96vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-center justify-between gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-white px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-700 text-white"><Wallet className="h-5 w-5" /></span>
+                    <div>
+                      <h3 className="text-lg font-extrabold text-stone-900">Bill Payment</h3>
+                      <p className="text-xs text-stone-500">Choose customer and collect payment</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setPayOpen(false)} disabled={processingBill} aria-label="Close" className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700"><X className="h-5 w-5" /></button>
                 </div>
 
-                <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={setWalkInCustomer} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border text-sm font-semibold ${isWalkIn ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}><User className="h-4 w-4" />Walk-in</button>
+                    <select
+                      value={customer.id || ''}
+                      onChange={(event) => selectCustomer(event.target.value)}
+                      aria-label="Saved customer"
+                      className={`min-h-11 min-w-0 rounded-xl border px-3 text-sm font-semibold ${!isWalkIn ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-700'}`}
+                    >
+                      <option value="">Customer…</option>
+                      {customers.map((item) => <option key={item.id} value={item.id}>{item.name}{item.phone ? ` · ${item.phone}` : ''}</option>)}
+                    </select>
+                  </div>
+
                   {loyalty.programs.filter((program) => program.available > 0).map((program) => (
                     <div key={program.programId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-pink-200 bg-pink-50 p-3">
                       <div className="min-w-0">
@@ -817,21 +869,75 @@ function BillingContent() {
                   {loyalty.programs.filter((program) => program.available === 0 && program.enrolled).map((program) => (
                     <p key={program.programId} className="text-xs text-gray-500">{program.name}: {program.progress}/{program.requiredVisits} — {program.remaining} more until {program.rewardLabel}</p>
                   ))}
-                  <div className="grid grid-cols-2 gap-2">
-                    <select value={discountType} onChange={(event) => setDiscountType(event.target.value)} className={inputClass}>
-                      <option value="amount">Discount Rs</option>
-                      <option value="percentage">Discount %</option>
-                    </select>
-                    <input
-                      type="number"
-                      min="0"
-                      value={discountValue}
-                      onChange={(event) => setDiscountValue(event.target.value)}
-                      placeholder="0"
-                      className={inputClass}
-                    />
+
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <p className="text-[13px] font-bold text-stone-800">Manual discount</p>
+                      <div className="inline-flex rounded-lg bg-stone-100 p-0.5 text-xs font-bold">
+                        {[['percentage', '%'], ['amount', 'Rs']].map(([type, label]) => (
+                          <button key={type} type="button" onClick={() => setDiscountType(type)} className={`rounded-md px-2.5 py-1 ${discountType === type ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <label className="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 focus-within:border-emerald-500">
+                      <span className="text-sm text-stone-400">{discountType === 'percentage' ? '%' : 'Rs'}</span>
+                      <input type="number" min="0" value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} placeholder="0" aria-label="Manual discount" className="min-w-0 flex-1 bg-transparent py-2 text-sm text-stone-900 outline-none" />
+                    </label>
                   </div>
 
+                  <label className="block">
+                    <span className="text-[13px] font-bold text-stone-800">Tax % <span className="font-normal text-stone-400">(optional)</span></span>
+                    <input type="number" min="0" max="100" value={taxPercent} onChange={(event) => setTaxPercent(event.target.value)} placeholder="0" className="mt-1.5 block min-h-11 w-full rounded-xl border border-stone-300 px-3 text-sm" />
+                  </label>
+
+                  <div className="space-y-1.5 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-sm">
+                    <div className="flex justify-between text-stone-600"><span>Subtotal</span><span className="font-semibold text-stone-900">{formatCurrency(subtotal)}</span></div>
+                    {safeDiscount > 0 ? <div className="flex justify-between text-rose-600"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div> : null}
+                    {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward · {appliedReward.rewardLabel}</span><span>-{formatCurrency(rewardDiscount)}</span></div> : null}
+                    {tax > 0 ? <div className="flex justify-between text-stone-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div> : null}
+                    <div className="flex justify-between border-t border-emerald-200 pt-2 text-lg font-extrabold"><span className="text-stone-900">Total</span><span className="text-emerald-700">{formatCurrency(total)}</span></div>
+                  </div>
+
+                  <div>
+                    <p className="mb-1.5 text-[13px] font-bold text-stone-800">Payment</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        ['cash', Wallet, 'Cash'],
+                        ['online', QrCode, 'Online'],
+                        ['credit', User, 'Credit'],
+                        ['split', Sparkles, 'Split'],
+                      ].map(([method, Icon, label]) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPaymentMethod(method)}
+                          className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border text-xs font-bold transition ${paymentMethod === method ? 'border-emerald-700 bg-emerald-700 text-white shadow-sm' : 'border-emerald-200 bg-white text-stone-700 hover:bg-emerald-50'}`}
+                        >
+                          <Icon className="h-5 w-5" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {paymentMethod === 'cash' ? (
+                    <div className="rounded-xl border border-emerald-200 p-3">
+                      <div className="flex justify-between text-sm"><span className="text-stone-500">Amount due</span><span className="font-bold text-stone-900">{formatCurrency(total)}</span></div>
+                      <label className="mt-2 block text-[13px] font-bold text-stone-800">Amount received
+                        <input type="number" min="0" value={amountPaid} onChange={(event) => setAmountPaid(event.target.value)} placeholder={total.toFixed(2)} className="mt-1 block min-h-12 w-full rounded-xl border border-stone-300 px-3 text-lg font-bold text-stone-900" />
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[['Exact', total], ...[50, 100, 500, 1000].map((step) => [null, Math.ceil(total / step) * step])]
+                          .filter(([, value], index, list) => value > 0 && list.findIndex(([, other]) => other === value) === index)
+                          .map(([label, value]) => (
+                            <button key={value} type="button" onClick={() => setAmountPaid(value.toFixed(2))} className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${Number(amountPaid) === value ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}>
+                              {label || formatCurrency(value)}
+                            </button>
+                          ))}
+                      </div>
+                      <p className={`mt-2 text-sm font-bold ${change >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{change >= 0 ? `Change: ${formatCurrency(change)}` : `Short by ${formatCurrency(-change)}`}</p>
+                    </div>
+                  ) : null}
                   {paymentMethod === 'online' ? (
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
                       <p className="mb-2 text-sm font-semibold text-blue-950">Show QR to customer</p>
@@ -943,97 +1049,24 @@ function BillingContent() {
                       </div>
                     </div>
                   ) : null}
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={taxPercent}
-                    onChange={(event) => setTaxPercent(event.target.value)}
-                    placeholder="Tax % (optional)"
-                    className={inputClass}
-                  />
-
-                  <div className="space-y-1.5 rounded-lg bg-gray-50 p-3 text-sm">
-                    <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                    <div className="flex justify-between text-green-700"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div>
-                    {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward · {appliedReward.rewardLabel}</span><span>-{formatCurrency(rewardDiscount)}</span></div> : null}
-                    <div className="flex justify-between text-gray-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
-                    <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold text-gray-950">
-                      <span>Total</span>
-                      <span>{formatCurrency(total)}</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      ['cash', Wallet, 'Cash'],
-                      ['card', CreditCard, 'Card'],
-                      ['online', MessageCircle, 'Online'],
-                      ['credit', User, 'Credit'],
-                      ['split', Receipt, 'Split'],
-                    ].map(([method, Icon, label]) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => setPaymentMethod(method)}
-                        className={`rounded-lg border px-2 py-2.5 text-xs font-semibold transition ${
-                          paymentMethod === method
-                            ? 'border-gray-900 bg-gray-900 text-white'
-                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className="mx-auto mb-1 h-4 w-4" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {paymentMethod === 'cash' ? (
-                    <div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={amountPaid}
-                        onChange={(event) => setAmountPaid(event.target.value)}
-                        placeholder={`Cash received (${formatCurrency(total)})`}
-                        className={inputClass}
-                      />
-                      {amountPaid && change >= 0 ? (
-                        <p className="mt-1.5 text-sm font-semibold text-green-700">Change: {formatCurrency(change)}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
                   {paymentMethod === 'credit' ? (
-                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
-                      {customer.id ? `Credit will be recorded against ${customer.name}. The server enforces the customer credit limit.` : 'Select an existing customer to use credit.'}
+                    <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+                      {customer.id ? `Credit will be recorded against ${customer.name}. The server enforces the customer credit limit.` : 'Select a saved customer above to use credit.'}
                     </div>
                   ) : null}
 
-                  <div className="grid gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={completeBill}
-                      disabled={cartCount === 0 || processingBill}
-                      className="rounded-lg bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {processingBill ? 'Completing...' : 'Complete bill'}
-                    </button>
-                  </div>
+                  {error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div> : null}
+                </div>
 
-                  {lastBill && !successBill ? (
-                    <button
-                      type="button"
-                      onClick={sendDigitalReceipt}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      <MessageCircle className="mr-2 inline h-4 w-4" />
-                      Send digital receipt
-                    </button>
-                  ) : null}
+                <div className="grid grid-cols-[1fr_1.4fr] gap-2 border-t border-stone-100 px-5 py-4">
+                  <button type="button" onClick={() => setPayOpen(false)} disabled={processingBill} className="min-h-12 rounded-xl border border-stone-300 bg-white text-sm font-bold text-stone-700 hover:bg-stone-50">Cancel</button>
+                  <button type="button" onClick={completeBill} disabled={cartCount === 0 || processingBill} className="min-h-12 rounded-xl bg-emerald-700 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
+                    {processingBill ? 'Completing…' : `Pay ${formatCurrency(total)}`}
+                  </button>
                 </div>
               </div>
             </div>
-          </aside>
+          ) : null}
         </div>
       </div>
       {successBill?.bill ? (

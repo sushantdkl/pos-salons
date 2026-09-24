@@ -227,7 +227,7 @@ export default function TransactionReport({ basePath, backPath, title }) {
                   </tr>
                 ) : pageTransactions.length ? (
                   pageTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="align-top hover:bg-gray-50">
+                    <tr key={transaction.id} className="cursor-pointer align-top hover:bg-gray-50" onClick={() => setSelected(transaction)} title="Open bill details">
                       <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">{formatDateTime(transaction.transactionDate)}</td>
                       <td className="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900"><BillLink billId={transaction.id} number={transaction.billNumber} /></td>
                       <td className="px-3 py-3 text-sm">

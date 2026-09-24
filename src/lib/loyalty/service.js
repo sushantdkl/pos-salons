@@ -44,6 +44,7 @@ export async function getCrmSettings(db) {
     publicReviewsEnabled: row?.public_reviews_enabled !== false,
     generalFeedbackEnabled: row?.general_feedback_enabled !== false,
     claimCodesEnabled: row?.claim_codes_enabled !== false,
+    publicJoinEnabled: row?.public_join_enabled !== false,
     claimCodeValidDays: Number(row?.claim_code_valid_days || 7),
     reviewWindowDays: Number(row?.review_window_days || 14),
     websiteReviewsEnabled: row?.website_reviews_enabled !== false,
@@ -58,7 +59,7 @@ export async function getCrmSettings(db) {
 export async function updateCrmSettings(db, actor, input) {
   const current = await getCrmSettings(db);
   const next = { ...current };
-  for (const key of ['publicRewardsEnabled', 'publicReviewsEnabled', 'generalFeedbackEnabled', 'claimCodesEnabled', 'websiteReviewsEnabled', 'receiptQrEnabled']) {
+  for (const key of ['publicRewardsEnabled', 'publicReviewsEnabled', 'generalFeedbackEnabled', 'claimCodesEnabled', 'publicJoinEnabled', 'websiteReviewsEnabled', 'receiptQrEnabled']) {
     if (input[key] !== undefined) next[key] = Boolean(input[key]);
   }
   const int = (value, label, min, max) => {
@@ -74,10 +75,10 @@ export async function updateCrmSettings(db, actor, input) {
   }
   if (!next.qrHeadline) throw httpError('The QR headline cannot be empty');
   await db.transaction(async (tx) => {
-    await tx.run(`UPDATE crm_settings SET public_rewards_enabled = ?, public_reviews_enabled = ?, general_feedback_enabled = ?, claim_codes_enabled = ?,
+    await tx.run(`UPDATE crm_settings SET public_rewards_enabled = ?, public_reviews_enabled = ?, general_feedback_enabled = ?, claim_codes_enabled = ?, public_join_enabled = ?,
       claim_code_valid_days = ?, review_window_days = ?, website_reviews_enabled = ?, receipt_qr_enabled = ?, qr_headline = ?, qr_subtext = ?, qr_footer = ?,
       low_rating_threshold = ?, updated_by = ?, updated_at = NOW() WHERE id = 1`,
-    [next.publicRewardsEnabled, next.publicReviewsEnabled, next.generalFeedbackEnabled, next.claimCodesEnabled, next.claimCodeValidDays, next.reviewWindowDays,
+    [next.publicRewardsEnabled, next.publicReviewsEnabled, next.generalFeedbackEnabled, next.claimCodesEnabled, next.publicJoinEnabled, next.claimCodeValidDays, next.reviewWindowDays,
       next.websiteReviewsEnabled, next.receiptQrEnabled, next.qrHeadline, next.qrSubtext, next.qrFooter, next.lowRatingThreshold, actor.id]);
     await crmAudit(tx, { entityType: 'crm_settings', entityId: 1, action: 'update', oldValue: current, newValue: next, actorId: actor.id });
   });

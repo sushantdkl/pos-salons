@@ -70,6 +70,11 @@ export default function AnalyticsPage() {
   const fmt = (iso) => (iso ? formatCalendarDate(String(iso).slice(0, 10), calendarSystem) : '');
   const periodText = a ? `${a.period?.label || ''} · ${a.period?.displayRange || ''}` : '';
   const live = a?.period?.value === 'today' && a?.businessDay?.status === 'OPEN';
+  // Cards that open a tab also scroll it into view.
+  const openTab = (key) => {
+    setTab(key);
+    requestAnimationFrame(() => document.getElementById('analytics-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
   const active = TABS.find((item) => item.key === tab) || TABS[0];
   const Body = active.body;
 
@@ -114,9 +119,9 @@ export default function AnalyticsPage() {
 
       {a ? (
         <div className={`space-y-6 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
-          <MoneyFlow a={a} />
+          <MoneyFlow a={a} onTab={openTab} />
 
-          <div role="tablist" aria-label="Analytics sections" className="print-hide -mx-1 flex gap-1 overflow-x-auto border-b border-stone-200 px-1">
+          <div id="analytics-tabs" role="tablist" aria-label="Analytics sections" className="print-hide -mx-1 flex gap-1 overflow-x-auto border-b border-stone-200 px-1">
             {TABS.map((item) => {
               const Icon = item.icon;
               const selected = tab === item.key;

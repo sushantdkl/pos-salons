@@ -87,7 +87,7 @@ function addSheet(workbook, { name, columns, rows, totals, title, subtitle, note
     cell.alignment = { vertical: 'middle', horizontal: ['money', 'number', 'decimal', 'percent'].includes(column.type) ? 'right' : 'left', wrapText: true };
     cell.border = { bottom: { style: 'medium', color: { argb: argb(tone.strong) } } };
   });
-  header.height = 22;
+  header.height = 30;
 
   // Body.
   rows.forEach((row, rowIndex) => {
@@ -135,9 +135,19 @@ function addSheet(workbook, { name, columns, rows, totals, title, subtitle, note
 
   // Filters + sensible widths.
   if (rows.length) sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + rows.length, column: columns.length } };
+  // Wide enough for the header PLUS the filter button (~4 chars), and for the formatted value
+  // ("Rs 12,05,150.00" is longer than the raw number). Minimums per type keep sheets readable.
+  const MIN_WIDTH = { money: 18, decimal: 14, number: 11, percent: 10, status: 14, date: 14 };
   columns.forEach((column, index) => {
-    const longest = Math.max(String(column.header).length, ...rows.slice(0, 300).map((row) => String(cellValue(column, row) ?? '').length));
-    sheet.getColumn(index + 1).width = Math.min(Math.max(column.width || longest + 3, 10), 60);
+    const header = String(column.header).length + 5;
+    const longest = Math.max(0, ...rows.slice(0, 500).map((row) => {
+      const value = cellValue(column, row);
+      if (typeof value === 'number') return (FORMATS[column.type] ? `Rs ${value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : String(value)).length;
+      return String(value ?? '').length;
+    })) + 3;
+    const totalLength = totals && totals[column.key] !== undefined ? String(totals[column.key]).length + 6 : 0;
+    const auto = Math.max(header, longest, totalLength, MIN_WIDTH[column.type] || 12);
+    sheet.getColumn(index + 1).width = Math.min(column.width ? Math.max(column.width, auto) : auto, 70);
   });
   return sheet;
 }

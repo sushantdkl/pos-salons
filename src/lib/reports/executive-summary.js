@@ -847,6 +847,26 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     lastCountedDate: sessionFacts.lastCountedDate || null,
     denominations: sessionFacts.denominations || null,
     netCashInHand: expectedCash !== null ? expectedCash : netCashMovement,
+    // Cash Position board (ledger vs drawer), all summed here so every screen shows the same.
+    board: (() => {
+      const salesAndCollections = round2(numeric(payments.grossCashCollected) + numeric(payments.creditCollectionsCash));
+      const openingAdjustment = round2(cashAdjustments.added - cashAdjustments.removed);
+      const ledgerBalance = round2(numeric(sessionFacts.startingCash) + netCashMovement);
+      const totalIn = round2(salesAndCollections + cashAdjustments.added);
+      // Count differences at close: a shortage is cash that left the drawer, an overage came in.
+      const totalOutWithCounts = round2(cashOut + cashAdjustments.removed - numeric(sessionFacts.sessionDifference));
+      return {
+        salesAndCollections,
+        openingAdjustment,
+        ledgerBalance,
+        ledgerGap: expectedCash === null ? null : round2(ledgerBalance - expectedCash),
+        totalIn,
+        totalOut: round2(cashOut + cashAdjustments.removed),
+        totalOutWithCounts,
+        drawerClosing: round2(numeric(sessionFacts.startingCash) + totalIn - totalOutWithCounts),
+        closedSessions: sessionFacts.sessions - sessionFacts.openSessions,
+      };
+    })(),
     // Admin-only itemisation of the combined cash outflow.
     ...(forAdmin ? { cashSalary: salaryCash } : {}),
   };
@@ -865,6 +885,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     onlineRefunds: payments.onlineRefunds,
     totalOnlineOut: round2(expenses.online + salaryOnline + savings.fromOnline + payments.onlineRefunds),
     netOnlineBalance: round2(financial.netOnlineBalance),
+    salesAndCollections: round2(numeric(payments.grossQrCollected) + numeric(payments.creditCollectionsOnline)),
     ...(forAdmin ? { onlineSalary: salaryOnline } : {}),
   };
 

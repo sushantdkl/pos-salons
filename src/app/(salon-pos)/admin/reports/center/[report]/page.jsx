@@ -7,10 +7,9 @@ import {
   ArrowLeft, Banknote, CalendarDays, CreditCard, FileText, GitCompareArrows, Package, Receipt, Scissors, Search, Wallet,
 } from 'lucide-react';
 import { CalendarDateInput } from '@/components/shared/calendar-date-input';
-import { AlertBanner, count, ErpPage, LoadingState, money, PrintButton, PrintHeader, tone } from '@/components/erp';
+import { AlertBanner, ErpPage, LoadingState, PrintButton, PrintHeader, tone } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
 import { ExportButtons } from '@/components/exports/export-buttons';
-import { KpiCard } from '@/components/reports/kpi-card';
 import { exportColumnsFor, ReportTable, statusLabel } from '@/components/reports/report-table';
 import { adToBsIso, bsToAdIso, formatCalendarDate } from '@/lib/dates/calendar';
 import { REPORT_CATALOG } from '@/lib/reports/report-catalog';
@@ -79,6 +78,17 @@ export default function ReportWorkspacePage() {
   const presets = useMemo(() => presetRanges(today, calendarSystem), [today, calendarSystem]);
   const periodDays = daysBetween(range.start, range.end);
   const previousRange = useMemo(() => ({ start: shiftDate(range.start, -periodDays), end: shiftDate(range.start, -1) }), [range.start, periodDays]);
+
+  // Deep link: ?start=YYYY-MM-DD&end=YYYY-MM-DD (e.g. from an Analytics card) opens that range.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const start = params.get('start');
+    const end = params.get('end');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(start || '') && /^\d{4}-\d{2}-\d{2}$/.test(end || '') && start <= end) {
+      setRange({ start, end });
+      setPresetKey(start === end && start === today ? 'today' : 'custom');
+    }
+  }, [today]);
 
   useEffect(() => {
     erpFetch('/api/admin/settings').then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD')).catch(() => {});
@@ -248,23 +258,6 @@ export default function ReportWorkspacePage() {
 
       {data ? (
         <div className={`space-y-5 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
-          <div>
-            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-stone-800">{periodLabel}</p>
-              <p className="text-xs text-stone-400">Compared with the previous {periodDays === 1 ? 'day' : `${periodDays} days`} ({previousLabel})</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-              {Object.entries(data.metrics || {}).map(([key, value]) => {
-                const metric = WORKSPACE_METRICS[key] || { label: statusLabel(key), type: 'number' };
-                return (
-                  <KpiCard key={key} label={metric.label} value={value} format={metric.type === 'money' ? money : count} tone={metric.tone} emphasis={metric.emphasis}
-                    lowerIsBetter={metric.lowerIsBetter} previous={snapshot.includes(key) || !previous ? undefined : previous.metrics?.[key]}
-                    compareLabel="vs previous period" hint={snapshot.includes(key) ? 'Balance as of now' : undefined} />
-                );
-              })}
-            </div>
-          </div>
-
           {tables.map((item, index) => (
             <ReportTable
               key={`${item.key}-${index}`}

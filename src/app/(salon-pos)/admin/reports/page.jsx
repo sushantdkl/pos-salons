@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, GitCompareArrows, Lightbulb, PieChart } from 'lucide-react';
-import { BillLink } from '@/components/bills/bill-detail';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import {
   AlertBanner, BreakdownCard, ChartCard, count, ErpPage, ErrorState, FinancialTable, LoadingState, money, PageHeader,
   PeriodFilter, PrintButton, PrintHeader, SectionHeading, StatusBadge, TONES,
@@ -147,6 +148,7 @@ function exportSheets(reports) {
 
 export default function ReportsPage() {
   const period = usePeriod('today');
+  const [openBill, setOpenBill] = useState(null);
   const { data: reports, error, loading, reload } = useReport(period.ready ? `/api/admin/reports?${period.query}` : null);
 
   // The equal-length period just before this one, for the comparison on the KPI cards.
@@ -236,11 +238,12 @@ export default function ReportsPage() {
               note="Click a bill number to see the full bill."
               action={<Link href={`/admin/reports/transactions?period=${period.period === 'custom' ? 'today' : period.period}`} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-700 hover:underline">All transactions<ArrowRight className="h-4 w-4" /></Link>}
             />
-            <FinancialTable columns={TRANSACTION_COLUMNS} rows={transactions.slice(0, 15)} rowKey={(row) => row.id || row.billNumber} empty="No bills in this period." caption="Bills in this period" />
+            <FinancialTable columns={TRANSACTION_COLUMNS} rows={transactions.slice(0, 15)} onRowClick={(row) => setOpenBill(row.id)} rowKey={(row) => row.id || row.billNumber} empty="No bills in this period." caption="Bills in this period" />
             {transactions.length > 15 ? <p className="mt-2 text-xs text-stone-500">Showing the latest 15 of {count(transactions.length)} bills — the Excel export has all of them.</p> : null}
           </section>
         </div>
       ) : null}
+      {openBill ? <BillDetailDrawer billId={openBill} onClose={() => setOpenBill(null)} /> : null}
     </ErpPage>
   );
 }
