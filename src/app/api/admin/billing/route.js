@@ -10,6 +10,9 @@ import { normalizePaymentAllocations } from '@/lib/payments/allocations';
 import { PERMISSIONS, hasPermission, requirePermission } from '@/lib/auth/permissions';
 import { normalizeDocumentSettings } from '@/lib/documents/settings';
 import { linkAppointmentToBill } from '@/lib/appointments/service';
+import {
+  awardBill, billHasEligibleLines, createClaimCode, customerBalances, getCrmSettings, planRedemption, recordRedemption,
+} from '@/lib/loyalty/service';
 
 function normalizeDiscount(type, value, subtotal) {
   const amount = Number(value || 0);
@@ -302,7 +305,16 @@ export async function POST(request) {
       const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
       const discountType = data.discount_type === 'percentage' ? 'percentage' : 'amount';
       const discountAmount = normalizeDiscount(discountType, data.discount_value || data.discount_amount, subtotal);
-      const taxable = subtotal - discountAmount;
+      // Loyalty reward chosen by the cashier: validated against the ledger here (customer locked).
+      // It is a DISCOUNT on the bill — stored inside discount_amount (so gross − discount = net
+      // holds in every report) and separately as loyalty_discount. No payment is created for it.
+      const redeemProgramId = Number(data.loyalty_redemption?.programId || 0) || null;
+      const loyalty = redeemProgramId
+        ? await planRedemption(tx, { customerId, programId: redeemProgramId, serviceRows, amountAfterDiscount: subtotal - discountAmount })
+        : null;
+      if (loyalty && loyalty.rewardIndex >= 0) serviceRows[loyalty.rewardIndex].loyalty_reward = true;
+      const loyaltyDiscount = loyalty ? loyalty.discount : 0;
+      const taxable = subtotal - discountAmount - loyaltyDiscount;
       const taxPercent = Number(data.tax_percent || 0);
       if (taxPercent < 0 || taxPercent > 100) throw new Error('Invalid tax percentage');
       const tax = taxable * taxPercent / 100;
@@ -338,15 +350,16 @@ export async function POST(request) {
           qr_type, total_paid, payment_status, cashier_id, token_id,
           transaction_time, is_printed, printed_at, printed_by,
           backdated_by, backdated_reason, notes, business_day_id, store_session_id,
-          revenue_business_day_id, payment_received_at, idempotency_key, credit_amount, document_snapshot
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?::jsonb)
+          revenue_business_day_id, payment_received_at, idempotency_key, credit_amount, document_snapshot,
+          loyalty_discount, loyalty_program_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?::jsonb, ?, ?)
       `, [
         billNumber,
         customerId,
         customerName,
         customerPhone,
         subtotal,
-        discountAmount,
+        discountAmount + loyaltyDiscount,
         discountType,
         tax,
         taxPercent,
@@ -377,19 +390,23 @@ export async function POST(request) {
         idempotencyKey,
         payment.creditAmount,
         JSON.stringify(documentSnapshot),
+        loyaltyDiscount,
+        loyalty ? loyalty.program.id : null,
       ]);
 
       const billId = billResult.lastInsertRowid;
       for (const item of items) {
-        await tx.run(`
+        const itemResult = await tx.run(`
           INSERT INTO salon_bill_items (
             bill_id, item_type, item_id, name, quantity, unit_price,
-            subtotal, staff_id, staff_name_snapshot, commission_percentage, commission_amount, unit_cost_snapshot
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            subtotal, staff_id, staff_name_snapshot, commission_percentage, commission_amount, unit_cost_snapshot, loyalty_reward
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           billId, item.item_type, item.item_id, item.name, item.quantity, item.unit_price,
           item.subtotal, item.staff_id, item.staff_name_snapshot || null, item.commission_percentage, item.commission_amount, item.unit_cost_snapshot ?? null,
+          Boolean(item.loyalty_reward),
         ]);
+        item.id = itemResult.lastInsertRowid;
         if (item.item_type === 'product') {
           await tx.run('UPDATE salon_products SET current_stock = ?, updated_at = NOW() WHERE id = ?', [item.new_stock, item.item_id]);
           await tx.run(`
@@ -406,6 +423,29 @@ export async function POST(request) {
           await tx.run(`INSERT INTO customer_credit_ledger(customer_id, bill_id, allocation_id, entry_type, debit, credit, note, business_day_id, created_by, idempotency_key) VALUES (?, ?, ?, 'credit_sale', ?, 0, ?, ?, ?, ?)`, [customerId, billId, allocationResult.lastInsertRowid, allocation.amount, cleanText(data.credit_note, 'Invoice credit'), businessDayId, user.id, `${idempotencyKey}:credit:${index}`]);
         }
       }
+
+      // Loyalty, in this same transaction: the reward is consumed (REDEEM), then this bill's
+      // eligible paid lines earn (EARN, once each). A walk-in bill gets a one-time claim code instead.
+      if (loyalty) {
+        await recordRedemption(tx, {
+          customerId, program: loyalty.program, billId, balance: loyalty.balance, actorId: user.id,
+          billItemId: loyalty.rewardIndex >= 0 ? serviceRows[loyalty.rewardIndex].id : null,
+        });
+      }
+      let loyaltyClaimCode = null;
+      const crm = await getCrmSettings(tx);
+      if (customerId) {
+        await awardBill(tx, { billId, customerId, source: 'POS', actorId: user.id });
+      } else {
+        if (crm.claimCodesEnabled && payment.creditAmount === 0 && await billHasEligibleLines(tx, billId)) {
+          loyaltyClaimCode = await createClaimCode(tx, billId, crm.claimCodeValidDays);
+        }
+      }
+      const loyaltyProgress = customerId
+        ? (await customerBalances(tx, customerId)).filter((row) => row.enrolled || row.available > 0).map((row) => ({
+          programId: row.programId, name: row.name, progress: row.progress, requiredVisits: row.requiredVisits, available: row.available, remaining: row.remaining, rewardLabel: row.rewardLabel,
+        }))
+        : [];
 
       if (customerId) {
         const serviceNames = serviceRows.map((item) => item.name).join(', ');
@@ -469,7 +509,12 @@ export async function POST(request) {
           customer_name: customerName,
           customer_phone: customerPhone,
           subtotal,
-          discount_amount: discountAmount,
+          discount_amount: discountAmount + loyaltyDiscount,
+          loyalty_discount: loyaltyDiscount,
+          loyalty_reward_label: loyalty ? loyalty.program.rewardLabel : null,
+          loyalty_progress: loyaltyProgress,
+          loyalty_claim_code: loyaltyClaimCode,
+          review_rewards_qr: crm.receiptQrEnabled,
           discount_type: discountType,
           tax,
           tax_percent: taxPercent,
@@ -521,6 +566,10 @@ export async function POST(request) {
     if (error.code === 'APPOINTMENT_ALREADY_BILLED' || error.constraint === 'ux_salon_bills_appointment_paid') {
       const message = error.code === 'APPOINTMENT_ALREADY_BILLED' ? error.message : 'This appointment is already billed.';
       return NextResponse.json({ error: message, message, code: 'APPOINTMENT_ALREADY_BILLED', success: false }, { status: 409 });
+    }
+    // Loyalty reward problems (no reward, reward service not on the bill…) carry their own status.
+    if (['NO_REWARD', 'REWARD_SERVICE_MISSING'].includes(error.code) || (/loyalty|reward/i.test(error.message || '') && error.status && error.status < 500)) {
+      return NextResponse.json({ error: error.message, message: error.message, code: error.code, success: false }, { status: error.status || 409 });
     }
     if (/appointment/i.test(error.message || '') && error.status && error.status < 500) {
       return NextResponse.json({ error: error.message, message: error.message, success: false }, { status: error.status });

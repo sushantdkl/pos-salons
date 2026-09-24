@@ -186,6 +186,21 @@ function Customers({ a }) {
         <MetricCard label="Repeat within period" value={percent(c.repeatWithinPeriodRate)} tone="neutral" hint="Saved customers with 2+ bills inside this period. Not a retention rate." />
         <MetricCard label="Visits per saved customer" value={c.visitsPerCustomer.toFixed(2)} tone="neutral" hint="Bills ÷ saved customers in this period." />
       </MetricGroup>
+      {c.crm ? (
+        <>
+          <MetricGroup columns={4}>
+            <MetricCard label="Reviews" value={count(c.crm.reviews.count)} tone="crm" sub={`${count(c.crm.reviews.verified)} verified visits`} />
+            <MetricCard label="Average rating" value={c.crm.reviews.average === null ? '—' : `${c.crm.reviews.average} ★`} tone="cash" sub={[5, 4, 3, 2, 1].map((s) => `${s}★ ${c.crm.reviews.ratings[s]}`).join(' · ')} />
+            <MetricCard label="Loyalty visits earned" value={count(c.crm.loyalty.stampsEarned)} tone="crm" sub={`${count(c.crm.loyalty.customersEarning)} customers`} />
+            <MetricCard label="Rewards redeemed" value={count(c.crm.loyalty.rewardsRedeemed)} tone="ops" sub={`Loyalty discount ${money(c.crm.loyalty.loyaltyDiscount)}`} />
+          </MetricGroup>
+          <MetricGroup columns={3}>
+            <MetricCard label="Rewards waiting (now)" value={count(c.crm.loyalty.outstandingRewards)} tone="online" sub={`${count(c.crm.loyalty.customersWithReward)} customers`} />
+            <MetricCard label="One visit from a reward (now)" value={count(c.crm.loyalty.customersNearReward)} tone="neutral" />
+            <MetricCard label="Redemption rate" value={c.crm.loyalty.redemptionRate === null ? '—' : percent(c.crm.loyalty.redemptionRate)} tone="neutral" hint="Rewards redeemed in this period ÷ (redeemed + still waiting). Describes use, not sales impact." />
+          </MetricGroup>
+        </>
+      ) : null}
       {c.trend.length ? (
         <ChartCard title="Customers per day" height={240}>
           <TrendChart rows={c.trend} format={countFormat} axisFormat={countFormat} series={[{ key: 'customers', label: 'Customers', color: TONES.ops.hex }]} />

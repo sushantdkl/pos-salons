@@ -34,6 +34,7 @@ function MoneyIn({ s }) {
             line('Product value', r.productRevenue),
             line('Gross bill value', r.grossSalesBeforeDiscount, { note: 'Before discounts' }),
             line('Discounts', r.totalDiscounts, { sign: '−', tone: 'outflow' }),
+            ...(Number(r.loyaltyDiscounts) > 0 ? [line('of which loyalty rewards', r.loyaltyDiscounts, { sign: '−', tone: 'outflow', indent: true, muted: true, note: 'Free / discounted services from loyalty cards — a discount, not a payment.' })] : []),
             r.totalTax ? line('Tax / VAT', r.totalTax, { sign: '+' }) : null,
             r.totalServiceCharge ? line('Service charge', r.totalServiceCharge, { sign: '+' }) : null,
             line('Finalized bill total', r.finalizedBillTotal, { note: `${count(r.bills)} bills` }),

@@ -44,6 +44,9 @@ const PAGES = {
     '/admin/hrm/overtime',
     '/admin/hrm/reports',
     '/admin/hrm/rules',
+    '/admin/crm/loyalty',
+    '/admin/crm/reviews',
+    '/admin/crm/reviews/forms',
     '/dashboard/admin/expenses/salary',
   ],
   cashier: [
@@ -261,6 +264,28 @@ for (const width of WIDTHS) {
   record(`public /book-appointment @${width} online booking form`, /online booking/i.test(metrics.text) && /services/i.test(metrics.text), metrics.text.slice(0, 80));
   record(`public /book-appointment @${width} no page errors`, errors.length === 0, errors.join(' | '));
   if (SHOTS && SHOT_WIDTHS.has(width)) await page.screenshot({ path: path.join(SHOTS, `public_book-appointment_${width}.png`), fullPage: true });
+  await context.close();
+}
+
+// Review & Rewards (the permanent QR page): phone widths matter most — no login, no admin nav, no leaks.
+for (const width of [320, 360, 390, 430, 768]) {
+  const context = await browser.newContext({ viewport: { width, height: 800 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message.slice(0, 200)));
+  page.on('console', (message) => { if (message.type() === 'error' && !/favicon/i.test(message.text())) errors.push(message.text().slice(0, 200)); });
+  await page.goto(`${BASE}/review`, { waitUntil: 'networkidle', timeout: 90000 });
+  await page.waitForTimeout(500);
+  const metrics = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, text: document.body.innerText,
+    adminNav: Boolean(document.querySelector('nav[aria-label="Main navigation"]')),
+  }));
+  record(`public /review @${width} no overflow`, metrics.scrollWidth <= metrics.clientWidth + 1, `${metrics.scrollWidth}>${metrics.clientWidth}`);
+  record(`public /review @${width} shows review & rewards`, /how was your visit/i.test(metrics.text) && /mobile number/i.test(metrics.text), metrics.text.slice(0, 120));
+  record(`public /review @${width} no admin navigation`, !metrics.adminNav);
+  record(`public /review @${width} no NaN/undefined`, !/\bNaN\b|\bundefined\b/.test(metrics.text));
+  record(`public /review @${width} no page errors`, errors.length === 0, errors.join(' | '));
+  if (SHOTS && [320, 390].includes(width)) await page.screenshot({ path: path.join(SHOTS, `public_review_${width}.png`), fullPage: true });
   await context.close();
 }
 

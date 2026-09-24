@@ -7,6 +7,7 @@
  *   online   sky      online / digital / bank, informational
  *   ledger   indigo   accounting, ledgers, reports
  *   hrm      violet   payroll, staff
+ *   crm      pink     loyalty, reviews, customer relationship
  *   ops      teal     services, salon operations
  *   neutral  stone    context values
  *
@@ -19,6 +20,7 @@ export const TONES = {
   online: { text: 'text-sky-700', strong: 'text-sky-800', soft: 'bg-sky-50', band: 'bg-sky-50/70', border: 'border-sky-200', ring: 'ring-sky-200', dot: 'bg-sky-500', hex: '#0284c7' },
   ledger: { text: 'text-indigo-700', strong: 'text-indigo-800', soft: 'bg-indigo-50', band: 'bg-indigo-50/70', border: 'border-indigo-200', ring: 'ring-indigo-200', dot: 'bg-indigo-500', hex: '#4f46e5' },
   hrm: { text: 'text-violet-700', strong: 'text-violet-800', soft: 'bg-violet-50', band: 'bg-violet-50/70', border: 'border-violet-200', ring: 'ring-violet-200', dot: 'bg-violet-500', hex: '#7c3aed' },
+  crm: { text: 'text-pink-700', strong: 'text-pink-800', soft: 'bg-pink-50', band: 'bg-pink-50/70', border: 'border-pink-200', ring: 'ring-pink-200', dot: 'bg-pink-500', hex: '#db2777' },
   ops: { text: 'text-teal-700', strong: 'text-teal-800', soft: 'bg-teal-50', band: 'bg-teal-50/70', border: 'border-teal-200', ring: 'ring-teal-200', dot: 'bg-teal-500', hex: '#0d9488' },
   neutral: { text: 'text-stone-700', strong: 'text-stone-900', soft: 'bg-stone-50', band: 'bg-stone-50', border: 'border-stone-200', ring: 'ring-stone-200', dot: 'bg-stone-400', hex: '#78716c' },
 };

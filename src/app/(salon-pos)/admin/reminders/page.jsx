@@ -201,7 +201,7 @@ export default function RemindersPage() {
               const due = balances.get(row.id) || 0;
               const isSelected = selected.has(row.id);
               return (
-                <div key={row.id} className={`rounded-xl border bg-white p-4 shadow-sm ${isSelected ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-stone-200'}`}>
+                <div key={row.id} className={`min-w-0 rounded-xl border bg-white p-4 shadow-sm ${isSelected ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-stone-200'}`}>
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"

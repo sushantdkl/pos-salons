@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
-import { DEFAULT_ROLE_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_KEYS, PERMISSION_ROLES } from '@/lib/auth/permission-catalog';
+import { ALL_PERMISSION_KEYS, defaultGrants, moduleKeyFor, PERMISSION_GROUPS, PERMISSION_MODULE, PERMISSION_ROLES } from '@/lib/auth/permission-catalog';
 
 const ROLES = new Set(PERMISSION_ROLES.map((role) => role.key));
-const KEYS = new Set(PERMISSION_KEYS);
-const CASHIER_PROTECTED_DENIALS = new Set(['payroll.payments.create','payroll.records.correct','payroll.records.delete']);
+const KEYS = new Set(ALL_PERMISSION_KEYS);
+const CASHIER_PROTECTED_DENIALS = new Set(['module.payroll','payroll.payments.create','payroll.records.correct','payroll.records.delete']);
+const GROUP_LABEL = Object.fromEntries(PERMISSION_GROUPS.map((group) => [moduleKeyFor(group.key), group.label]));
 
 function validateChange(role, permission, allowed) {
   if (!ROLES.has(role) || !KEYS.has(permission) || typeof allowed !== 'boolean') {
@@ -22,8 +23,29 @@ async function applyChanges(db, actor, role, changes) {
   }
   changes.forEach(({ permission, allowed }) => validateChange(role, permission, allowed));
   return db.transaction(async (tx) => {
-    let changed = 0;
+    // Two levels: a module switched off takes everything inside it off; a permission can only be
+    // switched on while its module is on (already, or in this same change).
+    const current = Object.fromEntries((await tx.all('SELECT permission_key, allowed FROM role_permissions WHERE role = ? FOR UPDATE', [role])).map((row) => [row.permission_key, row.allowed === true]));
+    const finalState = { ...current };
+    for (const { permission, allowed } of changes) finalState[permission] = allowed;
+    const expanded = [...changes];
     for (const { permission, allowed } of changes) {
+      if (!allowed && permission.startsWith('module.')) {
+        for (const [key, moduleKey] of Object.entries(PERMISSION_MODULE)) {
+          if (moduleKey === permission && finalState[key]) { finalState[key] = false; expanded.push({ permission: key, allowed: false }); }
+        }
+      }
+    }
+    for (const { permission, allowed } of expanded) {
+      const moduleKey = PERMISSION_MODULE[permission];
+      if (allowed && moduleKey && !finalState[moduleKey]) {
+        const error = new Error(`Turn on “${GROUP_LABEL[moduleKey]}” first — its permissions can only be chosen while the module is on.`);
+        error.status = 409;
+        throw error;
+      }
+    }
+    let changed = 0;
+    for (const { permission, allowed } of expanded) {
       const prior = await tx.get('SELECT allowed FROM role_permissions WHERE role=? AND permission_key=? FOR UPDATE', [role, permission]);
       if (prior && prior.allowed === allowed) continue;
       await tx.run(`INSERT INTO role_permissions(role,permission_key,allowed,updated_by,updated_at) VALUES (?,?,?,?,NOW()) ON CONFLICT(role,permission_key) DO UPDATE SET allowed=EXCLUDED.allowed,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING role`, [role, permission, allowed, actor.id]);
@@ -64,8 +86,8 @@ export async function PATCH(request) {
     const data = await request.json(); const role = data.role;
     let changes = data.changes;
     if (data.action === 'reset') {
-      const defaults = new Set(DEFAULT_ROLE_PERMISSIONS[role] || []);
-      changes = PERMISSION_KEYS.map((permission) => ({ permission, allowed: defaults.has(permission) }));
+      const defaults = defaultGrants(role);
+      changes = ALL_PERMISSION_KEYS.map((permission) => ({ permission, allowed: defaults.has(permission) }));
     }
     const changed = await applyChanges(db, actor, role, changes);
     return NextResponse.json({ message: `${changed} permission${changed === 1 ? '' : 's'} updated`, changed });

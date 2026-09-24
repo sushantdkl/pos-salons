@@ -86,6 +86,9 @@ function BillingContent() {
   });
   const [qrModal, setQrModal] = useState(null);
   const [processingBill, setProcessingBill] = useState(false);
+  // Loyalty: the selected customer's cards; the cashier chooses to apply a reward (never automatic).
+  const [loyalty, setLoyalty] = useState({ customerId: null, programs: [] });
+  const [appliedRewardId, setAppliedRewardId] = useState(null);
   const idempotencyKey = useRef(null);
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
@@ -180,8 +183,14 @@ function BillingContent() {
     + cartProducts.reduce((sum, item) => sum + Number(item.selling_price) * item.quantity, 0);
   const discountAmount = discountType === 'percentage' ? subtotal * (Number(discountValue || 0) / 100) : Number(discountValue || 0);
   const safeDiscount = Math.min(Math.max(discountAmount, 0), subtotal);
-  const tax = (subtotal - safeDiscount) * (Number(taxPercent || 0) / 100);
-  const total = subtotal - safeDiscount + tax;
+  // Preview only — the server validates the reward against the loyalty ledger and recomputes.
+  const appliedReward = loyalty.programs.find((program) => program.programId === appliedRewardId && program.available > 0) || null;
+  const rewardLine = appliedReward?.rewardType === 'FREE_SERVICE' ? cartServices.find((item) => Number(item.id) === Number(appliedReward.rewardServiceId)) : null;
+  const rewardDiscount = !appliedReward ? 0 : Math.min(subtotal - safeDiscount, appliedReward.rewardType === 'FREE_SERVICE'
+    ? Number(rewardLine?.price || 0)
+    : appliedReward.rewardType === 'FIXED_DISCOUNT' ? Number(appliedReward.rewardValue) : (subtotal - safeDiscount) * Number(appliedReward.rewardValue) / 100);
+  const tax = (subtotal - safeDiscount - rewardDiscount) * (Number(taxPercent || 0) / 100);
+  const total = subtotal - safeDiscount - rewardDiscount + tax;
   const change = Number(amountPaid || total) - total;
   const cartCount = cartServices.length + cartProducts.length;
   const splitTotal = Number(splitCashAmount || 0) + Number(splitQrAmount || 0) + Number(splitCreditAmount || 0);
@@ -192,6 +201,21 @@ function BillingContent() {
     const cash = Math.max(0, Number(splitCashAmount || 0));
     setSplitQrAmount(Math.max(0, total - cash - Number(splitCreditAmount || 0)).toFixed(2));
   }, [paymentMethod, splitCashAmount, splitCreditAmount, splitQrEdited, total]);
+
+  // Loyalty cards for the selected customer (by id, or by a full phone number typed in).
+  const loyaltyKey = customer.id ? `id:${customer.id}` : String(customer.phone || '').replace(/\D/g, '').length >= 10 ? `phone:${customer.phone}` : '';
+  useEffect(() => {
+    setAppliedRewardId(null);
+    if (!loyaltyKey) { setLoyalty({ customerId: null, programs: [] }); return undefined; }
+    let alive = true;
+    const query = customer.id ? `customerId=${encodeURIComponent(customer.id)}` : `phone=${encodeURIComponent(customer.phone)}`;
+    fetch(`/api/crm/loyalty/customer?${query}`, { headers: headers() })
+      .then((response) => (response.ok ? response.json() : { customerId: null, programs: [] }))
+      .then((data) => { if (alive) setLoyalty({ customerId: data.customerId || null, programs: data.programs || [] }); })
+      .catch(() => { if (alive) setLoyalty({ customerId: null, programs: [] }); });
+    return () => { alive = false; };
+    // customer.id / phone are captured by loyaltyKey.
+  }, [loyaltyKey]);
 
   const setWalkInCustomer = () => {
     setCustomer(walkInCustomer);
@@ -321,6 +345,7 @@ function BillingContent() {
   };
 
   const clearCart = () => {
+    setAppliedRewardId(null);
     setCartServices([]);
     setCartProducts([]);
     setDiscountValue('');
@@ -397,8 +422,9 @@ function BillingContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey.current, ...headers() },
         body: JSON.stringify({
-        customer_id: customer.id || null,
+        customer_id: customer.id || loyalty.customerId || null,
         customer,
+        loyalty_redemption: appliedReward ? { programId: appliedReward.programId } : undefined,
         services: cartServices.map((service) => ({ id: service.id, staff_id: service.staff_id })),
         products: cartProducts.map((product) => ({ id: product.id, quantity: product.quantity })),
         token_id: selectedToken?.id || null,
@@ -451,7 +477,7 @@ function BillingContent() {
   const printReceipt = (billData = lastBill, printWindow = window.open('', '', 'width=360,height=720')) => {
     if (!billData?.bill || !printWindow) return;
     printWindow.document.open();
-    printWindow.document.write(buildCustomerReceiptHtml(billData, salonInfo));
+    printWindow.document.write(buildCustomerReceiptHtml(billData, { ...salonInfo, site_origin: window.location.origin }));
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => {
@@ -777,6 +803,20 @@ function BillingContent() {
                 </div>
 
                 <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+                  {loyalty.programs.filter((program) => program.available > 0).map((program) => (
+                    <div key={program.programId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-pink-200 bg-pink-50 p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-pink-900">Reward available</p>
+                        <p className="text-xs text-pink-800">{program.rewardLabel} · {program.name}{program.rewardType === 'FREE_SERVICE' && !cartServices.some((item) => Number(item.id) === Number(program.rewardServiceId)) ? ` — add ${program.rewardServiceName} to use it` : ''}</p>
+                      </div>
+                      {appliedRewardId === program.programId
+                        ? <button type="button" onClick={() => setAppliedRewardId(null)} className="rounded-lg border border-pink-300 bg-white px-3 py-2 text-xs font-bold text-pink-800">Remove reward</button>
+                        : <button type="button" disabled={program.rewardType === 'FREE_SERVICE' && !cartServices.some((item) => Number(item.id) === Number(program.rewardServiceId))} onClick={() => setAppliedRewardId(program.programId)} className="rounded-lg bg-pink-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">Apply Reward</button>}
+                    </div>
+                  ))}
+                  {loyalty.programs.filter((program) => program.available === 0 && program.enrolled).map((program) => (
+                    <p key={program.programId} className="text-xs text-gray-500">{program.name}: {program.progress}/{program.requiredVisits} — {program.remaining} more until {program.rewardLabel}</p>
+                  ))}
                   <div className="grid grid-cols-2 gap-2">
                     <select value={discountType} onChange={(event) => setDiscountType(event.target.value)} className={inputClass}>
                       <option value="amount">Discount Rs</option>
@@ -916,6 +956,7 @@ function BillingContent() {
                   <div className="space-y-1.5 rounded-lg bg-gray-50 p-3 text-sm">
                     <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     <div className="flex justify-between text-green-700"><span>Discount</span><span>-{formatCurrency(safeDiscount)}</span></div>
+                    {appliedReward ? <div className="flex justify-between text-pink-700"><span>Loyalty reward · {appliedReward.rewardLabel}</span><span>-{formatCurrency(rewardDiscount)}</span></div> : null}
                     <div className="flex justify-between text-gray-600"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
                     <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold text-gray-950">
                       <span>Total</span>
@@ -1036,8 +1077,17 @@ function BillingContent() {
                 <div className="my-3 border-t border-dashed border-gray-300" />
                 <div className="space-y-1">
                   <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(successBill.bill.subtotal)}</span></div>
-                  {Number(successBill.bill.discount_amount || 0) > 0 ? (
-                    <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(successBill.bill.discount_amount)}</span></div>
+                  {Number(successBill.bill.discount_amount || 0) - Number(successBill.bill.loyalty_discount || 0) > 0 ? (
+                    <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(Number(successBill.bill.discount_amount) - Number(successBill.bill.loyalty_discount || 0))}</span></div>
+                  ) : null}
+                  {Number(successBill.bill.loyalty_discount || 0) > 0 ? (
+                    <div className="flex justify-between text-pink-700"><span>Loyalty reward{successBill.bill.loyalty_reward_label ? ` · ${successBill.bill.loyalty_reward_label}` : ''}</span><span>-{formatCurrency(successBill.bill.loyalty_discount)}</span></div>
+                  ) : null}
+                  {successBill.bill.loyalty_progress?.map((program) => (
+                    <div key={program.programId} className="flex justify-between text-xs text-pink-800"><span>{program.name}</span><span>{program.available > 0 ? `${program.rewardLabel} ready` : `${program.progress}/${program.requiredVisits}`}</span></div>
+                  ))}
+                  {successBill.bill.loyalty_claim_code ? (
+                    <div className="flex justify-between text-xs text-pink-800"><span>Reward code (on receipt)</span><span className="font-mono font-bold tracking-widest">{successBill.bill.loyalty_claim_code}</span></div>
                   ) : null}
                   {Number(successBill.bill.tax || 0) > 0 ? (
                     <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(successBill.bill.tax)}</span></div>

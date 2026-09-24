@@ -67,6 +67,10 @@ const ADMIN_ONLY = [
   '/api/hrm/reports',
   '/api/hrm/policy',
   '/api/hrm/payroll-inputs?month=2026-09',
+  // CRM administration (the POS reads a customer's loyalty via /api/crm/loyalty/customer).
+  '/api/crm/loyalty',
+  '/api/crm/reviews',
+  '/api/crm/reviews?view=forms',
   '/api/store/history',
   '/api/admin/tokens?mode=analytics',
 ];

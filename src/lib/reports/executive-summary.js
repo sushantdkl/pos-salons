@@ -660,6 +660,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     itemRevenue: round2(revenueSplit.serviceRevenue + revenueSplit.productRevenue),
     grossSalesBeforeDiscount: round2(financial.grossSalesBeforeDiscount),
     totalDiscounts: round2(financial.totalDiscounts),
+    loyaltyDiscounts: round2(financial.loyaltyDiscounts),
     totalTax: round2(financial.totalTax),
     totalServiceCharge: round2(financial.totalServiceCharge),
     finalizedBillTotal: round2(financial.finalizedBillTotal),

@@ -1,4 +1,5 @@
 import { requireAuth } from '@/lib/salon-schema';
+import { PERMISSION_MODULE } from '@/lib/auth/permission-catalog';
 
 export const PERMISSIONS = Object.freeze({
   BILLING_CREATE: 'billing.create',
@@ -22,16 +23,28 @@ export const PERMISSIONS = Object.freeze({
   LEAVE_APPROVE: 'leave.approve',
   OVERTIME_VIEW: 'overtime.view',
   OVERTIME_APPROVE: 'overtime.approve',
+  LOYALTY_VIEW: 'loyalty.view',
+  LOYALTY_ADJUST: 'loyalty.adjust',
+  LOYALTY_MANAGE: 'loyalty.manage',
+  REVIEWS_VIEW: 'reviews.view',
+  REVIEWS_MODERATE: 'reviews.moderate',
+  REVIEWS_MANAGE: 'reviews.manage',
 });
 
+/**
+ * A permission counts only when it AND its module (module.<group>) are allowed for the role —
+ * switching a module off in Staff Permissions blocks everything inside it.
+ */
 export async function hasPermission(db, user, permission) {
   if (!user) return false;
   if (user.role === 'admin') return true;
-  const row = await db.get(
-    'SELECT allowed FROM role_permissions WHERE role = ? AND permission_key = ?',
-    [user.role, permission]
+  const moduleKey = PERMISSION_MODULE[permission];
+  const keys = moduleKey ? [permission, moduleKey] : [permission];
+  const rows = await db.all(
+    `SELECT permission_key, allowed FROM role_permissions WHERE role = ? AND permission_key IN (${keys.map(() => '?').join(',')})`,
+    [user.role, ...keys]
   );
-  return row?.allowed === true;
+  return keys.every((key) => rows.some((row) => row.permission_key === key && row.allowed === true));
 }
 
 export async function requirePermission(request, db, permission) {

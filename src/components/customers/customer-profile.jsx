@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  CalendarClock, CreditCard, HandCoins, History, Mail, MapPin, Phone, ReceiptText, Scissors, Star, User, UserRound, X,
+  Award, CalendarClock, CreditCard, HandCoins, MessageSquareHeart, History, Mail, MapPin, Phone, ReceiptText, Scissors, Star, User, UserRound, X,
 } from 'lucide-react';
 import { AlertBanner, ErpButton, ErrorState, LoadingState, money, PrintHeader, StatusBadge } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
@@ -137,6 +137,8 @@ export default function CustomerProfileView({ customerId }) {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!data) return <LoadingState />;
   const { customer, summary, bills, services, ledger, payments, appointments, timeline, openInvoices } = data;
+  const loyalty = data.loyalty || { programs: [], transactions: [] };
+  const reviews = data.reviews || { items: [], total: 0, average: null, latest: null };
   const openBill = billId ? bills.find((bill) => bill.id === billId) : null;
 
   const tabs = [
@@ -146,6 +148,8 @@ export default function CustomerProfileView({ customerId }) {
     { key: 'ledger', label: 'Credit ledger', icon: CreditCard },
     { key: 'payments', label: `Credit payments (${payments.length})`, icon: HandCoins },
     { key: 'appointments', label: `Appointments (${appointments.length})`, icon: CalendarClock },
+    { key: 'loyalty', label: 'Loyalty', icon: Award },
+    { key: 'reviews', label: `Reviews (${data.reviews?.total || 0})`, icon: MessageSquareHeart },
   ];
 
   const exports = {
@@ -173,6 +177,16 @@ export default function CustomerProfileView({ customerId }) {
       label: 'Credit payments',
       headers: ['When', 'Method', 'Reference', 'Bills covered', 'Amount', 'Balance after', 'Received by'],
       rows: payments.map((row) => [formatDateTime(row.createdAt), methodLabel(row.method, row.provider), row.reference || '', row.allocations.map((a) => `${a.label} ${a.amount}`).join('; '), row.amount, row.balanceAfter ?? '', row.receivedBy || '']),
+    },
+    loyalty: {
+      label: 'Loyalty',
+      headers: ['When', 'Program', 'Type', 'Visits', 'Bill', 'Note'],
+      rows: loyalty.transactions.map((row) => [formatDateTime(row.at), row.programName, row.type, row.visits, row.billNumber || '', row.note || '']),
+    },
+    reviews: {
+      label: 'Reviews',
+      headers: ['Submitted', 'Rating', 'Review', 'Service', 'Status', 'Verified'],
+      rows: reviews.items.map((row) => [formatDateTime(row.submittedAt), row.rating || '', row.text || '', row.serviceName || '', row.status, row.verified ? 'yes' : 'no']),
     },
     appointments: {
       label: 'Appointments',
@@ -275,6 +289,39 @@ export default function CustomerProfileView({ customerId }) {
               <span key="a" className="font-semibold text-emerald-700">{money(row.amount)}</span>, row.balanceAfter === null ? '—' : money(row.balanceAfter), row.receivedBy || '—',
             ])}
           />
+        ) : null}
+        {tab === 'loyalty' ? (
+          <div className="space-y-4 p-4">
+            {loyalty.programs.length ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {loyalty.programs.map((program) => (
+                  <div key={program.programId} className={`rounded-xl border p-4 ${program.available > 0 ? 'border-pink-300 bg-pink-50' : 'border-stone-200 bg-white'}`}>
+                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{program.name}</p>
+                    {program.available > 0 ? <p className="mt-1 font-bold text-pink-800">{program.rewardLabel.toUpperCase()} AVAILABLE{program.available > 1 ? ` ×${program.available}` : ''}</p> : null}
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-stone-950">{program.progress} / {program.requiredVisits}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">{Array.from({ length: program.requiredVisits }, (_, index) => <span key={index} className={`h-3 w-3 rounded-full ${index < program.progress ? 'bg-pink-500' : 'bg-stone-200'}`} />)}</div>
+                    <p className="mt-2 text-xs text-stone-600">{program.remaining} more paid visit{program.remaining === 1 ? '' : 's'} until {program.rewardLabel} · {program.paidVisits} paid visit{program.paidVisits === 1 ? '' : 's'} · {program.redeemed} redeemed{program.adjustments ? ` · ${program.adjustments} adjustment(s)` : ''}</p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-stone-400">No loyalty program is active.</p>}
+            <ProfileTable
+              empty="No loyalty activity yet."
+              align={{ 3: 'right' }}
+              headers={['When', 'Program', 'Type', 'Visits', 'Bill / service', 'Note']}
+              rows={loyalty.transactions.map((row) => [formatDateTime(row.at), row.programName, row.type === 'REVERSAL' ? `reversal (${String(row.reversedType || '').toLowerCase()})` : row.type.replaceAll('_', ' ').toLowerCase(), row.visits > 0 ? `+${row.visits}` : row.visits, [row.billNumber, row.itemName].filter(Boolean).join(' · ') || '—', row.note || '—'])}
+            />
+          </div>
+        ) : null}
+        {tab === 'reviews' ? (
+          <div className="space-y-3 p-4">
+            <p className="text-sm text-stone-600">{reviews.total} review{reviews.total === 1 ? '' : 's'}{reviews.average !== null ? ` · average ${reviews.average}★` : ''}{reviews.latest ? ` · latest ${formatDate(reviews.latest.submittedAt)} (${reviews.latest.status.toLowerCase()})` : ''}</p>
+            <ProfileTable
+              empty="This customer has not left feedback."
+              headers={['Submitted', 'Rating', 'Review', 'Service', 'Status', '']}
+              rows={reviews.items.map((row) => [formatDateTime(row.submittedAt), row.rating ? '★'.repeat(row.rating) : '—', row.text || '—', row.serviceName || '—', row.status.toLowerCase(), row.verified ? 'Verified visit' : 'General'])}
+            />
+          </div>
         ) : null}
         {tab === 'appointments' ? (
           <ProfileTable

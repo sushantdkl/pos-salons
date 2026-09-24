@@ -249,6 +249,18 @@ await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission
 const granted = await call(cashier, 'GET', `/api/hrm/attendance?from=${D1}&to=${D1}`);
 check('I granting attendance.view in Staff Permissions lets the cashier see attendance', granted.status === 200, granted.status);
 await must(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'attendance.view', allowed: false });
+// Two-level permissions: the module must be on before anything inside it counts or can be chosen.
+await must(admin, 'PUT', '/api/admin/permissions', { role: 'barber', permission: 'module.hrm', allowed: false });
+const moduleOff = await call(barberToken, 'POST', '/api/hrm/leave', { action: 'request', leaveTypeId: sick.id, startDate: plusDays(today, 40), endDate: plusDays(today, 40) });
+check('I module switched off blocks the permissions inside it (own leave request)', moduleOff.status === 403, moduleOff.status);
+const cleared = (await db.query("SELECT allowed FROM role_permissions WHERE role = 'barber' AND permission_key = 'leave.request'")).rows[0];
+check('I switching a module off also clears its permissions', cleared?.allowed === false, cleared);
+const orphan = await call(admin, 'PUT', '/api/admin/permissions', { role: 'barber', permission: 'attendance.view', allowed: true });
+check('I a permission cannot be allowed while its module is off', orphan.status === 409, orphan.json.error);
+const together = await call(admin, 'PATCH', '/api/admin/permissions', { role: 'barber', changes: [{ permission: 'module.hrm', allowed: true }, { permission: 'leave.request', allowed: true }] });
+check('I module and its permission can be switched on together', together.status === 200, together.json.error);
+const cashierPayrollModule = await call(admin, 'PUT', '/api/admin/permissions', { role: 'cashier', permission: 'module.payroll', allowed: true });
+check('I full payroll module stays locked for the cashier', cashierPayrollModule.status === 422, cashierPayrollModule.status);
 const auditActions = (await db.query('SELECT DISTINCT action, entity_type FROM hr_audit_log')).rows.map((row) => `${row.entity_type}:${row.action}`);
 check('I audit covers shifts, manual entry, corrections, leave and overtime decisions', ['shift:create', 'attendance:manual_create', 'attendance:missing_punch_fixed', 'leave_request:approved', 'leave_request:cancelled', 'overtime:approved'].every((key) => auditActions.includes(key)), auditActions);
 

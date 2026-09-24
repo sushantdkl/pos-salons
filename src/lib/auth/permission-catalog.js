@@ -45,6 +45,17 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'crm', label: 'CRM — loyalty & customer reviews', description: 'Loyalty cards and customer feedback. Applying a reward at the POS only needs billing.',
+    permissions: [
+      { key: 'loyalty.view', label: 'View loyalty', description: 'See loyalty programs, customer progress and the loyalty ledger.' },
+      { key: 'loyalty.adjust', label: 'Adjust loyalty visits', description: 'Add or remove visits with a reason. Audited.' },
+      { key: 'loyalty.manage', label: 'Manage loyalty programs', description: 'Create and change loyalty programs.' },
+      { key: 'reviews.view', label: 'View customer reviews', description: 'Read feedback, ratings and review analytics.' },
+      { key: 'reviews.moderate', label: 'Moderate reviews', description: 'Publish, keep private, reject, archive or re-open reviews.' },
+      { key: 'reviews.manage', label: 'Manage feedback forms & QR', description: 'Build feedback forms and change review & rewards settings.' },
+    ],
+  },
+  {
     key: 'payroll', label: 'Full payroll — Admin-sensitive', description: 'Final salary payments and historical payroll corrections.',
     permissions: [
       { key: 'payroll.payments.create', label: 'Create full salary payments', description: 'Finalize a full payroll settlement. Blocked for Cashier by policy.' },
@@ -56,7 +67,22 @@ export const PERMISSION_GROUPS = [
 
 export const PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((group) => group.permissions.map((permission) => permission.key));
 
+/**
+ * Two levels: every group is a MODULE (module.<group>) that must be switched on before any
+ * permission inside it counts. Switching a module off blocks everything in it.
+ */
+export const moduleKeyFor = (groupKey) => `module.${groupKey}`;
+export const MODULE_KEYS = PERMISSION_GROUPS.map((group) => moduleKeyFor(group.key));
+export const PERMISSION_MODULE = Object.fromEntries(PERMISSION_GROUPS.flatMap((group) => group.permissions.map((permission) => [permission.key, moduleKeyFor(group.key)])));
+export const ALL_PERMISSION_KEYS = [...MODULE_KEYS, ...PERMISSION_KEYS];
+
 export const DEFAULT_ROLE_PERMISSIONS = {
   cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request'],
   barber: ['leave.request'], stylist: ['leave.request'], beautician: ['leave.request'],
 };
+
+/** A role's defaults including the modules those defaults live in. */
+export function defaultGrants(role) {
+  const permissions = DEFAULT_ROLE_PERMISSIONS[role] || [];
+  return new Set([...permissions, ...permissions.map((key) => PERMISSION_MODULE[key])]);
+}

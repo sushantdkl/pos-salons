@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { MessageCircle } from 'lucide-react';
 import { PublicLayout } from '@/modules/public-site/components/public-layout';
 import { Section } from '@/modules/public-site/components/section';
+import { CustomerReviews } from '@/modules/public-site/components/customer-reviews';
 import { PackageCard, ServiceCard } from '@/modules/public-site/components/cards';
 import { StaffCarousel } from '@/modules/public-site/components/staff-carousel';
 import { CmsImage } from '@/modules/public-site/components/cms-image';
@@ -246,6 +247,8 @@ export default async function HomePage() {
             </div>
           </Section>
         ) : null}
+
+        <CustomerReviews />
 
         <Section
           theme="dark"

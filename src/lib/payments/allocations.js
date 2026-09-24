@@ -11,6 +11,13 @@ export function canonicalPaymentMethod(value) {
 
 export function normalizePaymentAllocations(data, grandTotal, options = {}) {
   const totalMinor = toMinor(grandTotal, 'Grand total');
+  // A bill fully covered by a discount / loyalty reward settles with NO payment rows: nothing is
+  // collected, so no cash or online payment may be invented for it.
+  if (totalMinor === 0) {
+    const offered = (Array.isArray(data.allocations) ? data.allocations : []).some((row) => Number(row?.amount || 0) > 0);
+    if (offered) throw new Error('Payment allocations must equal the exact bill total');
+    return { allocations: [], cashAmount: 0, onlineAmount: 0, creditAmount: 0, collectedAmount: 0, paymentMethod: 'cash', amountTendered: 0, changeAmount: 0 };
+  }
   let raw = Array.isArray(data.allocations) ? data.allocations : null;
   if (!raw?.length) {
     const method = String(data.payment_method || 'cash').toLowerCase();

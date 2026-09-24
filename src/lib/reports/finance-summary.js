@@ -222,6 +222,7 @@ export async function getSalesTotals(db, period, options = {}) {
         COUNT(b.id)::int AS bills,
         COALESCE(SUM(b.subtotal), 0) AS gross_sales_before_discount,
         COALESCE(SUM(b.discount_amount), 0) AS total_discounts,
+        COALESCE(SUM(COALESCE(b.loyalty_discount, 0)), 0) AS loyalty_discounts,
         COALESCE(SUM(b.tax), 0) AS total_tax,
         COALESCE(SUM(b.service_charge), 0) AS total_service_charge,
         COALESCE(SUM(b.grand_total), 0) AS net_sales_after_discount,
@@ -255,6 +256,8 @@ export async function getSalesTotals(db, period, options = {}) {
     bills: Number(row?.bills || 0),
     grossSalesBeforeDiscount,
     totalDiscounts,
+    // Loyalty rewards are INSIDE totalDiscounts (never a payment); reported separately too.
+    loyaltyDiscounts: numeric(row?.loyalty_discounts),
     totalTax: numeric(row?.total_tax),
     totalServiceCharge: numeric(row?.total_service_charge),
     // Sum of finalized bill totals sold in scope, before any void processed later.

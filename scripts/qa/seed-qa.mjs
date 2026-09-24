@@ -35,6 +35,7 @@ const TRANSACTIONAL_TABLES = [
   'supplier_payments', 'purchase_items', 'purchases', 'suppliers',
   'hr_audit_log', 'hr_overtime', 'hr_leave_ledger', 'hr_leave_requests', 'hr_attendance_breaks', 'hr_attendance',
   'hr_holidays', 'hr_shift_assignments', 'hr_shifts',
+  'loyalty_ledger', 'loyalty_claim_codes', 'customer_reviews', 'crm_audit_log',
 ];
 
 const client = new pg.Client({ connectionString: url });

@@ -8,8 +8,8 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
-  GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle,
+  Award, BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, ClipboardPen, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle, MessageSquareHeart,
   PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
   Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Ticket, Timer, TrendingUp, Truck, UserCheck, Users, Wallet, WalletCards, Warehouse,
 } from 'lucide-react';
@@ -50,6 +50,10 @@ const ADMIN_NAV = [
     link('Expenses Report', '/admin/reports/center/expenses', BadgeDollarSign),
     link('Token Report', '/dashboard/admin/reports/tokens', Ticket),
     link('Transactions', '/admin/reports/transactions', ListOrdered),
+    link('Business Day History', '/dashboard/admin/business-days', CalendarDays),
+    link('Staff Performance', '/dashboard/admin/staff-performance', TrendingUp),
+    link('Attendance Reports', '/admin/hrm/reports', ClipboardList),
+    link('Advances Report', '/admin/reports/center/advances', Scale),
     link('Compare Periods', '/admin/reports/compare', GitCompareArrows),
   ]),
   group('operations', 'Salon Operations', 'operations', Scissors, [
@@ -60,6 +64,9 @@ const ADMIN_NAV = [
   group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
     link('Appointments', '/admin/appointments', CalendarClock),
     link('Hours & Booking', '/admin/appointments/settings', CalendarCog),
+    link('Loyalty', '/admin/crm/loyalty', Award),
+    link('Customer Reviews', '/admin/crm/reviews', MessageSquareHeart),
+    link('Feedback Forms', '/admin/crm/reviews/forms', ClipboardPen),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse),
@@ -68,7 +75,6 @@ const ADMIN_NAV = [
   ]),
   group('finance', 'Finance', 'finance', Wallet, [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
-    link('Business Day History', '/dashboard/admin/business-days', CalendarDays),
     link('Expenses', '/dashboard/admin/expenses', Receipt),
     link('Savings', '/admin/savings', PiggyBank),
     link('Credit Collection', '/cashier/credit', Wallet),
@@ -79,11 +85,8 @@ const ADMIN_NAV = [
     link('Shifts & Roster', '/admin/hrm/shifts', Clock),
     link('Leave Management', '/admin/hrm/leave', CalendarOff),
     link('Overtime', '/admin/hrm/overtime', Timer),
-    link('Attendance Reports', '/admin/hrm/reports', ClipboardList),
     link('Salary & Payroll', '/dashboard/admin/expenses/salary', Banknote),
     link('Salary Advances', '/cashier/advances', Coins),
-    link('Advances Report', '/admin/reports/center/advances', Scale),
-    link('Staff Performance', '/dashboard/admin/staff-performance', TrendingUp),
     link('HR Rules', '/admin/hrm/rules', SlidersHorizontal),
   ]),
   // Administration: main links, no System dropdown.
@@ -100,6 +103,10 @@ const CASHIER_NAV = [
   link('Summary', '/cashier/executive-summary', ScrollText),
   link('Customers', '/admin/customers', Contact),
   link('Customer Ledger', '/admin/customer-ledger', BookUser),
+  // Reports appear only when the owner grants them in Staff Permissions.
+  group('reports', 'Reports', 'reports', ChartPie, [
+    link('Attendance Reports', '/admin/hrm/reports', ClipboardList, { permission: 'attendance.view' }),
+  ]),
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo),
     link('Services', '/admin/products', Sparkles),
@@ -124,7 +131,6 @@ const CASHIER_NAV = [
     link('Shifts & Roster', '/admin/hrm/shifts', Clock, { permission: 'shift.manage' }),
     link('Leave Management', '/admin/hrm/leave', CalendarOff, { permission: 'leave.view' }),
     link('Overtime', '/admin/hrm/overtime', Timer, { permission: 'overtime.view' }),
-    link('Attendance Reports', '/admin/hrm/reports', ClipboardList, { permission: 'attendance.view' }),
     link('Salary Advance', '/cashier/advances', Coins),
   ]),
 ];

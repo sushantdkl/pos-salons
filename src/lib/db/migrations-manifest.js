@@ -18,4 +18,6 @@ export const TRACKED_MIGRATIONS = [
   '2026-09-25-appointments.sql',
   '2026-09-26-suppliers.sql',
   '2026-09-27-hrm-attendance.sql',
+  '2026-09-28-loyalty-reviews.sql',
+  '2026-09-29-permission-modules.sql',
 ];

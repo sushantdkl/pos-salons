@@ -370,6 +370,47 @@ async function getAppointmentStats(db, period, scope) {
   };
 }
 
+/* ------------------------------------------------------------ loyalty & reviews */
+
+/**
+ * Reviews submitted and loyalty activity recorded in the period (Nepal dates), plus current
+ * outstanding rewards. Descriptive only — no claim that loyalty caused any sales.
+ */
+async function getCrmStats(db, period, scope) {
+  const bounds = periodBoundsSql(period, scope.startDate, scope.endDate);
+  const inPeriod = (column) => `(${column} AT TIME ZONE '${SALON_TIMEZONE}')::date >= ${bounds.startSql} AND (${column} AT TIME ZONE '${SALON_TIMEZONE}')::date < ${bounds.endSql}`;
+  const [reviews, ratingRows, loyalty, discount, outstanding] = await Promise.all([
+    db.get(`SELECT COUNT(*)::int AS n, AVG(overall_rating) AS avg, COUNT(*) FILTER (WHERE verified)::int AS verified
+      FROM customer_reviews WHERE status <> 'ARCHIVED' AND ${inPeriod('submitted_at')}`, bounds.params),
+    db.all(`SELECT overall_rating AS stars, COUNT(*)::int AS n FROM customer_reviews
+      WHERE overall_rating IS NOT NULL AND status <> 'ARCHIVED' AND ${inPeriod('submitted_at')} GROUP BY 1`, bounds.params),
+    db.get(`SELECT COUNT(*) FILTER (WHERE l.entry_type = 'EARN' AND NOT EXISTS (SELECT 1 FROM loyalty_ledger r WHERE r.reversal_of = l.id))::int AS earned,
+        COUNT(*) FILTER (WHERE l.entry_type = 'REDEEM' AND NOT EXISTS (SELECT 1 FROM loyalty_ledger r WHERE r.reversal_of = l.id))::int AS redeemed,
+        COUNT(DISTINCT l.customer_id) FILTER (WHERE l.entry_type = 'EARN')::int AS customers
+      FROM loyalty_ledger l WHERE ${inPeriod('l.created_at')}`, bounds.params),
+    db.get(`SELECT COALESCE(SUM(b.loyalty_discount), 0) AS total FROM salon_bills b WHERE b.status = 'paid' AND ${inPeriod('b.transaction_time')}`, bounds.params),
+    db.get(`SELECT COUNT(*) FILTER (WHERE x.balance >= x.required)::int AS ready, COALESCE(SUM(GREATEST(x.balance, 0) / x.required), 0)::int AS rewards,
+        COUNT(*) FILTER (WHERE x.balance >= 0 AND x.balance % x.required = x.required - 1)::int AS near
+      FROM (SELECT l.customer_id, p.required_visits AS required, SUM(l.visits) AS balance FROM loyalty_ledger l JOIN loyalty_programs p ON p.id = l.program_id
+            WHERE p.is_active GROUP BY l.customer_id, p.id, p.required_visits) x`),
+  ]);
+  const counts = Object.fromEntries([5, 4, 3, 2, 1].map((stars) => [stars, Number(ratingRows.find((row) => Number(row.stars) === stars)?.n || 0)]));
+  const earnedRewards = Number(loyalty?.redeemed || 0) + Number(outstanding?.rewards || 0);
+  return {
+    reviews: { count: Number(reviews?.n || 0), average: reviews?.avg ? round2(reviews.avg) : null, verified: Number(reviews?.verified || 0), ratings: counts },
+    loyalty: {
+      stampsEarned: Number(loyalty?.earned || 0),
+      rewardsRedeemed: Number(loyalty?.redeemed || 0),
+      customersEarning: Number(loyalty?.customers || 0),
+      loyaltyDiscount: round2(discount?.total),
+      outstandingRewards: Number(outstanding?.rewards || 0),
+      customersWithReward: Number(outstanding?.ready || 0),
+      customersNearReward: Number(outstanding?.near || 0),
+      redemptionRate: earnedRewards ? pct(loyalty?.redeemed, earnedRewards) : null,
+    },
+  };
+}
+
 /* ---------------------------------------------------------- orchestration */
 
 export async function getSalonAnalytics(db, period, options = {}) {
@@ -379,7 +420,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     businessDayId: period === 'today' && options.businessDayId ? options.businessDayId : null,
   };
 
-  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls, appointments] = await Promise.all([
+  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls, appointments, crm] = await Promise.all([
     getExecutiveSummary(db, period, { ...options, scope: 'admin' }),
     getSalesSeries(db, period, scope),
     getTopServices(db, period, scope),
@@ -390,6 +431,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     getTokenDemand(db, period, scope),
     getControls(db, period, scope),
     getAppointmentStats(db, period, scope),
+    getCrmStats(db, period, scope),
   ]);
 
   const { revenue, payments, expenses, salary, tokens, savings } = summary;
@@ -434,7 +476,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
       serviceShare: pct(serviceRevenue, serviceRevenue + productRevenue),
       productShare: pct(productRevenue, serviceRevenue + productRevenue),
     },
-    customers: { ...customers, trend: customerTrend },
+    customers: { ...customers, trend: customerTrend, crm },
     staff: (summary.staffPerformance || []).map((member) => {
       const bills = staffTickets.get(String(member.staffId)) || 0;
       return { ...member, bills, averageTicket: bills > 0 ? round2(member.revenue / bills) : 0 };

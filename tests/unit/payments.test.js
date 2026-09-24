@@ -22,3 +22,10 @@ test('legacy card and split payloads remain compatible', () => {
   const split=normalizePaymentAllocations({payment_method:'split',cash_amount:10,qr_amount:15,qr_type:'BANK'},25);
   assert.equal(split.paymentMethod,'split'); assert.equal(split.onlineAmount,15);
 });
+
+test('a zero-total bill (fully discounted / loyalty reward) settles with no payment rows', () => {
+  const result = normalizePaymentAllocations({ payment_method: 'cash', amount_paid: 0 }, 0);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.cashAmount, 0); assert.equal(result.onlineAmount, 0); assert.equal(result.collectedAmount, 0);
+  assert.throws(() => normalizePaymentAllocations({ allocations: [{ method: 'cash', amount: '10' }] }, 0), /exact bill total/);
+});

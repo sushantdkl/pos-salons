@@ -75,6 +75,8 @@ export async function GET(request) {
     // "Right now" widgets: the live store state and who is waiting in the queue.
     const store = await getStoreStatus(db);
     const frontDesk = await getFrontDeskNow(db, businessDayId);
+    // Admin-only: low ratings waiting for a look (management information, not a staff score).
+    const lowRatings = await db.get("SELECT COUNT(*)::int AS n FROM customer_reviews r, crm_settings s WHERE s.id = 1 AND r.status = 'PENDING' AND r.overall_rating <= s.low_rating_threshold").catch(() => ({ n: 0 }));
     const salesSeries = await getSalesSeries(db, period, range);
     const totalCustomers = Number(totalCustomersRow?.count || 0);
     const repeatCustomers = Number(repeatCustomersRow?.count || 0);
@@ -146,6 +148,7 @@ export async function GET(request) {
         alerts: dashboard.alerts,
         store,
         ...frontDesk,
+        lowRatingReviews: Number(lowRatings?.n || 0),
       },
     });
   } catch (error) {

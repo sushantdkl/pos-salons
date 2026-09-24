@@ -10,6 +10,9 @@
  * so they settle the oldest open credit bill first. What stays open is still owed.
  */
 
+import { customerBalances, listTransactions } from '@/lib/loyalty/service';
+import { listReviews } from '@/lib/reviews/service';
+
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const EPS = 0.001;
 
@@ -309,5 +312,19 @@ export async function getCustomerProfile(db, customerId, { includePhone = true }
       status: row.status, source: row.source, staff: row.staff_name, services: row.services || '',
     })),
     timeline,
+    loyalty: {
+      programs: (await customerBalances(db, customerId)).filter((row) => row.isActive || row.enrolled),
+      transactions: await listTransactions(db, { customerId, limit: 100 }),
+    },
+    reviews: await (async () => {
+      const items = await listReviews(db, { customerId, limit: 100 });
+      const rated = items.filter((row) => row.rating && row.status !== 'ARCHIVED');
+      return {
+        items,
+        total: items.length,
+        average: rated.length ? Math.round((rated.reduce((sum, row) => sum + row.rating, 0) / rated.length) * 10) / 10 : null,
+        latest: items[0] || null,
+      };
+    })(),
   };
 }

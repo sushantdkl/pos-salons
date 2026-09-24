@@ -44,6 +44,7 @@ function Alerts({ data }) {
   const { store, summary, alerts: raw = {} } = data;
   if (store?.state === 'NO_DAY') alerts.push({ tone: 'cash', text: 'No business day is open. Open the store before taking bills.' });
   if (store?.state === 'CLOSED_SAME_DAY') alerts.push({ tone: 'cash', text: 'The store is closed. Reopen it to keep trading today.' });
+  if (data.lowRatingReviews) alerts.push({ tone: 'outflow', text: `${data.lowRatingReviews} low-rating review(s) waiting for a look.`, href: '/admin/crm/reviews' });
   if (data.pendingWebsiteRequests) alerts.push({ tone: 'cash', text: `${data.pendingWebsiteRequests} website booking request(s) waiting for confirmation.`, href: '/admin/appointments' });
   if (raw.lowStock?.length) alerts.push({ tone: 'cash', text: `${raw.lowStock.length} product(s) at or below their low-stock level.`, href: '/admin/stock' });
   if (raw.billsMissingStaff) alerts.push({ tone: 'outflow', text: `${raw.billsMissingStaff} bill(s) have a service without an assigned staff member.` });
