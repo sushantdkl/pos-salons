@@ -4,7 +4,7 @@
 # prod builds into .next-qa (NEXT_DIST_DIR) so a running `npm run dev` (.next) is never touched.
 # dev mode is not supported while your own dev server is running: both would share .next.
 # Migrates + resets the QA database, starts the app on :3013, runs the financial scenario,
-# the permission audit, the responsive/browser audit, the appointments, suppliers and customers scenarios, then stops the app.
+# the permission audit, the responsive/browser audit, the appointments, suppliers, customers and HRM scenarios, then stops the app.
 # Logs and screenshots go to test-results/qa (gitignored).
 set -u
 cd "$(dirname "$0")/../.."
@@ -33,6 +33,8 @@ DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
 QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/suppliers-scenario.mjs > "$OUT/suppliers.txt" 2>&1 || STATUS=1
 DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
 QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/customers-scenario.mjs > "$OUT/customers.txt" 2>&1 || STATUS=1
+DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
+QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/hrm-scenario.mjs > "$OUT/hrm.txt" 2>&1 || STATUS=1
 killport
-grep -hE "checks passed|^FAIL" "$OUT/scenario.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/permissions.txt" "$OUT/ui.txt"
+grep -hE "checks passed|^FAIL" "$OUT/scenario.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/hrm.txt" "$OUT/permissions.txt" "$OUT/ui.txt"
 exit $STATUS

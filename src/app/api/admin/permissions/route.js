@@ -26,7 +26,7 @@ async function applyChanges(db, actor, role, changes) {
     for (const { permission, allowed } of changes) {
       const prior = await tx.get('SELECT allowed FROM role_permissions WHERE role=? AND permission_key=? FOR UPDATE', [role, permission]);
       if (prior && prior.allowed === allowed) continue;
-      await tx.run(`INSERT INTO role_permissions(role,permission_key,allowed,updated_by,updated_at) VALUES (?,?,?,?,NOW()) ON CONFLICT(role,permission_key) DO UPDATE SET allowed=EXCLUDED.allowed,updated_by=EXCLUDED.updated_by,updated_at=NOW()`, [role, permission, allowed, actor.id]);
+      await tx.run(`INSERT INTO role_permissions(role,permission_key,allowed,updated_by,updated_at) VALUES (?,?,?,?,NOW()) ON CONFLICT(role,permission_key) DO UPDATE SET allowed=EXCLUDED.allowed,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING role`, [role, permission, allowed, actor.id]);
       await tx.run('INSERT INTO permission_audit(role,permission_key,previous_value,new_value,actor_id) VALUES (?,?,?,?,?)', [role, permission, prior?.allowed ?? null, allowed, actor.id]);
       changed += 1;
     }

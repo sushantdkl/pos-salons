@@ -422,6 +422,12 @@ async function saveSalary(db, data, userId, scope = {}) {
       salaryId = result.lastInsertRowid;
     }
 
+    // Attendance is payroll INPUT only: record which attendance figures this settlement was
+    // based on (for audit). It changes no amount — bonus/deduction above are what the admin set.
+    if (data.attendanceSnapshot && typeof data.attendanceSnapshot === 'object') {
+      await tx.run('UPDATE salary_payments SET attendance_snapshot = ?::jsonb WHERE id = ?', [JSON.stringify(data.attendanceSnapshot).slice(0, 20000), salaryId]);
+    }
+
     const salaryReference = `SALARY-${salaryMonth}-${staffId}`;
     const commissionReference = `COMMISSION-${salaryMonth}-${staffId}`;
     await tx.run(`

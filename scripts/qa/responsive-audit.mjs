@@ -38,6 +38,13 @@ const PAGES = {
     '/admin/reminders',
     '/admin/purchases',
     '/admin/purchases/new',
+    '/admin/hrm/attendance',
+    '/admin/hrm/shifts',
+    '/admin/hrm/leave',
+    '/admin/hrm/overtime',
+    '/admin/hrm/reports',
+    '/admin/hrm/rules',
+    '/dashboard/admin/expenses/salary',
   ],
   cashier: [
     '/dashboard/cashier',
@@ -51,10 +58,12 @@ const PAGES = {
     '/admin/customer-ledger',
     '/admin/reminders',
     '/cashier/advances',
+    '/attendance/my',
   ],
   barber: [
     '/dashboard/barber',
     '/appointments/my',
+    '/attendance/my',
   ],
 };
 
@@ -82,6 +91,8 @@ const record = (label, ok, detail = '') => results.push({ ok, label, detail });
   let customer = (await api('GET', '/api/admin/customers')).customers?.[0];
   if (!customer) customer = (await api('POST', '/api/admin/customers', { name: 'QA UI Customer' })).customer;
   if (supplier?.id) PAGES.admin.push(`/admin/suppliers/${supplier.id}`);
+  const employee = (await api('GET', '/api/hrm/shifts')).employees?.[0];
+  if (employee?.id) PAGES.admin.push(`/admin/hrm/attendance/staff/${employee.id}`);
   if (customer?.id) {
     PAGES.admin.push(`/admin/customers/${customer.id}`);
     PAGES.cashier.push(`/admin/customers/${customer.id}`);

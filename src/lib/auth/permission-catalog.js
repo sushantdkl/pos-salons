@@ -29,6 +29,22 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'hrm', label: 'HRM — attendance, shifts, leave & overtime', description: 'Workforce records. Employees always clock themselves in and out and see their own attendance.',
+    permissions: [
+      { key: 'attendance.view', label: 'View staff attendance', description: 'See all staff attendance, the calendar and attendance reports.' },
+      { key: 'attendance.create', label: 'Clock staff in / out', description: 'Punch clock in, clock out and breaks on behalf of another employee.' },
+      { key: 'attendance.edit', label: 'Enter manual attendance', description: 'Create an attendance record for a day with a reason.' },
+      { key: 'attendance.correct', label: 'Correct attendance', description: 'Change punches or status of a past record, with a reason. Audited.' },
+      { key: 'attendance.approve', label: 'Excuse late / approve early leave', description: 'Mark a late arrival excused or an early departure approved.' },
+      { key: 'shift.manage', label: 'Manage shifts & rosters', description: 'Create shifts, assign staff, set day overrides and holidays.' },
+      { key: 'leave.view', label: 'View all leave', description: 'See all staff leave requests and balances.' },
+      { key: 'leave.request', label: 'Request own leave', description: 'Apply for leave for oneself.' },
+      { key: 'leave.approve', label: 'Approve leave', description: 'Approve, reject or cancel leave, allocate leave balances.' },
+      { key: 'overtime.view', label: 'View overtime', description: 'See potential and approved overtime for all staff.' },
+      { key: 'overtime.approve', label: 'Approve overtime', description: 'Approve or reject overtime. Payroll only uses approved minutes.' },
+    ],
+  },
+  {
     key: 'payroll', label: 'Full payroll — Admin-sensitive', description: 'Final salary payments and historical payroll corrections.',
     permissions: [
       { key: 'payroll.payments.create', label: 'Create full salary payments', description: 'Finalize a full payroll settlement. Blocked for Cashier by policy.' },
@@ -41,6 +57,6 @@ export const PERMISSION_GROUPS = [
 export const PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((group) => group.permissions.map((permission) => permission.key));
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create'],
-  barber: [], stylist: [], beautician: [],
+  cashier: ['billing.create', 'billing.credit.create', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request'],
+  barber: ['leave.request'], stylist: ['leave.request'], beautician: ['leave.request'],
 };

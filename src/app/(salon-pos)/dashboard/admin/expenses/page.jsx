@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DollarSign, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import PayrollAttendancePanel from '@/components/hrm/payroll-attendance-panel';
 
 const tabs = ['Overview', 'Expenses', 'Salary Payments', 'Reports'];
 const emptyExpense = {
@@ -393,6 +394,13 @@ function SalaryForm({ form, setForm, staff, totalPayable, remainingBalance, paym
         <Field label="Staff"><Select value={form.staffId} onChange={(event) => update({ staffId: event.target.value })}><option value="">Select staff</option>{staff.map((member) => <option key={member.id} value={member.id}>{member.name} ({member.role})</option>)}</Select></Field>
         <Field label="Salary month"><Input type="month" value={form.salaryMonth} onChange={(event) => update({ salaryMonth: event.target.value })} /></Field>
         <div className="grid gap-3 md:grid-cols-2"><Field label="Base salary"><Input type="number" min="0" value={form.baseSalary} onChange={(event) => update({ baseSalary: event.target.value })} placeholder="e.g. 25000" /></Field><Field label="Commission earned"><Input type="number" min="0" value={form.commissionEarned} onChange={(event) => update({ commissionEarned: event.target.value })} placeholder="e.g. 1500" /></Field></div>
+        <PayrollAttendancePanel
+          staffId={form.staffId}
+          month={form.salaryMonth}
+          onApplyBonus={(amount) => setForm((current) => ({ ...current, bonus: String(Math.round((Number(current.bonus || 0) + amount) * 100) / 100) }))}
+          onApplyDeduction={(amount) => setForm((current) => ({ ...current, deduction: String(Math.round((Number(current.deduction || 0) + amount) * 100) / 100) }))}
+          onSnapshot={(snapshot) => setForm((current) => ({ ...current, attendanceSnapshot: snapshot }))}
+        />
         <div className="grid gap-3 md:grid-cols-2"><Field label="Bonus"><Input type="number" min="0" value={form.bonus} onChange={(event) => update({ bonus: event.target.value })} placeholder="e.g. 500" /></Field><Field label="Deduction"><Input type="number" min="0" value={form.deduction} onChange={(event) => update({ deduction: event.target.value })} placeholder="e.g. 200" /></Field></div>
         {/* Settlement breakdown. The gross figure is never overwritten — the advance is shown
             as its own deduction line so the two stay distinguishable. */}

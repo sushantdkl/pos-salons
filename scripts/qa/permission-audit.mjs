@@ -59,6 +59,14 @@ const ADMIN_ONLY = [
   '/api/admin/website-cms',
   '/api/suppliers',
   '/api/purchases',
+  // HRM administration: denied to cashier and service staff until granted in Staff Permissions.
+  '/api/hrm/attendance',
+  '/api/hrm/shifts',
+  '/api/hrm/leave',
+  '/api/hrm/overtime',
+  '/api/hrm/reports',
+  '/api/hrm/policy',
+  '/api/hrm/payroll-inputs?month=2026-09',
   '/api/store/history',
   '/api/admin/tokens?mode=analytics',
 ];

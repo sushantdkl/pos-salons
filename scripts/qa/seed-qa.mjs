@@ -33,6 +33,8 @@ const TRANSACTIONAL_TABLES = [
   'appointment_waitlist', 'appointment_events', 'appointment_services', 'appointments',
   'staff_time_off', 'staff_working_hours',
   'supplier_payments', 'purchase_items', 'purchases', 'suppliers',
+  'hr_audit_log', 'hr_overtime', 'hr_leave_ledger', 'hr_leave_requests', 'hr_attendance_breaks', 'hr_attendance',
+  'hr_holidays', 'hr_shift_assignments', 'hr_shifts',
 ];
 
 const client = new pg.Client({ connectionString: url });

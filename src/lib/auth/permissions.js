@@ -11,6 +11,17 @@ export const PERMISSIONS = Object.freeze({
   PAYROLL_PAYMENTS_CREATE: 'payroll.payments.create',
   PAYROLL_RECORDS_CORRECT: 'payroll.records.correct',
   PAYROLL_RECORDS_DELETE: 'payroll.records.delete',
+  ATTENDANCE_VIEW: 'attendance.view',
+  ATTENDANCE_CREATE: 'attendance.create',
+  ATTENDANCE_EDIT: 'attendance.edit',
+  ATTENDANCE_CORRECT: 'attendance.correct',
+  ATTENDANCE_APPROVE: 'attendance.approve',
+  SHIFT_MANAGE: 'shift.manage',
+  LEAVE_VIEW: 'leave.view',
+  LEAVE_REQUEST: 'leave.request',
+  LEAVE_APPROVE: 'leave.approve',
+  OVERTIME_VIEW: 'overtime.view',
+  OVERTIME_APPROVE: 'overtime.approve',
 });
 
 export async function hasPermission(db, user, permission) {

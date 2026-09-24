@@ -43,6 +43,8 @@ export default function AdminLayout({ children }) {
   // Group open state. Starts empty on the server and the first client paint (no hydration
   // mismatch); saved state is restored in an effect and the active page's group is forced open.
   const [openGroups, setOpenGroups] = useState({});
+  // Delegated HR permissions (Staff Permissions) reveal extra links for non-admin roles.
+  const [grants, setGrants] = useState(null);
 
   const closeMobileSidebar = () => setSidebarOpen(false);
 
@@ -146,7 +148,7 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     // Restore saved groups, then make sure the group holding the current page is open.
-    const entries = navigationForRole(currentRole);
+    const entries = navigationForRole(currentRole, grants);
     const active = resolveActiveHref(entries, pathname);
     const activeGroup = entries.find((entry) => entry.items?.some((item) => item.href === active));
     setOpenGroups((current) => ({
@@ -154,7 +156,18 @@ export default function AdminLayout({ children }) {
       ...current,
       ...(activeGroup ? { [activeGroup.id]: true } : {}),
     }));
-  }, [pathname, currentRole]);
+  }, [pathname, currentRole, grants]);
+
+  useEffect(() => {
+    if (!currentRole || currentRole === 'admin') return undefined;
+    let alive = true;
+    const token = localStorage.getItem('pos_token');
+    fetch('/api/hrm/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => { if (alive && data?.permissions) setGrants(data.permissions); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [currentRole]);
 
   const toggleGroup = (id) => {
     setOpenGroups((current) => {
@@ -213,7 +226,7 @@ export default function AdminLayout({ children }) {
     router.push('/login');
   };
 
-  const navEntries = navigationForRole(currentRole);
+  const navEntries = navigationForRole(currentRole, grants);
   const activeHref = resolveActiveHref(navEntries, pathname);
 
   if (loading) {

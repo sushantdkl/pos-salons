@@ -8,10 +8,10 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle,
   PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
-  Settings, ShieldCheck, Sparkles, Store, Ticket, TrendingUp, Truck, Users, Wallet, WalletCards, Warehouse,
+  Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Ticket, Timer, TrendingUp, Truck, UserCheck, Users, Wallet, WalletCards, Warehouse,
 } from 'lucide-react';
 
 /**
@@ -74,11 +74,17 @@ const ADMIN_NAV = [
     link('Credit Collection', '/cashier/credit', Wallet),
   ]),
   group('hrm', 'HRM', 'hrm', Users, [
-    link('Staff', '/admin/employees', Users),
+    link('Employees', '/admin/employees', Users),
+    link('Attendance', '/admin/hrm/attendance', UserCheck),
+    link('Shifts & Roster', '/admin/hrm/shifts', Clock),
+    link('Leave Management', '/admin/hrm/leave', CalendarOff),
+    link('Overtime', '/admin/hrm/overtime', Timer),
+    link('Attendance Reports', '/admin/hrm/reports', ClipboardList),
     link('Salary & Payroll', '/dashboard/admin/expenses/salary', Banknote),
     link('Salary Advances', '/cashier/advances', Coins),
     link('Advances Report', '/admin/reports/center/advances', Scale),
     link('Staff Performance', '/dashboard/admin/staff-performance', TrendingUp),
+    link('HR Rules', '/admin/hrm/rules', SlidersHorizontal),
   ]),
   // Administration: main links, no System dropdown.
   link('Staff Permissions', '/admin/permissions', ShieldCheck, { separatorBefore: true }),
@@ -112,6 +118,13 @@ const CASHIER_NAV = [
     link('Credit Collection', '/cashier/credit', Wallet),
   ]),
   group('hrm', 'HRM', 'hrm', Users, [
+    link('My Attendance', '/attendance/my', UserCheck),
+    // Shown only when the owner grants the permission in Staff Permissions.
+    link('Attendance', '/admin/hrm/attendance', ClipboardCheck, { permission: 'attendance.view' }),
+    link('Shifts & Roster', '/admin/hrm/shifts', Clock, { permission: 'shift.manage' }),
+    link('Leave Management', '/admin/hrm/leave', CalendarOff, { permission: 'leave.view' }),
+    link('Overtime', '/admin/hrm/overtime', Timer, { permission: 'overtime.view' }),
+    link('Attendance Reports', '/admin/hrm/reports', ClipboardList, { permission: 'attendance.view' }),
     link('Salary Advance', '/cashier/advances', Coins),
   ]),
 ];
@@ -120,6 +133,7 @@ const serviceStaffNav = (role) => [
   link('Dashboard', `/dashboard/${role}`, LayoutDashboard, { exact: true }),
   link('Queue', `/dashboard/${role}/queue`, ListTodo),
   link('My Appointments', '/appointments/my', CalendarClock),
+  link('My Attendance', '/attendance/my', UserCheck),
 ];
 
 export const NAVIGATION = {
@@ -130,8 +144,16 @@ export const NAVIGATION = {
   beautician: serviceStaffNav('beautician'),
 };
 
-export function navigationForRole(role) {
-  return NAVIGATION[role] || NAVIGATION.stylist;
+/**
+ * A role's navigation. Links with a `permission` appear only when that delegated permission is
+ * granted (admin sees everything); a group left with no links is dropped.
+ */
+export function navigationForRole(role, grants = null) {
+  const entries = NAVIGATION[role] || NAVIGATION.stylist;
+  const allowed = (item) => !item.permission || role === 'admin' || Boolean(grants?.[item.permission]);
+  return entries
+    .map((entry) => (entry.items ? { ...entry, items: entry.items.filter(allowed) } : entry))
+    .filter((entry) => (entry.items ? entry.items.length > 0 : allowed(entry)));
 }
 
 /** Every link of a role's navigation, groups flattened. */

@@ -44,6 +44,12 @@ export function canAccessPath(role, pathname) {
     return normalized === 'admin';
   }
 
+  // Every employee has their own attendance page (self punches, own history, own leave).
+  if (pathname.startsWith('/attendance/my')) return ['cashier', 'barber', 'stylist', 'beautician'].includes(normalized);
+  // HR workspace: admin, and a cashier the owner delegated HR permissions to (APIs enforce each one).
+  if (pathname.startsWith('/admin/hrm/rules')) return normalized === 'admin';
+  if (pathname.startsWith('/admin/hrm')) return ['admin', 'cashier'].includes(normalized);
+
   // Front desk runs appointments; service staff see only their own schedule.
   if (pathname.startsWith('/admin/appointments')) return ['admin', 'cashier'].includes(normalized);
   if (pathname.startsWith('/appointments/my')) return ['barber', 'stylist', 'beautician'].includes(normalized);
