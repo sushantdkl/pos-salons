@@ -120,14 +120,19 @@ for (const [role, pages] of Object.entries(PAGES)) {
 
     // Mobile drawer: opens, closes with Escape.
     if (width < 1024) {
-      await page.goto(`${BASE}${pages[0]}`, { waitUntil: 'networkidle' });
-      const menu = page.getByRole('button', { name: 'Open menu' });
-      await menu.click();
-      const visible = await page.locator('nav[aria-label="Main navigation"]').isVisible();
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(400);
-      const inert = await page.locator('aside').getAttribute('aria-hidden');
-      record(`${role} @${width} mobile drawer opens and Escape closes`, visible && inert === 'true', `visible=${visible} aria-hidden=${inert}`);
+      // One flaky navigation must fail one check, not abort the whole audit.
+      try {
+        await page.goto(`${BASE}${pages[0]}`, { waitUntil: 'networkidle', timeout: 90000 });
+        const menu = page.getByRole('button', { name: 'Open menu' });
+        await menu.click();
+        const visible = await page.locator('nav[aria-label="Main navigation"]').isVisible();
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(400);
+        const inert = await page.locator('aside').getAttribute('aria-hidden');
+        record(`${role} @${width} mobile drawer opens and Escape closes`, visible && inert === 'true', `visible=${visible} aria-hidden=${inert}`);
+      } catch (error) {
+        record(`${role} @${width} mobile drawer check`, false, error.message.slice(0, 160));
+      }
     }
     await context.close();
   }

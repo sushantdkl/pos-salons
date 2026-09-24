@@ -332,7 +332,15 @@ export default function AdminLayout({ children }) {
         >
           {showExpanded
             ? navEntries.map((entry) => {
-              if (!entry.items) return renderNavLink(entry, NAV_TINTS.top, true);
+              if (!entry.items) {
+                if (!entry.separatorBefore) return renderNavLink(entry, NAV_TINTS.top, true);
+                return (
+                  <div key={entry.href} className="space-y-1">
+                    <div className="mx-2 border-t border-stone-200 pt-2" role="separator" aria-hidden="true" />
+                    {renderNavLink(entry, NAV_TINTS.top, true)}
+                  </div>
+                );
+              }
               const tint = NAV_TINTS[entry.tint] || NAV_TINTS.system;
               const hasActive = entry.items.some((item) => item.href === activeHref);
               const expanded = Boolean(openGroups[entry.id]) || hasActive;

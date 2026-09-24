@@ -20,7 +20,7 @@ export const REPORT_CATALOG = Object.freeze({
     question: 'How was billed value settled?',
   },
   credit: {
-    title: 'Customer Credit',
+    title: 'Customer Ledger',
     description: 'Review credit issued, collections, source bills, and the current outstanding balance.',
     question: 'Which customer credit movements changed the receivable balance?',
   },

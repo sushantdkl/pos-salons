@@ -8,7 +8,7 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  BadgeDollarSign, Banknote, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  BadgeDollarSign, Banknote, BookUser, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle,
   PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
   Settings, ShieldCheck, Sparkles, Store, Ticket, TrendingUp, Users, Wallet, WalletCards, Warehouse,
@@ -37,13 +37,15 @@ const ADMIN_NAV = [
   link('POS', '/admin/billing', Store),
   link('Analytics', '/admin/analytics', ChartColumnBig),
   link('Summary', '/admin/executive-summary', ScrollText),
+  // Everyday essentials stay one click away, outside any dropdown.
+  link('Customers', '/admin/customers', Contact),
+  link('Customer Ledger', '/admin/reports/center/credit', BookUser),
   group('reports', 'Reports', 'reports', ChartPie, [
     link('Business Overview', '/admin/reports', ChartPie, { exact: true }),
     link('Sales & Invoices', '/admin/reports/center/sales', ReceiptText),
     link('Services Report', '/admin/reports/center/services', Scissors),
     link('Products & Retail', '/admin/reports/center/products', PackageSearch),
     link('Payment Reconciliation', '/admin/reports/center/payments', WalletCards),
-    link('Customer Credit', '/admin/reports/center/credit', HandCoins),
     link('Expenses Report', '/admin/reports/center/expenses', BadgeDollarSign),
     link('Token Report', '/dashboard/admin/reports/tokens', Ticket),
     link('Transactions', '/admin/reports/transactions', ListOrdered),
@@ -56,7 +58,6 @@ const ADMIN_NAV = [
   ]),
   group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
     link('Appointments', '/admin/appointments', CalendarClock),
-    link('Customers', '/admin/customers', Contact),
     link('Hours & Booking', '/admin/appointments/settings', CalendarCog),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
@@ -75,13 +76,12 @@ const ADMIN_NAV = [
     link('Salary Advances', '/cashier/advances', Coins),
     link('Advances Report', '/admin/reports/center/advances', Scale),
     link('Staff Performance', '/dashboard/admin/staff-performance', TrendingUp),
-    link('Staff Permissions', '/admin/permissions', ShieldCheck),
   ]),
-  group('system', 'System', 'system', Settings, [
-    link('Website CMS', '/dashboard/admin/website', Globe),
-    link('Printer', '/admin/printer', Printer),
-    link('Settings', '/admin/settings', Settings),
-  ]),
+  // Administration: main links, no System dropdown.
+  link('Staff Permissions', '/admin/permissions', ShieldCheck, { separatorBefore: true }),
+  link('Website CMS', '/dashboard/admin/website', Globe),
+  link('Printer', '/admin/printer', Printer),
+  link('Settings', '/admin/settings', Settings),
 ];
 
 // Cashier: the operational items it had before, grouped, plus front-desk Appointments.
@@ -89,6 +89,7 @@ const CASHIER_NAV = [
   link('Dashboard', '/dashboard/cashier', LayoutDashboard, { exact: true }),
   link('POS', '/admin/billing', Store),
   link('Summary', '/cashier/executive-summary', ScrollText),
+  link('Customers', '/admin/customers', Contact),
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo),
     link('Services', '/admin/products', Sparkles),
@@ -96,7 +97,6 @@ const CASHIER_NAV = [
   ]),
   group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
     link('Appointments', '/admin/appointments', CalendarClock),
-    link('Customers', '/admin/customers', Contact),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse),
