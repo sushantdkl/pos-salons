@@ -10,9 +10,11 @@ import { useState } from 'react';
 import { ChartColumnBig } from 'lucide-react';
 import {
   AlertBanner, BreakdownCard, ChartCard, count, EmptyState, ErpPage, ErrorState, FinancialTable, line,
-  humanize, LoadingState, MetricCard, MetricGroup, money, PageHeader, percent, PeriodFilter, RefreshButton,
+  humanize, LoadingState, MetricCard, MetricGroup, money, PageHeader, percent, PeriodFilter, PrintButton, PrintHeader, RefreshButton,
   ReportSection, TONES,
 } from '@/components/erp';
+import { ExportButtons } from '@/components/exports/export-buttons';
+import { KpiCard } from '@/components/reports/kpi-card';
 import { DonutChart, GroupedBarChart, HorizontalBarChart, TrendChart } from '@/components/erp/charts';
 import { usePeriod, useReport } from '@/components/erp/use-report';
 
@@ -392,6 +394,89 @@ function Controls({ a }) {
   );
 }
 
+/* ----------------------------------------------------------------- export */
+
+function shiftDate(date, days) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+const daysBetween = (start, end) => Math.round((new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / 86400000) + 1;
+
+/** Every analytics section as a coloured Excel sheet (figures exactly as the server sent them). */
+function analyticsSheets(a, prev) {
+  const k = a.kpis;
+  const kpi = (label, key) => ({ label, value: k[key], previous: prev?.kpis?.[key] ?? null });
+  return [
+    {
+      name: 'Summary',
+      columns: [{ header: 'Measure', key: 'label', bold: true, width: 30 }, { header: 'This period', key: 'value', type: 'decimal', tone: 'ledger' }, { header: 'Previous period', key: 'previous', type: 'decimal' }],
+      rows: [
+        kpi('Gross sales', 'grossSales'), kpi('Discounts', 'discounts'), kpi('Voids processed', 'voids'), kpi('Net sales', 'netSales'),
+        kpi('Operating expenses', 'expenses'), kpi('Salary / payroll paid', 'payroll'), kpi('Net collection', 'netCollection'),
+        kpi('Completed bills', 'bills'), kpi('Customers served', 'customersServed'), kpi('Average bill', 'averageBill'),
+        { label: 'Cash sales', value: a.payments.cash, previous: prev?.payments?.cash ?? null },
+        { label: 'Online sales', value: a.payments.online, previous: prev?.payments?.online ?? null },
+        { label: 'Credit billed', value: a.payments.credit, previous: prev?.payments?.credit ?? null },
+      ],
+    },
+    {
+      name: 'Daily trend',
+      columns: [
+        { header: 'Date', key: 'label' }, { header: 'Bills', key: 'bills', type: 'number', tone: 'ledger' },
+        { header: 'Gross sales', key: 'grossSales', type: 'money' }, { header: 'Discounts', key: 'discounts', type: 'money', tone: 'outflow' },
+        { header: 'Net sales', key: 'netSales', type: 'money', tone: 'inflow', bold: true },
+        { header: 'Cash collected', key: 'cashCollected', type: 'money', tone: 'cash' }, { header: 'Online collected', key: 'qrCollected', type: 'money', tone: 'online' },
+      ],
+      rows: a.salesTrend,
+    },
+    {
+      name: 'Services',
+      columns: [
+        { header: 'Service', key: 'name', bold: true }, { header: 'Category', key: 'category', type: 'status' },
+        { header: 'Times done', key: 'quantity', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' },
+        { header: 'Average value', key: 'averageValue', type: 'money', tone: 'ledger' },
+      ],
+      rows: a.services.byRevenue,
+    },
+    {
+      name: 'Service categories',
+      columns: [{ header: 'Category', key: 'category', bold: true }, { header: 'Quantity', key: 'quantity', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }, { header: 'Share', key: 'percentage', type: 'percent' }],
+      rows: a.services.categories,
+    },
+    {
+      name: 'Staff',
+      columns: [
+        { header: 'Staff', key: 'staffName', bold: true }, { header: 'Role', key: 'role', type: 'status' },
+        { header: 'Services', key: 'servicesCompleted', type: 'number', tone: 'ops' }, { header: 'Customers', key: 'customersServed', type: 'number', tone: 'crm' },
+        { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }, { header: 'Commission', key: 'commission', type: 'money', tone: 'hrm' },
+        { header: 'Average ticket', key: 'averageTicket', type: 'money', tone: 'ledger' }, { header: 'Share', key: 'percentage', type: 'percent' },
+      ],
+      rows: a.staff,
+    },
+    {
+      name: 'Top customers',
+      columns: [{ header: 'Customer', key: 'name', bold: true }, { header: 'Bills', key: 'bills', type: 'number', tone: 'ledger' }, { header: 'Spend', key: 'spend', type: 'money', tone: 'crm' }],
+      rows: a.customers.topCustomers,
+    },
+    {
+      name: 'Products',
+      columns: [{ header: 'Product', key: 'name', bold: true }, { header: 'Units sold', key: 'quantity', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }],
+      rows: a.products.topProducts,
+    },
+    {
+      name: 'Expenses',
+      columns: [
+        { header: 'Category', key: 'category', type: 'status' }, { header: 'Entries', key: 'records', type: 'number', tone: 'ledger' },
+        { header: 'Cash', key: 'cash', type: 'money', tone: 'cash' }, { header: 'Online', key: 'online', type: 'money', tone: 'online' },
+        { header: 'Amount', key: 'amount', type: 'money', tone: 'outflow', bold: true }, { header: 'Share', key: 'percentage', type: 'percent' },
+      ],
+      rows: a.expenses.categories,
+    },
+  ];
+}
+
 /* ------------------------------------------------------------------- page */
 
 export default function AnalyticsPage() {
@@ -401,10 +486,19 @@ export default function AnalyticsPage() {
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const a = data?.analytics;
 
+  // The equal-length period right before this one, for the comparison on the KPI cards.
+  const days = a?.period?.startDate && a?.period?.endDate ? daysBetween(a.period.startDate, a.period.endDate) : 0;
+  const previousUrl = days ? `/api/admin/analytics?period=custom&startDate=${shiftDate(a.period.startDate, -days)}&endDate=${shiftDate(a.period.startDate, -1)}` : null;
+  const { data: previousData } = useReport(previousUrl, { enabled: Boolean(previousUrl) });
+  const prev = previousData?.analytics;
+  const compareLabel = days === 1 ? 'vs previous day' : `vs previous ${days} days`;
+  const periodText = a ? `${a.period?.label || ''} · ${a.period?.displayRange || ''}` : '';
+
   const TabBody = { overview: Overview, money: SalesMoney, services: Services, customers: Customers, staff: Staff, products: Products, frontdesk: FrontDesk, appointments: Appointments, controls: Controls }[tab];
 
   return (
     <ErpPage>
+      <PrintHeader title="Salon Analytics" period={periodText} />
       <PageHeader
         icon={ChartColumnBig}
         iconTone="ledger"
@@ -416,7 +510,13 @@ export default function AnalyticsPage() {
             <span>Updated {updatedLabel(a.generatedAt)}</span>
           </>
         ) : null}
-        actions={<RefreshButton loading={loading} onClick={reload} />}
+        actions={(
+          <>
+            <RefreshButton loading={loading} onClick={reload} />
+            <ExportButtons filename={`Salon analytics ${a?.period?.startDate || ''} to ${a?.period?.endDate || ''}`} title="Salon Analytics" subtitle={periodText} getSheets={async () => analyticsSheets(a, prev)} disabled={!a} />
+            <PrintButton />
+          </>
+        )}
       />
       <PeriodFilter {...period.filterProps} className="mb-4" />
 
@@ -426,18 +526,24 @@ export default function AnalyticsPage() {
 
       {a ? (
         <div className={`space-y-4 ${loading ? 'opacity-60' : ''}`}>
-          <MetricGroup columns={5}>
-            <MetricCard label="Gross sales" value={money(a.kpis.grossSales)} tone="ops" />
-            <MetricCard label="Discounts" value={money(a.kpis.discounts)} tone="outflow" />
-            <MetricCard label="Net sales" value={money(a.kpis.netSales)} tone="inflow" emphasis sub={a.kpis.voids ? `after ${money(a.kpis.voids)} voids` : undefined} />
-            <MetricCard label="Expenses" value={money(a.kpis.expenses)} tone="outflow" />
-            <MetricCard label="Salary / payroll paid" value={money(a.kpis.payroll)} tone="hrm" />
-            <MetricCard label="Net collection" value={money(a.kpis.netCollection)} tone="cash" hint="Cash + online received − refunds." />
-            <MetricCard label="Completed bills" value={count(a.kpis.bills)} tone="neutral" />
-            <MetricCard label="Customers served" value={count(a.kpis.customersServed)} tone="ops" />
-            <MetricCard label="Cash sales" value={money(a.payments.cash)} tone="cash" sub={`net ${money(a.payments.netCash)}`} />
-            <MetricCard label="Online sales" value={money(a.payments.online)} tone="online" sub={`net ${money(a.payments.netOnline)}`} />
-          </MetricGroup>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <KpiCard label="Net sales" value={a.kpis.netSales} format={money} tone="inflow" emphasis previous={prev?.kpis?.netSales} compareLabel={compareLabel} />
+            <KpiCard label="Gross sales" value={a.kpis.grossSales} format={money} tone="ops" previous={prev?.kpis?.grossSales} compareLabel={compareLabel} />
+            <KpiCard label="Discounts" value={a.kpis.discounts} format={money} tone="outflow" lowerIsBetter previous={prev?.kpis?.discounts} compareLabel={compareLabel} />
+            <KpiCard label="Expenses" value={a.kpis.expenses} format={money} tone="outflow" lowerIsBetter previous={prev?.kpis?.expenses} compareLabel={compareLabel} />
+            <KpiCard label="Net collection" value={a.kpis.netCollection} format={money} tone="cash" previous={prev?.kpis?.netCollection} compareLabel={compareLabel} />
+            <KpiCard label="Completed bills" value={a.kpis.bills} format={count} tone="ledger" previous={prev?.kpis?.bills} compareLabel={compareLabel} />
+            <KpiCard label="Average bill" value={a.kpis.averageBill} format={money} tone="ops" previous={prev?.kpis?.averageBill} compareLabel={compareLabel} />
+            <KpiCard label="Customers served" value={a.kpis.customersServed} format={count} tone="crm" previous={prev?.kpis?.customersServed} compareLabel={compareLabel} />
+            <KpiCard label="Cash sales" value={a.payments.cash} format={money} tone="cash" previous={prev?.payments?.cash} compareLabel={compareLabel} />
+            <KpiCard label="Online sales" value={a.payments.online} format={money} tone="online" previous={prev?.payments?.online} compareLabel={compareLabel} />
+          </div>
+          {a.kpis.voids || a.kpis.payroll ? (
+            <p className="-mt-1 text-xs text-stone-500">
+              {a.kpis.voids ? `Net sales are after ${money(a.kpis.voids)} of voids processed in this period. ` : ''}
+              {a.kpis.payroll ? `Salary / payroll paid: ${money(a.kpis.payroll)}.` : ''}
+            </p>
+          ) : null}
 
           <div role="tablist" aria-label="Analytics sections" className="print-hide -mx-1 flex gap-1 overflow-x-auto border-b border-stone-200 px-1">
             {TABS.map(([value, label]) => (

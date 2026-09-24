@@ -1,527 +1,246 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { ArrowRight, GitCompareArrows, Lightbulb, PieChart } from 'lucide-react';
+import { BillLink } from '@/components/bills/bill-detail';
 import {
-  ArrowRight,
-  Award,
-  Calendar,
-  Download,
-  DollarSign,
-  ShoppingCart,
-  Target,
-  TrendingUp,
-  Users,
-  Zap,
-} from 'lucide-react';
+  AlertBanner, BreakdownCard, ChartCard, count, ErpPage, ErrorState, FinancialTable, LoadingState, money, PageHeader,
+  PeriodFilter, PrintButton, PrintHeader, SectionHeading, StatusBadge, TONES,
+} from '@/components/erp';
+import { DonutChart } from '@/components/erp/charts';
+import { usePeriod, useReport } from '@/components/erp/use-report';
+import { ExportButtons } from '@/components/exports/export-buttons';
+import { KpiCard } from '@/components/reports/kpi-card';
 import FinancialSummary from '@/modules/reports/components/financial-summary';
-import TransactionDetail from '@/modules/reports/components/transaction-detail';
 
-function numberValue(value) {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+const PERIOD_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: '7days', label: 'Last 7 days' },
+  { value: '30days', label: 'Last 30 days' },
+  { value: 'month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
+  { value: 'custom', label: 'Custom range' },
+];
+
+const METHOD_TONES = { cash: 'cash', online: 'online', credit: 'ledger', split: 'ops' };
+const methodLabel = (method) => ({ cash: 'Cash', online: 'Online / QR', credit: 'Credit', split: 'Split' }[method] || String(method || '—'));
+
+function shiftDate(date, days) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
-function money(value) {
-  return numberValue(value).toFixed(2);
+function daysBetween(start, end) {
+  return Math.round((new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / 86400000) + 1;
 }
 
 function formatDateTime(value) {
-  if (!value) return '-';
+  if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return date.toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function qrTypeLabel(type) {
-  return {
-    ESEWA_PHONEPAY: 'Esewa / PhonePay',
-    BANK: 'Bank QR',
-  }[type] || (type === 'Not recorded' ? 'Not recorded' : '-');
-}
-
-function csvCell(value) {
-  const text = String(value ?? '');
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(filename, rows) {
-  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
-  const dataBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(dataBlob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-const PIE_COLORS = ['#171411', '#9b742d', '#6d625b', '#d7b56d', '#b8aea3', '#3a3530'];
-
-function PaymentPie({ slices, total }) {
-  if (!slices.length || total <= 0) {
-    return (
-      <div className="flex h-40 items-center justify-center rounded-full border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-        No payment data
+const TRANSACTION_COLUMNS = [
+  { key: 'date', label: 'Date & time', render: (row) => <span className="tabular-nums">{formatDateTime(row.transactionDate)}</span> },
+  { key: 'bill', label: 'Bill', render: (row) => <BillLink billId={row.id} number={row.billNumber} /> },
+  {
+    key: 'customer', label: 'Customer',
+    render: (row) => (
+      <div className="leading-tight">
+        <p className="font-medium text-stone-900">{row.customerName || 'Walk-in Customer'}</p>
+        {row.customerPhone ? <p className="text-xs text-stone-400">{row.customerPhone}</p> : null}
       </div>
-    );
-  }
+    ),
+  },
+  {
+    key: 'services', label: 'Services / staff',
+    render: (row) => {
+      const lines = row.assignedStaff || [];
+      if (!lines.length) return <span className="text-stone-300">—</span>;
+      return <span className="block max-w-[230px] truncate text-xs text-stone-600" title={lines.join(' · ')}>{lines[0]}{lines.length > 1 ? <span className="ml-1 font-semibold text-stone-400">+{lines.length - 1} more</span> : null}</span>;
+    },
+  },
+  { key: 'payment', label: 'Payment', render: (row) => <StatusBadge label={methodLabel(row.paymentMethod)} tone={METHOD_TONES[row.paymentMethod] || 'neutral'} /> },
+  { key: 'discount', label: 'Discount', align: 'right', className: 'text-rose-700', render: (row) => (Number(row.discountAmount) ? money(row.discountAmount) : <span className="text-stone-300">—</span>) },
+  { key: 'cash', label: 'Cash', align: 'right', className: 'text-amber-700', render: (row) => (Number(row.cashAmount) ? money(row.cashAmount) : <span className="text-stone-300">—</span>) },
+  { key: 'qr', label: 'Online', align: 'right', className: 'text-sky-700', render: (row) => (Number(row.qrAmount) ? money(row.qrAmount) : <span className="text-stone-300">—</span>) },
+  { key: 'total', label: 'Bill total', align: 'right', className: 'font-bold text-stone-900', render: (row) => money(row.grandTotal) },
+];
 
-  let cursor = 0;
-  const stops = slices.map((slice, index) => {
-    const start = cursor;
-    const share = (slice.amount / total) * 100;
-    cursor += share;
-    return `${PIE_COLORS[index % PIE_COLORS.length]} ${start}% ${cursor}%`;
-  });
-
-  return (
-    <div
-      className="mx-auto h-40 w-40 rounded-full shadow-inner ring-4 ring-white"
-      style={{ background: `conic-gradient(${stops.join(', ')})` }}
-      aria-label="Payment methods pie chart"
-    />
-  );
+function exportSheets(reports) {
+  const f = reports.financial || {};
+  const summary = [
+    ['Gross sales before discount', f.grossSalesBeforeDiscount, 'inflow'],
+    ['Total discounts', f.totalDiscounts, 'outflow'],
+    ['Net sales after discount', f.netSalesAfterDiscount, 'inflow'],
+    ['Cash collected', f.grossCashCollected, 'cash'],
+    ['Online / QR collected', f.grossQrCollected, 'online'],
+    ['Total collected', f.grossTotalCollected, 'inflow'],
+    ['Operating expenses', f.operatingExpenses, 'outflow'],
+    ['Salary expenses', f.salaryExpenses, 'outflow'],
+    ['Savings transfers', f.savingsTransfers, 'outflow'],
+    ['Net cash collections', f.netCashInHand, 'cash'],
+    ['Net online balance', f.netOnlineBalance, 'online'],
+    ['Net available balance', f.netAvailableBalance, 'ledger'],
+    ['Staff commission', reports.commissionSummary, 'hrm'],
+  ].map(([label, value, tone]) => ({ label, value: Number(value || 0), tone }));
+  const counts = [
+    { label: 'Average bill value', value: Number(Number(reports.avgBillValue || 0).toFixed(2)) },
+    { label: 'Bills', count: reports.totalBills }, { label: 'Customers served', count: reports.uniqueCustomers },
+  ];
+  return [
+    {
+      name: 'Summary',
+      columns: [{ header: 'Measure', key: 'label', bold: true, width: 32 }, { header: 'Amount', key: 'value', type: 'money', tone: 'ledger' }, { header: 'Count', key: 'count', type: 'number', tone: 'ops' }],
+      rows: [...summary, ...counts],
+      note: 'Figures are calculated by the server with the same rules as the dashboards.',
+    },
+    {
+      name: 'Payment methods',
+      columns: [
+        { header: 'Method', key: 'method', type: 'status' }, { header: 'Bills', key: 'count', type: 'number', tone: 'ledger' },
+        { header: 'Amount', key: 'amount', type: 'money', tone: 'inflow' }, { header: 'Cash part', key: 'cashAmount', type: 'money', tone: 'cash' },
+        { header: 'Online part', key: 'qrAmount', type: 'money', tone: 'online' },
+      ],
+      rows: Object.entries(reports.paymentMethods || {}).map(([method, data]) => ({ method: methodLabel(method), ...data })),
+    },
+    {
+      name: 'Bills',
+      columns: [
+        { header: 'Date & time', key: 'date', value: (row) => formatDateTime(row.transactionDate) },
+        { header: 'Bill', key: 'billNumber', bold: true, tone: 'ledger' },
+        { header: 'Customer', key: 'customerName' }, { header: 'Phone', key: 'customerPhone' },
+        { header: 'Services / staff', key: 'staff', value: (row) => (row.assignedStaff || []).join('; ') },
+        { header: 'Created by', key: 'createdByName' },
+        { header: 'Payment', key: 'paymentMethod', type: 'status', value: (row) => methodLabel(row.paymentMethod) },
+        { header: 'Subtotal', key: 'subtotal', type: 'money', tone: 'neutral' },
+        { header: 'Discount', key: 'discountAmount', type: 'money', tone: 'outflow' },
+        { header: 'Cash', key: 'cashAmount', type: 'money', tone: 'cash' },
+        { header: 'Online', key: 'qrAmount', type: 'money', tone: 'online' },
+        { header: 'Bill total', key: 'grandTotal', type: 'money', tone: 'inflow', bold: true },
+        { header: 'Token', key: 'tokenNumber' },
+        { header: 'Status', key: 'status', type: 'status' },
+      ],
+      rows: reports.transactions || [],
+      totals: ['subtotal', 'discountAmount', 'cashAmount', 'qrAmount', 'grandTotal'].reduce((totals, key) => ({ ...totals, [key]: Number((reports.transactions || []).reduce((sum, row) => sum + Number(row[key] || 0), 0).toFixed(2)) }), { date: 'Total' }),
+    },
+    {
+      name: 'Top services',
+      columns: [{ header: 'Service', key: 'name', bold: true }, { header: 'Times done', key: 'quantity', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }],
+      rows: reports.topServices || [],
+    },
+    {
+      name: 'Staff',
+      columns: [{ header: 'Staff', key: 'name', bold: true }, { header: 'Services', key: 'services', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }, { header: 'Commission', key: 'commission', type: 'money', tone: 'hrm' }],
+      rows: reports.bestStaff || [],
+    },
+    {
+      name: 'Products',
+      columns: [{ header: 'Product', key: 'name', bold: true }, { header: 'Units', key: 'quantity', type: 'number', tone: 'ops' }, { header: 'Revenue', key: 'revenue', type: 'money', tone: 'inflow' }],
+      rows: reports.productSales || [],
+    },
+  ];
 }
 
 export default function ReportsPage() {
-  const searchParams = useSearchParams();
-  const queryPeriod = searchParams.get('period');
-  const normalizedQueryPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState(['today', '3days', '7days', 'month', 'custom'].includes(normalizedQueryPeriod) ? normalizedQueryPeriod : 'today');
-  const [customDates, setCustomDates] = useState({
-    start: searchParams.get('startDate') || '',
-    end: searchParams.get('endDate') || '',
-  });
-  const [reports, setReports] = useState(null);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const period = usePeriod('today');
+  const { data: reports, error, loading, reload } = useReport(period.ready ? `/api/admin/reports?${period.query}` : null);
 
-  const fetchReports = async () => {
-    try {
-      const token = localStorage.getItem('pos_token');
-      let url = `/api/admin/reports?period=${period}`;
+  // The equal-length period just before this one, for the comparison on the KPI cards.
+  const range = reports?.period;
+  const days = range?.startDate && range?.endDate ? daysBetween(range.startDate, range.endDate) : 0;
+  const previousUrl = days ? `/api/admin/reports?period=custom&startDate=${shiftDate(range.startDate, -days)}&endDate=${shiftDate(range.startDate, -1)}` : null;
+  const { data: previous } = useReport(previousUrl, { enabled: Boolean(previousUrl) });
+  const compareLabel = days === 1 ? 'vs previous day' : `vs previous ${days} days`;
+  const periodText = range ? `${range.label}${range.displayRange ? ` · ${range.displayRange}` : ''}` : '';
 
-      if (period === 'custom' && customDates.start && customDates.end) {
-        url += `&startDate=${customDates.start}&endDate=${customDates.end}`;
-      }
-
-      const response = await fetch(url, {
-        cache: 'no-store',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setReports(data);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error:', error);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReports();
-  }, [period]);
-
-  // Adopt the period from the URL only when the URL itself actually changes (shared link,
-  // browser back/forward) — never in response to a local tab click. This is what stops the
-  // Custom Range picker from being reverted and flickering.
-  const lastQueryPeriod = useRef(queryPeriod);
-  useEffect(() => {
-    if (queryPeriod === lastQueryPeriod.current) return;
-    lastQueryPeriod.current = queryPeriod;
-    const nextPeriod = queryPeriod === 'week' ? '7days' : queryPeriod;
-    if (nextPeriod && ['today', '3days', '7days', 'month', 'custom'].includes(nextPeriod)) {
-      setPeriod(nextPeriod);
-    }
-  }, [queryPeriod]);
-
-  const paymentSlices = useMemo(() => {
-    const methods = reports?.paymentMethods || {};
-    return Object.entries(methods)
-      .map(([method, data]) => ({
-        method,
-        amount: numberValue(data.amount),
-        count: Number(data.count || 0),
-        cashAmount: numberValue(data.cashAmount),
-        qrAmount: numberValue(data.qrAmount),
-      }))
-      .filter((slice) => slice.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
-  }, [reports]);
-
-  const paymentTotal = useMemo(
-    () => paymentSlices.reduce((sum, slice) => sum + slice.amount, 0),
-    [paymentSlices]
-  );
-
-  const topItems = reports?.topItems || [];
-  const maxTopRevenue = numberValue(topItems[0]?.revenue) || 1;
-
-  const exportReport = () => {
-    const transactions = reports?.transactions || [];
-    const paymentRows = Object.entries(reports?.paymentMethods || {});
-    const rows = [
-      ['Report Period', period],
-      ['Exported At', new Date().toLocaleString()],
-      [],
-      ['Summary'],
-      ['Gross Sales Before Discount', money(reports?.financial?.grossSalesBeforeDiscount)],
-      ['Total Discounts', money(reports?.financial?.totalDiscounts)],
-      ['Net Sales After Discount', money(reports?.financial?.netSalesAfterDiscount)],
-      ['Gross Cash Collected', money(reports?.financial?.grossCashCollected)],
-      ['Gross QR Collected', money(reports?.financial?.grossQrCollected)],
-      ['Gross Total Collected', money(reports?.financial?.grossTotalCollected)],
-      ['Operating Expenses', money(reports?.financial?.operatingExpenses)],
-      ['Salary Expenses', money(reports?.financial?.salaryExpenses)],
-      ['Savings Transfers', money(reports?.financial?.savingsTransfers)],
-      ['Net Cash Collections', money(reports?.financial?.netCashInHand)],
-      ['Net Online Balance', money(reports?.financial?.netOnlineBalance)],
-      ['Net Available Balance', money(reports?.financial?.netAvailableBalance)],
-      ['Total Bills', reports?.totalBills || 0],
-      ['Average Bill Value', money(reports?.avgBillValue)],
-      ['Unique Customers', reports?.uniqueCustomers || 0],
-      [],
-      ['Payment Methods'],
-      ['Payment Method', 'Transaction Count', 'Amount', 'Cash Amount', 'QR Amount'],
-      ...paymentRows.map(([method, data]) => [
-        method,
-        data.count || 0,
-        money(data.amount),
-        money(data.cashAmount),
-        money(data.qrAmount),
-      ]),
-      [],
-      ['Transactions'],
-      ['Date', 'Invoice', 'Customer', 'Phone', 'Services / Assigned Staff', 'Created By', 'Payment', 'Subtotal', 'Discount', 'Cash', 'QR', 'QR Type', 'Final Total', 'Token', 'Print Status', 'Status'],
-      ...transactions.map((transaction) => [
-        formatDateTime(transaction.transactionDate),
-        transaction.billNumber,
-        transaction.customerName,
-        transaction.customerPhone,
-        (transaction.assignedStaff || []).join('; '),
-        transaction.createdByName,
-        transaction.paymentLabel || transaction.paymentMethod,
-        money(transaction.subtotal),
-        money(transaction.discountAmount),
-        money(transaction.cashAmount),
-        money(transaction.qrAmount),
-        qrTypeLabel(transaction.qrType),
-        money(transaction.grandTotal),
-        transaction.tokenNumber || '',
-        transaction.isPrinted ? 'Printed' : 'Digital',
-        transaction.status || transaction.paymentStatus,
-      ]),
-    ];
-    downloadCsv(`salon-report-${period}-${Date.now()}.csv`, rows);
-  };
-
-  if (loading) {
-    return <div className="min-h-screen bg-gray-50 p-6 text-gray-600">Loading reports...</div>;
-  }
+  const paymentRows = Object.entries(reports?.paymentMethods || {}).map(([method, data]) => ({
+    label: methodLabel(method), value: Number(data.amount || 0), color: TONES[METHOD_TONES[method] || 'neutral'].hex,
+  }));
+  const transactions = reports?.transactions || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
-        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-950 sm:text-3xl">Reports & Analytics</h1>
-            <p className="mt-1 text-sm text-gray-600">Sales and performance insights</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href="/admin/reports/compare" className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800">Compare reports <ArrowRight className="h-4 w-4" /></Link>
-            <button type="button" onClick={exportReport} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 sm:w-auto"><Download className="h-4 w-4" />Export CSV</button>
-          </div>
-        </div>
-
-        <div className="mb-6 flex flex-wrap gap-2">
-          {[
-            ['today', 'Today'],
-            ['3days', 'Last 3 Days'],
-            ['7days', 'Last 7 Days'],
-            ['month', 'This Month'],
-            ['custom', 'Custom Range'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setPeriod(value)}
-              className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                period === value ? 'bg-gray-950 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {period === 'custom' ? (
-          <div className="mb-6 flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:gap-3">
-            <input
-              type="date"
-              value={customDates.start}
-              onChange={(e) => setCustomDates({ ...customDates, start: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
-            />
-            <span className="hidden text-sm text-gray-500 sm:inline">to</span>
-            <input
-              type="date"
-              value={customDates.end}
-              onChange={(e) => setCustomDates({ ...customDates, end: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
-            />
-            <button
-              type="button"
-              onClick={fetchReports}
-              className="rounded-lg bg-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-            >
-              Apply
-            </button>
-          </div>
-        ) : null}
-
-        {reports ? (
+    <ErpPage>
+      <PrintHeader title="Business Overview" period={periodText} />
+      <PageHeader
+        icon={PieChart}
+        iconTone="ledger"
+        title="Business Overview"
+        subtitle="Sales, collections, outflows and what sold — for the period you choose."
+        meta={periodText ? <span>{periodText}</span> : null}
+        actions={(
           <>
-            <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
-              {[
-                [DollarSign, 'green', `Rs ${money(reports.totalSales)}`, 'Net Sales After Discount'],
-                [ShoppingCart, 'blue', String(reports.totalBills || 0), 'Total Bills'],
-                [Target, 'amber', `Rs ${money(reports.avgBillValue)}`, 'Avg Bill Value'],
-                [Users, 'gray', String(reports.uniqueCustomers || 0), 'Customers'],
-              ].map(([Icon, tone, value, label]) => {
-                const tones = {
-                  green: 'bg-green-50 text-green-700',
-                  blue: 'bg-blue-50 text-blue-700',
-                  amber: 'bg-amber-50 text-amber-800',
-                  gray: 'bg-gray-100 text-gray-700',
-                };
-                return (
-                  <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-                    <div className={`mb-3 inline-flex rounded-lg p-2 ${tones[tone]}`}>
-                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-950 sm:text-2xl">{value}</h3>
-                    <p className="mt-1 text-xs text-gray-500 sm:text-sm">{label}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <FinancialSummary financial={reports.financial} />
-
-            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-gray-100 p-2">
-                    <Calendar className="h-5 w-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-950 sm:text-lg">Transactions</h2>
-                    <p className="text-sm text-gray-500">Invoices in the selected period</p>
-                  </div>
-                </div>
-                <Link
-                  href={`/admin/reports/transactions?period=${period === 'custom' ? 'today' : period}`}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 sm:ml-auto"
-                >
-                  View All
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-[1280px] w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50/80">
-                      {['Date', 'Invoice', 'Customer', 'Services / Staff', 'Created By', 'Payment', 'Subtotal', 'Discount', 'Cash', 'QR', 'QR Type', 'Final Total', 'Token', 'Print', 'Status', 'View'].map((heading) => (
-                        <th
-                          key={heading}
-                          className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-gray-600 sm:px-4 ${
-                            ['Subtotal', 'Cash', 'QR', 'Discount', 'Final Total'].includes(heading) ? 'text-right' : 'text-left'
-                          }`}
-                        >
-                          {heading}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(reports.transactions || []).length ? (
-                      reports.transactions.map((transaction) => (
-                        <tr key={transaction.id || transaction.billNumber} className="hover:bg-gray-50">
-                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900 sm:px-4">{formatDateTime(transaction.transactionDate)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4"><BillLink billId={transaction.id} number={transaction.billNumber || '-'} /></td>
-                          <td className="px-3 py-3 text-sm sm:px-4">
-                            <div className="font-medium text-gray-900">{transaction.customerName || 'Walk-in Customer'}</div>
-                            {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">
-                            {(transaction.assignedStaff || []).length ? (
-                              <div className="space-y-1">
-                                {/* A bill can repeat the same service and staff, so the index is
-                                    what makes these keys unique — the text alone is not. */}
-                                {transaction.assignedStaff.map((line, index) => (
-                                  <div key={`${transaction.id}-staff-${index}`} className="text-xs font-medium text-gray-700">{line}</div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-400">No services</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.createdByName || '-'}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.paymentLabel || transaction.paymentMethod || '-'}</td>
-                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.subtotal)}</td>
-                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.discountAmount)}</td>
-                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.cashAmount)}</td>
-                          <td className="px-3 py-3 text-right text-sm text-gray-700 sm:px-4">Rs {money(transaction.qrAmount)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{qrTypeLabel(transaction.qrType)}</td>
-                          <td className="px-3 py-3 text-right text-sm font-semibold text-gray-950 sm:px-4">Rs {money(transaction.grandTotal)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.tokenNumber || '-'}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 sm:px-4">{transaction.isPrinted ? 'Printed' : 'Digital'}</td>
-                          <td className="px-3 py-3 text-sm capitalize text-gray-700 sm:px-4">{transaction.status || transaction.paymentStatus || '-'}</td>
-                          <td className="px-3 py-3 text-sm sm:px-4">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedTransaction(transaction)}
-                              className="font-semibold text-gray-950 hover:underline"
-                            >
-                              View
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-500">
-                          No sales records found for this period.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="mb-6 grid gap-6 lg:grid-cols-[280px_1fr]">
-              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-4 text-base font-semibold text-gray-950">Payment mix</h2>
-                <PaymentPie slices={paymentSlices} total={paymentTotal || numberValue(reports.totalSales)} />
-                <div className="mt-5 space-y-2.5">
-                  {paymentSlices.length ? (
-                    paymentSlices.map((slice, index) => {
-                      const pct = paymentTotal > 0 ? (slice.amount / paymentTotal) * 100 : 0;
-                      return (
-                        <div key={slice.method} className="flex items-center justify-between gap-3 text-sm">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
-                            />
-                            <span className="truncate capitalize text-gray-700">{slice.method}</span>
-                          </div>
-                          <span className="shrink-0 font-semibold text-gray-950">
-                            {pct.toFixed(0)}% · Rs {money(slice.amount)}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-gray-500">Complete bills to see payment mix.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-5 flex items-center gap-2">
-                  <Award className="h-5 w-5 text-gray-700" />
-                  <h2 className="text-base font-semibold text-gray-950">Top services</h2>
-                </div>
-
-                {topItems.length ? (
-                  <div className="space-y-4">
-                    {topItems.slice(0, 6).map((item, index) => {
-                      const revenue = numberValue(item.revenue);
-                      const pct = (revenue / maxTopRevenue) * 100;
-                      const rankStyles = [
-                        'bg-[#171411] text-white',
-                        'bg-[#9b742d] text-white',
-                        'bg-[#6d625b] text-white',
-                      ];
-                      return (
-                        <div key={`${item.name}-${index}`} className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 sm:p-4">
-                          <div className="mb-2 flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${rankStyles[index] || 'bg-white text-gray-700 border border-gray-200'}`}>
-                                {index + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-gray-950">{item.name}</p>
-                                <p className="text-xs text-gray-500">{item.quantity} sold</p>
-                              </div>
-                            </div>
-                            <p className="shrink-0 text-sm font-bold text-gray-950">Rs {money(revenue)}</p>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-white">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-[#171411] to-[#9b742d] transition-all duration-700"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <div className="grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-3">
-                      <div className="rounded-lg bg-[#171411] p-4 text-white">
-                        <div className="mb-2 flex items-center gap-2 text-white/70">
-                          <Zap className="h-4 w-4" />
-                          <span className="text-xs font-semibold uppercase tracking-wide">Best seller</span>
-                        </div>
-                        <p className="font-semibold">{topItems[0]?.name || '—'}</p>
-                        <p className="mt-1 text-xs text-white/60">{topItems[0]?.quantity || 0} units</p>
-                      </div>
-                      <div className="rounded-lg border border-gray-200 bg-white p-4">
-                        <div className="mb-2 flex items-center gap-2 text-gray-500">
-                          <TrendingUp className="h-4 w-4" />
-                          <span className="text-xs font-semibold uppercase tracking-wide">Top revenue</span>
-                        </div>
-                        <p className="font-semibold text-gray-950">Rs {money(topItems[0]?.revenue)}</p>
-                        <p className="mt-1 text-xs text-gray-500">From best seller</p>
-                      </div>
-                      <div className="rounded-lg border border-gray-200 bg-white p-4">
-                        <div className="mb-2 flex items-center gap-2 text-gray-500">
-                          <Award className="h-4 w-4" />
-                          <span className="text-xs font-semibold uppercase tracking-wide">In list</span>
-                        </div>
-                        <p className="font-semibold text-gray-950">{topItems.length}</p>
-                        <p className="mt-1 text-xs text-gray-500">Services ranked</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="py-8 text-center text-sm text-gray-500">No service sales yet for this period.</p>
-                )}
-              </div>
-            </div>
+            <Link href="/admin/reports/compare" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><GitCompareArrows className="h-4 w-4" />Compare</Link>
+            <ExportButtons
+              filename={`Business overview ${range?.startDate || ''} to ${range?.endDate || ''}`}
+              title="Business Overview"
+              subtitle={periodText}
+              getSheets={async () => exportSheets(reports)}
+              disabled={!reports}
+            />
+            <PrintButton />
           </>
-        ) : (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-white py-16 text-center text-gray-500">
-            Could not load reports.
-          </div>
         )}
-      </div>
+      />
 
-      {selectedTransaction?.id ? <BillDetailDrawer billId={selectedTransaction.id} onClose={() => setSelectedTransaction(null)} /> : <TransactionDetail transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />}
-    </div>
+      <PeriodFilter {...period.filterProps} options={PERIOD_OPTIONS} className="mb-5" />
+
+      {error ? <ErrorState message={error} onRetry={reload} /> : null}
+      {loading && !reports ? <LoadingState label="Loading the overview…" /> : null}
+
+      {reports ? (
+        <div className={`space-y-6 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiCard label="Net sales" value={reports.totalSales} format={money} tone="inflow" emphasis previous={previous?.totalSales} compareLabel={compareLabel} />
+            <KpiCard label="Bills" value={reports.totalBills} format={count} tone="ledger" previous={previous?.totalBills} compareLabel={compareLabel} />
+            <KpiCard label="Average bill" value={reports.avgBillValue} format={money} tone="ops" previous={previous?.avgBillValue} compareLabel={compareLabel} />
+            <KpiCard label="Customers served" value={reports.uniqueCustomers} format={count} tone="crm" previous={previous?.uniqueCustomers} compareLabel={compareLabel} />
+          </div>
+
+          <FinancialSummary financial={reports.financial} className="mb-0!" />
+
+          {reports.lowStockProducts?.length ? (
+            <AlertBanner tone="cash" title={`${reports.lowStockProducts.length} product${reports.lowStockProducts.length === 1 ? '' : 's'} at or below the low-stock level`} action={<Link href="/admin/stock" className="text-sm font-semibold underline">Open stock</Link>}>
+              {reports.lowStockProducts.map((product) => `${product.name} (${product.current_stock} left)`).join(' · ')}
+            </AlertBanner>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ChartCard title="Payment mix" note="How this period's bills were settled" height={300} empty={!paymentRows.some((row) => row.value > 0)} emptyMessage="No bills in this period.">
+              <DonutChart rows={paymentRows} centerLabel="Billed" stacked />
+            </ChartCard>
+            <BreakdownCard title="Top services" note="By revenue" tone="ops" limit={6} rows={(reports.topServices || []).map((row) => ({ label: row.name, value: row.revenue, sub: `${count(row.quantity)} times` }))} empty="No services sold in this period." />
+            <BreakdownCard title="Staff performance" note="Service revenue · commission" tone="hrm" limit={6} rows={(reports.bestStaff || []).map((row) => ({ label: row.name, value: row.revenue, sub: `${count(row.services)} services · ${money(row.commission)} commission` }))} empty="No staff sales in this period." />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <BreakdownCard title="Retail products" note="By revenue" tone="inflow" limit={5} rows={(reports.productSales || []).map((row) => ({ label: row.name, value: row.revenue, sub: `${count(row.quantity)} sold` }))} empty="No products sold in this period." />
+            <section className="rounded-xl border border-stone-200 bg-white lg:col-span-2">
+              <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-2.5">
+                <Lightbulb className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                <h3 className="text-[12.5px] font-bold uppercase tracking-[0.05em] text-stone-800">Highlights</h3>
+              </div>
+              <ul className="divide-y divide-stone-100 text-sm text-stone-700">
+                {(reports.insights || []).map((insight) => <li key={insight} className="px-4 py-2.5">{insight}</li>)}
+                {!(reports.insights || []).length ? <li className="px-4 py-6 text-center text-stone-400">Nothing to highlight for this period yet.</li> : null}
+              </ul>
+            </section>
+          </div>
+
+          <section>
+            <SectionHeading
+              title={`Bills in this period (${count(transactions.length)})`}
+              note="Click a bill number to see the full bill."
+              action={<Link href={`/admin/reports/transactions?period=${period.period === 'custom' ? 'today' : period.period}`} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-700 hover:underline">All transactions<ArrowRight className="h-4 w-4" /></Link>}
+            />
+            <FinancialTable columns={TRANSACTION_COLUMNS} rows={transactions.slice(0, 15)} rowKey={(row) => row.id || row.billNumber} empty="No bills in this period." caption="Bills in this period" />
+            {transactions.length > 15 ? <p className="mt-2 text-xs text-stone-500">Showing the latest 15 of {count(transactions.length)} bills — the Excel export has all of them.</p> : null}
+          </section>
+        </div>
+      ) : null}
+    </ErpPage>
   );
 }

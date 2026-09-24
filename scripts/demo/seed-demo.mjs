@@ -34,6 +34,15 @@ const between = (min, max) => min + Math.floor(rand() * (max - min + 1));
 const chance = (p) => rand() < p;
 const weighted = (entries) => { const total = entries.reduce((s, [, w]) => s + w, 0); let r = rand() * total; for (const [v, w] of entries) { if ((r -= w) <= 0) return v; } return entries[0][0]; };
 const round2 = (v) => Math.round(v * 100) / 100;
+/** Notes for a whole-rupee amount, largest first, e.g. 3497 -> { 1000: 3, 100: 4, 50: 1, 20: 2, 5: 1, 1: 2 }. */
+function noteBreakdown(amount) {
+  let rest = amount;
+  return Object.fromEntries([1000, 500, 100, 50, 20, 10, 5, 1].map((note) => {
+    const n = Math.floor(rest / note);
+    rest -= n * note;
+    return [String(note), n];
+  }));
+}
 
 const db = new pg.Client({ connectionString: url });
 await db.connect();
@@ -459,8 +468,10 @@ try {
     const expected = round2(openingCash + cashIn + creditCashIn - cashOut - refundsCash - savingsCash);
     const diff = chance(0.8) ? 0 : pick([-100, -50, -20, 10, 20]);
     const counted = round2(expected + diff);
-    await q(`UPDATE store_sessions SET status = 'CLOSED', closed_at = $2, closed_by = $3, expected_cash = $4, counted_cash = $5, cash_difference = $6, updated_at = $2 WHERE id = $1`,
-      [session.id, at(date, '20:15'), cashierId, expected, counted, diff]);
+    // The note breakdown counted at close (same shape as Close Store saves), when it is whole rupees.
+    const notes = Number.isInteger(counted) && counted >= 0 ? noteBreakdown(counted) : null;
+    await q(`UPDATE store_sessions SET status = 'CLOSED', closed_at = $2, closed_by = $3, expected_cash = $4, counted_cash = $5, cash_difference = $6, cash_denominations = $7::jsonb, updated_at = $2 WHERE id = $1`,
+      [session.id, at(date, '20:15'), cashierId, expected, counted, diff, notes ? JSON.stringify(notes) : null]);
     await q(`UPDATE business_days SET status = 'CLOSED', closed_at = $2, closed_by = $3, expected_cash = $4, counted_cash = $5, cash_difference = $6, updated_at = $2 WHERE id = $1`,
       [bd.id, at(date, '20:15'), cashierId, expected, counted, diff]);
     drawer = counted;

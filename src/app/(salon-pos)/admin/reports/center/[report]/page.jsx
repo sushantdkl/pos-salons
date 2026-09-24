@@ -3,9 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Download, Loader2, Printer, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft, Banknote, CalendarDays, CreditCard, FileText, GitCompareArrows, Package, Receipt, Scissors, Search, Wallet,
+} from 'lucide-react';
 import { CalendarDateInput } from '@/components/shared/calendar-date-input';
-import { MONEY_FIELDS, REPORT_CATALOG, humanizeReportField } from '@/lib/reports/report-catalog';
+import { AlertBanner, count, ErpPage, LoadingState, money, PrintButton, PrintHeader, tone } from '@/components/erp';
+import { erpFetch } from '@/components/erp/use-report';
+import { ExportButtons } from '@/components/exports/export-buttons';
+import { KpiCard } from '@/components/reports/kpi-card';
+import { exportColumnsFor, ReportTable, statusLabel } from '@/components/reports/report-table';
+import { adToBsIso, bsToAdIso, formatCalendarDate } from '@/lib/dates/calendar';
+import { REPORT_CATALOG } from '@/lib/reports/report-catalog';
+import { WORKSPACE_COLUMNS, WORKSPACE_METRICS, WORKSPACE_SNAPSHOT } from '@/lib/reports/workspace-columns';
+
+const REPORT_ICONS = { sales: Receipt, services: Scissors, products: Package, payments: CreditCard, credit: Wallet, expenses: Banknote, advances: FileText };
+const REPORT_TONES = { sales: 'inflow', services: 'ops', products: 'ops', payments: 'online', credit: 'ledger', expenses: 'outflow', advances: 'hrm' };
+const ACCENT = { inflow: 'border-t-emerald-500', ops: 'border-t-teal-500', online: 'border-t-sky-500', ledger: 'border-t-indigo-500', outflow: 'border-t-rose-500', hrm: 'border-t-violet-500' };
 
 function nepalToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
@@ -17,148 +30,258 @@ function shiftDate(date, days) {
   return value.toISOString().slice(0, 10);
 }
 
-function displayValue(key, value) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (MONEY_FIELDS.has(key)) return `Rs ${Number(value || 0).toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (typeof value === 'number') return value.toLocaleString('en-NP', { maximumFractionDigits: 2 });
-  if (String(key).includes('date') || String(key).includes('time') || key === 'created_at') {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) return date.toLocaleString('en-NP', { timeZone: 'Asia/Kathmandu', dateStyle: 'medium', timeStyle: key.includes('time') || key === 'created_at' ? 'short' : undefined });
+const daysBetween = (start, end) => Math.round((new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / 86400000) + 1;
+
+/** Month / year presets follow the salon's calendar (BS months when the salon uses BS). */
+function presetRanges(today, calendarSystem) {
+  let monthStart; let lastMonthStart; let yearStart;
+  if (calendarSystem === 'BS') {
+    const [y, m] = adToBsIso(today).split('-').map(Number);
+    const pad = (n) => String(n).padStart(2, '0');
+    monthStart = bsToAdIso(`${y}-${pad(m)}-01`);
+    lastMonthStart = bsToAdIso(m === 1 ? `${y - 1}-12-01` : `${y}-${pad(m - 1)}-01`);
+    yearStart = bsToAdIso(`${y}-01-01`);
+  } else {
+    monthStart = `${today.slice(0, 8)}01`;
+    lastMonthStart = `${shiftDate(monthStart, -1).slice(0, 8)}01`;
+    yearStart = `${today.slice(0, 4)}-01-01`;
   }
-  return String(value).replaceAll('_', ' ');
+  return [
+    { key: 'today', label: 'Today', start: today, end: today },
+    { key: 'yesterday', label: 'Yesterday', start: shiftDate(today, -1), end: shiftDate(today, -1) },
+    { key: '7', label: 'Last 7 days', start: shiftDate(today, -6), end: today },
+    { key: '30', label: 'Last 30 days', start: shiftDate(today, -29), end: today },
+    { key: 'month', label: 'This month', start: monthStart, end: today },
+    { key: 'lastmonth', label: 'Last month', start: lastMonthStart, end: shiftDate(monthStart, -1) },
+    { key: 'year', label: 'This year', start: yearStart, end: today },
+  ];
 }
 
-function downloadCsv(report, rows, start, end) {
-  if (!rows.length) return;
-  const keys = Object.keys(rows[0]);
-  const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-  const csv = [keys.map(humanizeReportField).map(quote).join(','), ...rows.map((row) => keys.map((key) => quote(row[key])).join(','))].join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${report}-${start}-${end}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
+const selectClass = 'h-11 min-w-0 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 focus:border-stone-400 focus:outline-none';
 
-export default function FeatureReportPage() {
+export default function ReportWorkspacePage() {
   const params = useParams();
   const report = String(params.report || '');
   const catalog = REPORT_CATALOG[report];
+  const columnsByTable = WORKSPACE_COLUMNS[report];
   const today = useMemo(nepalToday, []);
-  const [range, setRange] = useState({ start: today, end: today });
-  const [page, setPage] = useState(1);
   const [calendarSystem, setCalendarSystem] = useState('AD');
+  const [presetKey, setPresetKey] = useState('today');
+  const [range, setRange] = useState({ start: today, end: today });
+  const [filters, setFilters] = useState({ basis: 'calendar', staff: '', method: '', category: '' });
+  const [search, setSearch] = useState('');
   const [data, setData] = useState(null);
+  const [previous, setPrevious] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
-  const requestSequence = useRef(0);
+  const sequence = useRef(0);
 
-  const loadReport = useCallback(async () => {
-    if (!catalog) return;
-    const sequence = ++requestSequence.current;
-    setLoading(true);
-    setError('');
-    setData(null);
-    try {
-      const query = new URLSearchParams({ report, start: range.start, end: range.end, page: String(page), pageSize: '25' });
-      const response = await fetch(`/api/reports/center?${query}`, { headers: { Authorization: `Bearer ${localStorage.getItem('pos_token')}` } });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Unable to load report');
-      if (sequence === requestSequence.current) setData(body);
-    } catch (loadError) {
-      if (sequence === requestSequence.current) setError(loadError.message || 'Unable to load report. Try again.');
-    } finally {
-      if (sequence === requestSequence.current) setLoading(false);
-    }
-  }, [catalog, page, range.end, range.start, report]);
+  const presets = useMemo(() => presetRanges(today, calendarSystem), [today, calendarSystem]);
+  const periodDays = daysBetween(range.start, range.end);
+  const previousRange = useMemo(() => ({ start: shiftDate(range.start, -periodDays), end: shiftDate(range.start, -1) }), [range.start, periodDays]);
 
-  useEffect(() => { loadReport(); }, [loadReport]);
   useEffect(() => {
-    fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${localStorage.getItem('pos_token')}` } })
-      .then((response) => response.ok ? response.json() : null)
-      .then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD'))
-      .catch(() => {});
+    erpFetch('/api/admin/settings').then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD')).catch(() => {});
   }, []);
 
-  if (!catalog) {
-    return <main className="min-h-screen bg-[#F7F5F2] p-5 sm:p-8"><div className="mx-auto max-w-3xl rounded-[14px] bg-white p-8 text-center"><h1 className="text-2xl font-bold text-[#1A1714]">Report not found</h1><Link href="/admin/reports" className="mt-4 inline-flex text-sm font-semibold text-[#5433C9]">Return to reports</Link></div></main>;
+  const load = useCallback(async () => {
+    if (!catalog || !columnsByTable) return;
+    const id = ++sequence.current;
+    setLoading(true);
+    setError('');
+    const query = (start, end, extra = {}) => new URLSearchParams(Object.fromEntries(Object.entries({ report, start, end, ...filters, ...extra }).filter(([, v]) => v !== '' && v !== null)));
+    try {
+      const [body, prev] = await Promise.all([
+        erpFetch(`/api/reports/workspace?${query(range.start, range.end)}`),
+        erpFetch(`/api/reports/workspace?${query(previousRange.start, previousRange.end, { metricsOnly: '1' })}`).catch(() => null),
+      ]);
+      if (id === sequence.current) { setData(body); setPrevious(prev); }
+    } catch (loadError) {
+      if (id === sequence.current) setError(loadError.message || 'Unable to load the report.');
+    } finally {
+      if (id === sequence.current) setLoading(false);
+    }
+  }, [catalog, columnsByTable, report, range.start, range.end, previousRange.start, previousRange.end, filters]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!catalog || !columnsByTable) {
+    return (
+      <ErpPage narrow>
+        <div className="rounded-xl border border-stone-200 bg-white p-8 text-center">
+          <h1 className="text-2xl font-bold text-stone-900">Report not found</h1>
+          <Link href="/admin/reports" className="mt-4 inline-flex text-sm font-semibold text-indigo-700">Return to reports</Link>
+        </div>
+      </ErpPage>
+    );
   }
 
-  const rows = data?.rows || [];
-  const columns = rows[0] ? Object.keys(rows[0]) : [];
-  const setPreset = (days) => { setPage(1); setRange({ start: shiftDate(today, -(days - 1)), end: today }); };
-  const exportAllRows = async () => {
-    setExporting(true); setError('');
-    try {
-      const headers = { Authorization: `Bearer ${localStorage.getItem('pos_token')}` };
-      const firstQuery = new URLSearchParams({ report, start: range.start, end: range.end, page: '1', pageSize: '100' });
-      const firstResponse = await fetch(`/api/reports/center?${firstQuery}`, { headers });
-      const firstBody = await firstResponse.json();
-      if (!firstResponse.ok) throw new Error(firstBody.error || 'Unable to export report');
-      const pages = Number(firstBody.pagination?.pages || 1);
-      const remaining = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, async (_, index) => {
-        const query = new URLSearchParams({ report, start: range.start, end: range.end, page: String(index + 2), pageSize: '100' });
-        const response = await fetch(`/api/reports/center?${query}`, { headers });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error || 'Unable to export report');
-        return body.rows || [];
-      }));
-      downloadCsv(report, [firstBody.rows || [], ...remaining].flat(), range.start, range.end);
-    } catch (exportError) { setError(exportError.message || 'Unable to export report'); }
-    finally { setExporting(false); }
+  const Icon = REPORT_ICONS[report] || FileText;
+  const reportTone = REPORT_TONES[report] || 'ledger';
+  const t = tone(reportTone);
+  const fmt = (iso) => formatCalendarDate(iso, calendarSystem);
+  const periodLabel = range.start === range.end ? fmt(range.start) : `${fmt(range.start)} – ${fmt(range.end)}`;
+  const previousLabel = previousRange.start === previousRange.end ? fmt(previousRange.start) : `${fmt(previousRange.start)} – ${fmt(previousRange.end)}`;
+  const options = data?.options || {};
+  const snapshot = WORKSPACE_SNAPSHOT[report] || [];
+  const tables = data?.tables || [];
+  const exportBase = `${catalog.title} ${range.start} to ${range.end}`;
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const choosePreset = (preset) => { setPresetKey(preset.key); setRange({ start: preset.start, end: preset.end }); };
+
+  const workbook = async () => {
+    const metricsSheet = {
+      name: 'Summary',
+      columns: [
+        { header: 'Measure', key: 'label', bold: true, width: 30 },
+        { header: 'This period', key: 'value', type: 'decimal', tone: 'ledger' },
+        { header: 'Previous period', key: 'previous', type: 'decimal', tone: 'neutral' },
+      ],
+      rows: Object.entries(data?.metrics || {}).map(([key, value]) => ({ label: WORKSPACE_METRICS[key]?.label || statusLabel(key), value, previous: snapshot.includes(key) ? null : previous?.metrics?.[key] ?? null })),
+      note: `Previous period: ${previousLabel}.`,
+    };
+    return [metricsSheet, ...tables.map((item) => {
+      const columns = columnsByTable[item.key] || [];
+      const firstText = columns.find((column) => !['money', 'number', 'percent'].includes(column.type))?.key;
+      return {
+        name: item.title,
+        columns: exportColumnsFor(columns, calendarSystem),
+        rows: item.rows,
+        totals: Object.keys(item.totals || {}).length && item.rows.length ? { ...item.totals, ...(firstText ? { [firstText]: 'TOTAL' } : {}) } : undefined,
+      };
+    })];
   };
 
+  const activeFilters = [
+    filters.staff && options.staff?.find((s) => String(s.id) === String(filters.staff))?.name,
+    filters.method && statusLabel(filters.method),
+    filters.category && (options.categories?.find((c) => c.value === filters.category)?.label || filters.category),
+    filters.basis === 'business' && 'Business-day dates',
+  ].filter(Boolean);
+  const subtitle = [periodLabel, ...activeFilters].join(' · ');
+
   return (
-    <main className="min-h-screen bg-[#F7F5F2] px-4 py-5 sm:px-8 sm:py-7">
-      <div className="mx-auto max-w-[1500px]">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4 print:mb-3">
+    <ErpPage>
+      <PrintHeader title={catalog.title} period={subtitle} />
+      <Link href="/admin/reports" className="print-hide mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-500 hover:text-stone-900"><ArrowLeft className="h-4 w-4" />All reports</Link>
+
+      <header className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.soft} ${t.text}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <h1 className="font-[family-name:var(--font-dashboard-heading)] text-2xl font-extrabold tracking-tight text-stone-900 sm:text-[28px]">{catalog.title}</h1>
+            <p className="mt-0.5 max-w-2xl text-sm text-stone-500">{catalog.description}</p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500">
+              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+              {data?.businessDay ? `Current Business Day · ${fmt(data.businessDay)}` : `No business day open · Today ${fmt(today)}`}
+            </p>
+          </div>
+        </div>
+        <div className="print-hide flex flex-wrap items-center gap-2">
+          <Link href="/admin/reports/compare" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-50"><GitCompareArrows className="h-4 w-4" />Compare report</Link>
+          <ExportButtons filename={exportBase} title={catalog.title} subtitle={subtitle} getSheets={workbook} disabled={!data || loading} />
+          <PrintButton />
+        </div>
+      </header>
+
+      <section className={`print-hide mb-5 rounded-2xl border border-stone-200 border-t-4 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)] ${ACCENT[reportTone] || 'border-t-indigo-500'}`}>
+        <div className="px-4 pb-4 pt-3.5 sm:px-5">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-stone-500">Period</p>
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Report period">
+            {presets.map((preset) => (
+              <button key={preset.key} type="button" role="tab" aria-selected={presetKey === preset.key} onClick={() => choosePreset(preset)}
+                className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${presetKey === preset.key ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
+                {preset.label}
+              </button>
+            ))}
+            <button type="button" role="tab" aria-selected={presetKey === 'custom'} onClick={() => setPresetKey('custom')}
+              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${presetKey === 'custom' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
+              Custom dates
+            </button>
+          </div>
+          {presetKey === 'custom' ? (
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="text-xs font-semibold text-stone-500">From ({calendarSystem})
+                <CalendarDateInput value={range.start} max={range.end} calendarSystem={calendarSystem} onChange={(value) => setRange((r) => ({ ...r, start: value }))} className="mt-1 block h-10 w-44 rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900" />
+              </label>
+              <label className="text-xs font-semibold text-stone-500">To ({calendarSystem})
+                <CalendarDateInput value={range.end} min={range.start} calendarSystem={calendarSystem} onChange={(value) => setRange((r) => ({ ...r, end: value }))} className="mt-1 block h-10 w-44 rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900" />
+              </label>
+            </div>
+          ) : null}
+        </div>
+        <div className="grid gap-2 border-t border-stone-100 px-4 py-3.5 sm:grid-cols-2 sm:px-5 lg:flex lg:flex-wrap">
+          {options.basis !== false ? (
+            <select aria-label="Date basis" value={filters.basis} onChange={(event) => setFilter('basis', event.target.value)} className={`${selectClass} lg:w-52`}>
+              <option value="calendar">Calendar date range</option>
+              <option value="business">Business day range</option>
+            </select>
+          ) : null}
+          {options.staff?.length ? (
+            <select aria-label="Employee" value={filters.staff} onChange={(event) => setFilter('staff', event.target.value)} className={`${selectClass} lg:w-48`}>
+              <option value="">All employees</option>
+              {options.staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+            </select>
+          ) : null}
+          {options.methods?.length ? (
+            <select aria-label="Payment method" value={filters.method} onChange={(event) => setFilter('method', event.target.value)} className={`${selectClass} lg:w-52`}>
+              <option value="">All payment methods</option>
+              {options.methods.map((method) => <option key={method} value={method}>{statusLabel(method)}</option>)}
+            </select>
+          ) : null}
+          {options.categories?.length ? (
+            <select aria-label="Category" value={filters.category} onChange={(event) => setFilter('category', event.target.value)} className={`${selectClass} lg:w-52`}>
+              <option value="">{options.categoryLabel || 'All categories'}</option>
+              {options.categories.map((category) => <option key={category.value} value={category.value}>{statusLabel(category.label)}</option>)}
+            </select>
+          ) : null}
+          <label className="relative min-w-0 sm:col-span-2 lg:min-w-[220px] lg:flex-1">
+            <span className="sr-only">Search these records</span>
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden="true" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search these records…" className={`${selectClass} w-full pl-10`} />
+          </label>
+        </div>
+      </section>
+
+      {error ? <div className="mb-5"><AlertBanner tone="outflow" title="Report could not load">{error}</AlertBanner></div> : null}
+      {loading && !data ? <LoadingState label="Building the report…" /> : null}
+
+      {data ? (
+        <div className={`space-y-5 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
           <div>
-            <Link href="/admin/reports" className="print-hide mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#6B625A] hover:text-[#17140F]"><ArrowLeft className="h-4 w-4" />All reports</Link>
-            <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-[#17140F] sm:text-3xl">{catalog.title}</h1>
-            <p className="mt-1 max-w-3xl text-sm text-[#6B625A]">{catalog.description}</p>
-          </div>
-          <div className="print-hide flex gap-2">
-            <button type="button" disabled={loading || exporting || !Number(data?.pagination?.total || 0)} onClick={exportAllRows} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#DED8D0] bg-white px-4 text-sm font-semibold text-[#332E29] disabled:opacity-40">{exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}{exporting ? 'Exporting…' : 'CSV'}</button>
-            <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#17140F] px-4 text-sm font-semibold text-white"><Printer className="h-4 w-4" />Print</button>
-          </div>
-        </header>
-
-        <section className="print-hide mb-5 rounded-[14px] bg-white p-4 shadow-[0_2px_12px_rgba(42,34,28,0.06)] sm:p-5">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex min-h-11 items-center gap-2 text-sm font-bold text-[#332E29]"><CalendarRange className="h-5 w-5 text-[#5E5CE6]" />Report period</div>
-            <div className="flex flex-wrap gap-2">
-              {[['Today', 1], ['Last 7 days', 7], ['Last 30 days', 30]].map(([label, days]) => <button key={label} type="button" onClick={() => setPreset(days)} className="min-h-11 rounded-[10px] bg-[#F1F0EC] px-3 text-sm font-semibold text-[#4D463F] hover:bg-[#E8E5DF]">{label}</button>)}
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-stone-800">{periodLabel}</p>
+              <p className="text-xs text-stone-400">Compared with the previous {periodDays === 1 ? 'day' : `${periodDays} days`} ({previousLabel})</p>
             </div>
-            <label className="min-w-[175px] flex-1"><span className="mb-1 block text-xs font-semibold text-[#6B625A]">From ({calendarSystem})</span><CalendarDateInput value={range.start} max={range.end} calendarSystem={calendarSystem} onChange={(value) => { setPage(1); setRange((current) => ({ ...current, start: value })); }} className="min-h-11 w-full rounded-xl border border-[#D8D1C8] bg-white px-3" /></label>
-            <label className="min-w-[175px] flex-1"><span className="mb-1 block text-xs font-semibold text-[#6B625A]">To ({calendarSystem})</span><CalendarDateInput value={range.end} min={range.start} calendarSystem={calendarSystem} onChange={(value) => { setPage(1); setRange((current) => ({ ...current, end: value })); }} className="min-h-11 w-full rounded-xl border border-[#D8D1C8] bg-white px-3" /></label>
-            <button type="button" onClick={loadReport} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8D1C8] bg-white px-4 text-sm font-semibold"><RefreshCw className="h-4 w-4" />Refresh</button>
-          </div>
-        </section>
-
-        {error ? <div role="alert" className="mb-5 rounded-[12px] bg-[#FCEDEA] px-4 py-3 text-sm font-semibold text-[#8B2E24]">{error}</div> : null}
-
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Object.entries(data?.metrics || {}).map(([key, value]) => (
-            <div key={key} className="rounded-[14px] bg-white px-5 py-4 shadow-[0_2px_12px_rgba(42,34,28,0.06)]">
-              <p className="text-xs font-semibold text-[#746C64]">{humanizeReportField(key)}</p>
-              <p className="mt-1 text-2xl font-extrabold tracking-[-0.02em] text-[#17140F]">{displayValue(key, value)}</p>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+              {Object.entries(data.metrics || {}).map(([key, value]) => {
+                const metric = WORKSPACE_METRICS[key] || { label: statusLabel(key), type: 'number' };
+                return (
+                  <KpiCard key={key} label={metric.label} value={value} format={metric.type === 'money' ? money : count} tone={metric.tone} emphasis={metric.emphasis}
+                    lowerIsBetter={metric.lowerIsBetter} previous={snapshot.includes(key) || !previous ? undefined : previous.metrics?.[key]}
+                    compareLabel="vs previous period" hint={snapshot.includes(key) ? 'Balance as of now' : undefined} />
+                );
+              })}
             </div>
+          </div>
+
+          {tables.map((item, index) => (
+            <ReportTable
+              key={`${item.key}-${index}`}
+              title={item.title}
+              columns={columnsByTable[item.key] || []}
+              rows={item.rows}
+              totals={item.totals}
+              truncated={item.truncated}
+              calendarSystem={calendarSystem}
+              globalSearch={search}
+              exportName={`${catalog.title} - ${item.title} ${range.start} to ${range.end}`}
+              exportSubtitle={subtitle}
+              defaultPageSize={index === 0 ? 50 : 25}
+            />
           ))}
         </div>
-
-        <section className="overflow-hidden rounded-[14px] bg-white shadow-[0_2px_12px_rgba(42,34,28,0.06)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EEE9E3] px-4 py-4 sm:px-5">
-            <div><h2 className="font-bold text-[#17140F]">Detailed records</h2><p className="mt-0.5 text-xs text-[#746C64]">{catalog.question}</p></div>
-            <p className="text-xs text-[#746C64]">Date basis: {data?.definition?.dateBasis || '—'} · Included: {(data?.definition?.statuses || []).join(', ') || '—'}</p>
-          </div>
-          {loading ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-[#6B625A]"><Loader2 className="h-5 w-5 animate-spin" />Loading report…</div> : rows.length ? (
-            <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-[#F8F6F2]"><tr>{columns.map((key) => <th key={key} className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold text-[#5B534B]">{humanizeReportField(key)}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={row.id || row.bill_number || `${report}-${rowIndex}`} className="border-t border-[#F0ECE6] hover:bg-[#FCFAF7]">{columns.map((key) => <td key={key} className="whitespace-nowrap px-4 py-3 text-[#332E29]">{displayValue(key, row[key])}</td>)}</tr>)}</tbody></table></div>
-          ) : <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center"><CalendarRange className="mb-3 h-9 w-9 text-[#B4ABA2]" /><p className="font-semibold text-[#332E29]">No records in this period</p><p className="mt-1 text-sm text-[#746C64]">Choose a wider date range, then refresh the report.</p></div>}
-          <div className="print-hide flex items-center justify-between border-t border-[#EEE9E3] px-4 py-3 text-sm"><span className="text-[#746C64]">{data?.pagination?.total || 0} records</span><div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="inline-flex min-h-11 items-center gap-1 rounded-[10px] border border-[#DED8D0] px-3 font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Previous</button><span className="px-2 font-semibold">{page} / {data?.pagination?.pages || 1}</span><button type="button" disabled={page >= (data?.pagination?.pages || 1) || loading} onClick={() => setPage((value) => value + 1)} className="inline-flex min-h-11 items-center gap-1 rounded-[10px] border border-[#DED8D0] px-3 font-semibold disabled:opacity-40">Next<ChevronRight className="h-4 w-4" /></button></div></div>
-        </section>
-      </div>
-    </main>
+      ) : null}
+    </ErpPage>
   );
 }

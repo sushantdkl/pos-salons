@@ -72,6 +72,7 @@ const ADMIN_NAV = [
     link('Services Report', '/admin/reports/center/services', Scissors),
     link('Products & Retail', '/admin/reports/center/products', PackageSearch),
     link('Payment Reconciliation', '/admin/reports/center/payments', WalletCards),
+    link('Customer Credit', '/admin/reports/center/credit', HandCoins),
     link('Expenses Report', '/admin/reports/center/expenses', BadgeDollarSign),
     link('Token Report', '/dashboard/admin/reports/tokens', Ticket),
     link('Transactions', '/admin/reports/transactions', ListOrdered),

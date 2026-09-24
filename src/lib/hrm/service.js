@@ -10,6 +10,7 @@
  */
 
 import { hasPermission, PERMISSIONS } from '@/lib/auth/permissions';
+import { PERMISSION_KEYS } from '@/lib/auth/permission-catalog';
 import {
   addDays, computeAttendance, datesBetween, dayWithoutRecordStatus, isIsoDate, leaveDaysFor,
   minutesBetween, nepalDateOf, nepalInstant, recordStatus, resolveAttendanceDate, shiftWindow, weekdayOf,
@@ -74,14 +75,10 @@ export async function assertCan(db, user, permission) {
 }
 
 export async function myPermissions(db, user) {
-  const keys = [
-    PERMISSIONS.ATTENDANCE_VIEW, PERMISSIONS.ATTENDANCE_CREATE, PERMISSIONS.ATTENDANCE_EDIT, PERMISSIONS.ATTENDANCE_CORRECT,
-    PERMISSIONS.ATTENDANCE_APPROVE, PERMISSIONS.SHIFT_MANAGE, PERMISSIONS.LEAVE_VIEW, PERMISSIONS.LEAVE_REQUEST,
-    PERMISSIONS.LEAVE_APPROVE, PERMISSIONS.OVERTIME_VIEW, PERMISSIONS.OVERTIME_APPROVE,
-  ];
-  const result = {};
-  for (const key of keys) result[key] = await hasPermission(db, user, key);
-  return result;
+  // Every permission (not only HR): the sidebar hides links by these grants, so a missing key
+  // would hide a page the employee is allowed to use. hasPermission applies the module switch.
+  const values = await Promise.all(PERMISSION_KEYS.map((key) => hasPermission(db, user, key)));
+  return Object.fromEntries(PERMISSION_KEYS.map((key, index) => [key, values[index]]));
 }
 
 /* ================================================================ policy */

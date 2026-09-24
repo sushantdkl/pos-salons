@@ -14,6 +14,7 @@
  */
 
 import { BILL_DATE_EXPR_B, periodBoundsSql, periodDateColumnFilter, SALON_TIMEZONE } from '@/lib/db/postgres-dates';
+import { getAnalyticsExtras } from '@/lib/reports/analytics-money';
 import { getExecutiveSummary, INVENTORY_PURCHASE_CATEGORY } from '@/lib/reports/executive-summary';
 import { eventScope, getSalesSeries, numeric, PAID_BILL_STATUS_SQL, revenueScope, soldBillSql } from '@/lib/reports/finance-summary';
 
@@ -420,7 +421,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     businessDayId: period === 'today' && options.businessDayId ? options.businessDayId : null,
   };
 
-  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls, appointments, crm] = await Promise.all([
+  const [summary, salesSeries, services, customers, customerTrend, staffTickets, products, tokenDemand, controls, appointments, crm, extras] = await Promise.all([
     getExecutiveSummary(db, period, { ...options, scope: 'admin' }),
     getSalesSeries(db, period, scope),
     getTopServices(db, period, scope),
@@ -432,6 +433,7 @@ export async function getSalonAnalytics(db, period, options = {}) {
     getControls(db, period, scope),
     getAppointmentStats(db, period, scope),
     getCrmStats(db, period, scope),
+    getAnalyticsExtras(db, period, scope),
   ]);
 
   const { revenue, payments, expenses, salary, tokens, savings } = summary;
@@ -503,6 +505,52 @@ export async function getSalonAnalytics(db, period, options = {}) {
       byHour: tokenDemand,
     },
     appointments,
+    // Owner money view — the Summary's own figures, so Analytics and Summary always agree.
+    money: {
+      revenue: {
+        grossSales: revenue.grossSalesBeforeDiscount,
+        discounts: revenue.totalDiscounts,
+        loyaltyDiscounts: revenue.loyaltyDiscounts,
+        tax: revenue.totalTax,
+        serviceCharge: revenue.totalServiceCharge,
+        finalizedTotal: revenue.finalizedBillTotal,
+        voids: revenue.voidedSales,
+        voidCount: revenue.voidCount,
+        netSales: revenue.netSales,
+        creditSales: revenue.creditSales,
+        serviceRevenue: revenue.serviceRevenue,
+        productRevenue: revenue.productRevenue,
+      },
+      payments: {
+        cash: payments.grossCashCollected,
+        online: payments.grossQrCollected,
+        esewaPhonePay: payments.esewaPhonePay,
+        bankQr: payments.bankQr,
+        creditCollectionsCash: payments.creditCollectionsCash,
+        creditCollectionsOnline: payments.creditCollectionsOnline,
+        cashRefunds: payments.cashRefunds,
+        onlineRefunds: payments.onlineRefunds,
+        refunds: round2(numeric(payments.cashRefunds) + numeric(payments.onlineRefunds)),
+        netCash: payments.netCashReceived,
+        netOnline: payments.netOnlineReceived,
+        netReceived: payments.netReceived,
+      },
+      expenses: { total: expenses.total, cash: expenses.cash, online: expenses.online, records: expenses.records, excludingPurchases: round2(numeric(expenses.total) - numeric(summary.purchases?.totalPurchase)) },
+      purchases: { total: summary.purchases?.totalPurchase ?? 0, records: summary.purchases?.records ?? 0 },
+      salary: { total: salary?.totalPaid ?? 0, cash: salary?.totalCash ?? 0, online: salary?.totalOnline ?? 0, commissionAccrued: salary?.commissionAccrued ?? 0 },
+      savings: { total: savings.total, fromCash: savings.fromCash, fromOnline: savings.fromOnline, records: savings.records },
+      cashPosition: summary.cashPosition,
+      onlinePosition: summary.onlinePosition,
+      receivables: summary.customerCredit?.outstandingNow ?? 0,
+      payables: extras.payables,
+      profitLoss: summary.profitLoss,
+    },
+    sources: extras.sources,
+    paymentSummary: extras.paymentSummary,
+    byHour: extras.byHour,
+    byWeekday: extras.byWeekday,
+    paymentRecords: extras.paymentRecords,
+    cancellations: extras.cancellations,
     controls: { ...controls, cashAdded: summary.cashPosition.cashAdded, cashRemoved: summary.cashPosition.cashRemoved, cancelledTokens: tokens.cancelled },
   };
 }

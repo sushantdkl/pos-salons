@@ -128,13 +128,14 @@ export function HorizontalBarChart({ rows = [], format = money, axisFormat = mon
 }
 
 /** Donut for part-of-whole (payment mix, customer mix). rows: [{ label, value, color? }]. */
-export function DonutChart({ rows = [], format = money, centerLabel }) {
+/** stacked: legend under the ring, for narrow cards. */
+export function DonutChart({ rows = [], format = money, centerLabel, stacked = false }) {
   const data = rows.filter((row) => toNum(row.value) > 0);
   if (!data.length) return <EmptyChart />;
   const total = data.reduce((sum, row) => sum + toNum(row.value), 0);
   return (
-    <div className="flex h-full min-w-0 flex-col items-center gap-2 sm:flex-row">
-      <div className="relative h-full min-h-[150px] w-full sm:w-1/2">
+    <div className={`flex h-full min-w-0 flex-col items-center gap-2 ${stacked ? '' : 'sm:flex-row'}`}>
+      <div className={`relative w-full ${stacked ? 'min-h-0 flex-1' : 'h-full min-h-[150px] sm:w-1/2'}`}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="label" innerRadius="58%" outerRadius="85%" paddingAngle={data.length > 1 ? 2 : 0} isAnimationActive={false}>
@@ -150,7 +151,7 @@ export function DonutChart({ rows = [], format = money, centerLabel }) {
           </div>
         ) : null}
       </div>
-      <ul className="w-full space-y-1.5 text-[13px] sm:w-1/2">
+      <ul className={`w-full space-y-1.5 text-[13px] ${stacked ? '' : 'sm:w-1/2'}`}>
         {data.map((row, index) => (
           <li key={row.label} className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color || CHART_SERIES[index % CHART_SERIES.length] }} />

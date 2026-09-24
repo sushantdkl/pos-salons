@@ -197,11 +197,12 @@ export async function GET(request) {
       ORDER BY COALESCE(total_visits, 0) DESC, COALESCE(total_spent, 0) DESC
       LIMIT 1
     `);
+    const rupees = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const insights = [
       topService ? `${topService.name} generated the highest service revenue for this period.` : null,
-      topStaff ? `${topStaff.name} generated ${numeric(topStaff.revenue)} in service revenue for this period.` : null,
-      mostActiveCustomer ? `${mostActiveCustomer.name} has visited ${mostActiveCustomer.total_visits || 0} times.` : null,
-      commissionSummary > 0 ? `Total staff commission for this period is ${commissionSummary}.` : null,
+      topStaff ? `${topStaff.name} generated ${rupees(topStaff.revenue)} in service revenue for this period.` : null,
+      mostActiveCustomer ? `${mostActiveCustomer.name} is the most regular customer: ${mostActiveCustomer.total_visits || 0} visits, ${rupees(mostActiveCustomer.total_spent)} spent in total.` : null,
+      commissionSummary > 0 ? `Total staff commission for this period is ${rupees(commissionSummary)}.` : null,
     ].filter(Boolean);
 
     return NextResponse.json({

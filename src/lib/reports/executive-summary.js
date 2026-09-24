@@ -430,7 +430,7 @@ async function getSessionFacts(db, period, options) {
   // cashier actually reconciled against. Never a sum across sessions.
   const lastClosed = await db.get(`
     SELECT ss.expected_cash, ss.counted_cash, ss.cash_difference, ss.closed_at,
-           ss.session_number, bd.business_date,
+           ss.session_number, bd.business_date, to_char(bd.business_date, 'YYYY-MM-DD') AS business_date_text, ss.cash_denominations,
            COALESCE(u.full_name, u.username, '') AS closed_by_name
     FROM store_sessions ss
     JOIN business_days bd ON bd.id = ss.business_day_id
@@ -450,6 +450,10 @@ async function getSessionFacts(db, period, options) {
     snapshotExpectedCash: lastClosed ? round2(lastClosed.expected_cash) : null,
     snapshotDifference: lastClosed ? round2(lastClosed.cash_difference) : null,
     countedAt: lastClosed?.closed_at || null,
+    // Last physical count in the scope, even while a later session is still open.
+    lastCountedCash: lastClosed ? round2(lastClosed.counted_cash) : null,
+    lastCountedDate: lastClosed?.business_date_text || null,
+    denominations: lastClosed?.cash_denominations || null,
     closedBy: lastClosed?.closed_by_name || '',
     finalSessionNumber: lastClosed ? Number(lastClosed.session_number || 0) : null,
     allClosed: openSessions === 0 && Boolean(lastClosed),
@@ -838,6 +842,10 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
       ? 'PENDING'
       : cashDifference === 0 ? 'MATCHED' : cashDifference < 0 ? 'SHORT' : 'OVER',
     countedAt: sessionFacts.countedAt,
+    lastCountedCash: sessionFacts.lastCountedCash ?? null,
+    lastCountedAt: sessionFacts.countedAt || null,
+    lastCountedDate: sessionFacts.lastCountedDate || null,
+    denominations: sessionFacts.denominations || null,
     netCashInHand: expectedCash !== null ? expectedCash : netCashMovement,
     // Admin-only itemisation of the combined cash outflow.
     ...(forAdmin ? { cashSalary: salaryCash } : {}),

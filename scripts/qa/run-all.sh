@@ -4,7 +4,7 @@
 # prod builds into .next-qa (NEXT_DIST_DIR) so a running `npm run dev` (.next) is never touched.
 # dev mode is not supported while your own dev server is running: both would share .next.
 # Migrates + resets the QA database, starts the app on :3013, runs the financial scenario,
-# the permission audit, the responsive/browser audit, the appointments, suppliers, customers, HRM and loyalty/review scenarios, then stops the app.
+# the report-workspace consistency checks, the permission audit, the responsive/browser audit, the appointments, suppliers, customers, HRM and loyalty/review scenarios, then stops the app.
 # Logs and screenshots go to test-results/qa (gitignored).
 set -u
 cd "$(dirname "$0")/../.."
@@ -22,6 +22,7 @@ else DATABASE_URL="$QA" PG_SSL=false npx next dev -p 3013 > "$OUT/server.log" 2>
 for i in $(seq 1 60); do curl -s -o /dev/null -w "%{http_code}" http://localhost:3013/api/health | grep -q 200 && break; sleep 3; done
 STATUS=0
 QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/financial-scenario.mjs > "$OUT/scenario.txt" 2>&1 || STATUS=1
+QA_BASE_URL=http://localhost:3013 node scripts/qa/reports-scenario.mjs > "$OUT/reports.txt" 2>&1 || STATUS=1
 QA_BASE_URL=http://localhost:3013 node scripts/qa/permission-audit.mjs > "$OUT/permissions.txt" 2>&1 || STATUS=1
 # The browser audit reads the financial scenario's data, so it runs before the reseed below.
 QA_BASE_URL=http://localhost:3013 QA_SHOTS="$OUT/shots" node scripts/qa/responsive-audit.mjs > "$OUT/ui.txt" 2>&1 || STATUS=1
@@ -38,5 +39,5 @@ QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/hrm-scen
 DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
 QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/loyalty-scenario.mjs > "$OUT/loyalty.txt" 2>&1 || STATUS=1
 killport
-grep -hE "checks passed|^FAIL" "$OUT/scenario.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/hrm.txt" "$OUT/loyalty.txt" "$OUT/permissions.txt" "$OUT/ui.txt"
+grep -hE "checks passed|^FAIL" "$OUT/scenario.txt" "$OUT/reports.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/hrm.txt" "$OUT/loyalty.txt" "$OUT/permissions.txt" "$OUT/ui.txt"
 exit $STATUS

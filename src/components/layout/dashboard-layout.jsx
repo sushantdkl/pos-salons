@@ -311,7 +311,7 @@ export default function AdminLayout({ children }) {
 
       <aside
         aria-hidden={!isDesktop && !sidebarOpen ? 'true' : undefined}
-        inert={!isDesktop && !sidebarOpen ? '' : undefined}
+        inert={!isDesktop && !sidebarOpen ? true : undefined}
         className={`print-hide fixed inset-y-0 left-0 z-50 flex h-full w-[min(18rem,88vw)] flex-col border-r border-[#ECE7E1] bg-white transition-transform duration-300 ease-out lg:translate-x-0 ${desktopWidthClass} ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
