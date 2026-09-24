@@ -23,7 +23,9 @@
     "qa:permissions": "node scripts/qa/permission-audit.mjs",
     "qa:ui": "node scripts/qa/responsive-audit.mjs",
     "qa:all": "bash scripts/qa/run-all.sh prod",
-    "qa:appointments": "node scripts/qa/appointments-scenario.mjs"
+    "qa:appointments": "node scripts/qa/appointments-scenario.mjs",
+    "demo:setup": "bash scripts/demo/setup.sh",
+    "demo:start": "node scripts/demo/start.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.22",
