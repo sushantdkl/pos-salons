@@ -16,20 +16,45 @@ import {
 
 /**
  * Module family -> tint. Static literal Tailwind classes so the compiler keeps them.
- * bg: group band · header: label colour · active: active child row · bar: active marker.
+ * bg: group band · header: label colour · active: active child row · bar: active marker ·
+ * tile: the coloured square behind each icon.
  */
 export const NAV_TINTS = {
-  reports: { bg: 'bg-indigo-50', header: 'text-indigo-800', hover: 'hover:bg-indigo-100', active: 'bg-indigo-100 text-indigo-950', bar: 'bg-indigo-600', icon: 'text-indigo-600' },
-  operations: { bg: 'bg-teal-50', header: 'text-teal-800', hover: 'hover:bg-teal-100', active: 'bg-teal-100 text-teal-950', bar: 'bg-teal-600', icon: 'text-teal-600' },
-  inventory: { bg: 'bg-lime-50', header: 'text-lime-800', hover: 'hover:bg-lime-100', active: 'bg-lime-100 text-lime-950', bar: 'bg-lime-600', icon: 'text-lime-700' },
-  finance: { bg: 'bg-amber-50', header: 'text-amber-800', hover: 'hover:bg-amber-100', active: 'bg-amber-100 text-amber-950', bar: 'bg-amber-600', icon: 'text-amber-600' },
-  hrm: { bg: 'bg-violet-50', header: 'text-violet-800', hover: 'hover:bg-violet-100', active: 'bg-violet-100 text-violet-950', bar: 'bg-violet-600', icon: 'text-violet-600' },
-  crm: { bg: 'bg-rose-50', header: 'text-rose-800', hover: 'hover:bg-rose-100', active: 'bg-rose-100 text-rose-950', bar: 'bg-rose-600', icon: 'text-rose-600' },
-  system: { bg: 'bg-stone-100', header: 'text-stone-700', hover: 'hover:bg-stone-200', active: 'bg-stone-200 text-stone-950', bar: 'bg-stone-600', icon: 'text-stone-500' },
-  top: { bg: '', header: 'text-stone-700', hover: 'hover:bg-stone-100', active: 'bg-stone-900 text-white', bar: 'bg-stone-900', icon: 'text-stone-600' },
+  reports: { bg: 'bg-indigo-50', header: 'text-indigo-800', hover: 'hover:bg-indigo-100', active: 'bg-indigo-100 text-indigo-950', bar: 'bg-indigo-600', icon: 'text-indigo-600', tile: 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100' },
+  operations: { bg: 'bg-teal-50', header: 'text-teal-800', hover: 'hover:bg-teal-100', active: 'bg-teal-100 text-teal-950', bar: 'bg-teal-600', icon: 'text-teal-600', tile: 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-100' },
+  inventory: { bg: 'bg-lime-50', header: 'text-lime-800', hover: 'hover:bg-lime-100', active: 'bg-lime-100 text-lime-950', bar: 'bg-lime-600', icon: 'text-lime-700', tile: 'bg-white text-lime-700 shadow-sm ring-1 ring-lime-100' },
+  finance: { bg: 'bg-amber-50', header: 'text-amber-800', hover: 'hover:bg-amber-100', active: 'bg-amber-100 text-amber-950', bar: 'bg-amber-600', icon: 'text-amber-600', tile: 'bg-white text-amber-600 shadow-sm ring-1 ring-amber-100' },
+  hrm: { bg: 'bg-violet-50', header: 'text-violet-800', hover: 'hover:bg-violet-100', active: 'bg-violet-100 text-violet-950', bar: 'bg-violet-600', icon: 'text-violet-600', tile: 'bg-white text-violet-600 shadow-sm ring-1 ring-violet-100' },
+  crm: { bg: 'bg-rose-50', header: 'text-rose-800', hover: 'hover:bg-rose-100', active: 'bg-rose-100 text-rose-950', bar: 'bg-rose-600', icon: 'text-rose-600', tile: 'bg-white text-rose-600 shadow-sm ring-1 ring-rose-100' },
+  system: { bg: 'bg-stone-100', header: 'text-stone-700', hover: 'hover:bg-stone-200', active: 'bg-stone-200 text-stone-950', bar: 'bg-stone-600', icon: 'text-stone-500', tile: 'bg-stone-200 text-stone-600' },
+  top: { bg: '', header: 'text-stone-700', hover: 'hover:bg-stone-100', active: 'bg-stone-900 text-white', bar: 'bg-stone-900', icon: 'text-stone-600', tile: 'bg-stone-100 text-stone-600' },
 };
 
 const link = (label, href, icon, extra = {}) => ({ label, href, icon, ...extra });
+
+/** Colour tiles for main (top-level) links — each its own hue so the sidebar scans quickly. */
+export const ICON_TILES = {
+  sky: 'bg-sky-100 text-sky-600',
+  emerald: 'bg-emerald-100 text-emerald-600',
+  indigo: 'bg-indigo-100 text-indigo-600',
+  amber: 'bg-amber-100 text-amber-600',
+  rose: 'bg-rose-100 text-rose-600',
+  fuchsia: 'bg-fuchsia-100 text-fuchsia-600',
+  orange: 'bg-orange-100 text-orange-600',
+  cyan: 'bg-cyan-100 text-cyan-700',
+  blue: 'bg-blue-100 text-blue-600',
+  teal: 'bg-teal-100 text-teal-600',
+  slate: 'bg-slate-200 text-slate-600',
+  violet: 'bg-violet-100 text-violet-600',
+};
+const TOP_COLOURS = {
+  Dashboard: 'sky', POS: 'emerald', Analytics: 'indigo', Summary: 'amber', Customers: 'rose', 'Customer Ledger': 'fuchsia',
+  'Supplier Ledger': 'orange', 'Staff Permissions': 'cyan', 'Website CMS': 'blue', Printer: 'teal', Settings: 'slate',
+  Queue: 'teal', 'My Appointments': 'rose', 'My Attendance': 'violet',
+};
+export function tileFor(item) {
+  return ICON_TILES[item.color || TOP_COLOURS[item.label]] || ICON_TILES.slate;
+}
 const group = (id, label, tint, icon, items) => ({ id, label, tint, icon, items });
 
 const ADMIN_NAV = [

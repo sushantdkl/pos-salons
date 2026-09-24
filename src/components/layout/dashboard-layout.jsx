@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
-import { flattenNavigation, NAV_TINTS, navigationForRole, resolveActiveHref } from '@/constants/navigation';
+import { flattenNavigation, NAV_TINTS, navigationForRole, resolveActiveHref, tileFor } from '@/constants/navigation';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
@@ -285,10 +285,14 @@ export default function AdminLayout({ children }) {
         {isActive && !iconOnly ? (
           <span className={`absolute inset-y-1.5 left-0 w-[3px] rounded-full ${topLevel ? 'bg-white/80' : tint.bar}`} aria-hidden="true" />
         ) : null}
-        <item.icon
-          className={`h-[18px] w-[18px] shrink-0 ${isActive ? (topLevel ? 'text-white' : '') : tint.icon}`}
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+            isActive && topLevel ? 'bg-white/15 text-white' : topLevel ? tileFor(item) : tint.tile
+          } ${isActive && !topLevel ? 'shadow-sm' : ''}`}
           aria-hidden="true"
-        />
+        >
+          <item.icon className="h-4 w-4" />
+        </span>
         {iconOnly ? null : <span className={`truncate text-sm ${isActive ? '' : 'font-medium'}`}>{item.label}</span>}
       </Link>
     );
@@ -367,7 +371,7 @@ export default function AdminLayout({ children }) {
                     onClick={() => toggleGroup(entry.id)}
                     className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-900/30 ${tint.header} ${tint.hover}`}
                   >
-                    <entry.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ${tint.icon}`} aria-hidden="true"><entry.icon className="h-4 w-4" /></span>
                     <span className="flex-1">{entry.label}</span>
                     {hasActive && !expanded ? <span className={`h-1.5 w-1.5 rounded-full ${tint.bar}`} aria-hidden="true" /> : null}
                     <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
