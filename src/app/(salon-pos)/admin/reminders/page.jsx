@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, CheckCheck, ClipboardCopy, MessageCircle, Search, Send, SkipForward, Square, SquareCheckBig, X } from 'lucide-react';
 import { AlertBanner, ErpButton, ErpPage, ErrorState, LoadingState, money, PageHeader } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
-import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
 import { buildWhatsAppUrl, formatWhatsAppNumber, SALON_NAME, toWhatsAppNumber, whatsAppBlockReason } from '@/lib/messaging/whatsapp';
 import { CREDIT_REMINDER_TEMPLATE, DEFAULT_REMINDER_TEMPLATE, fillMessageTemplate } from '@/lib/messaging/template';
 
@@ -30,14 +29,10 @@ function saveTemplate(value) {
 export default function RemindersPage() {
   const [customers, setCustomers] = useState(null);
   const [balances, setBalances] = useState(new Map());
-  const [services, setServices] = useState([]);
-  const [staff, setStaff] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [template, setTemplate] = useState(DEFAULT_REMINDER_TEMPLATE);
   const [search, setSearch] = useState('');
   const [audience, setAudience] = useState('all');
-  const [serviceName, setServiceName] = useState('');
-  const [staffName, setStaffName] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [sent, setSent] = useState(() => new Set());
   const [queue, setQueue] = useState(null); // { ids: [], index }
@@ -49,16 +44,12 @@ export default function RemindersPage() {
   const load = async () => {
     setLoadError('');
     try {
-      const [customerData, ledgerData, serviceData, staffData] = await Promise.all([
+      const [customerData, ledgerData] = await Promise.all([
         erpFetch('/api/admin/customers'),
         erpFetch('/api/customers/ledger').catch(() => ({ customers: [] })),
-        erpFetch('/api/admin/services').catch(() => ({ services: [] })),
-        erpFetch('/api/admin/employees').catch(() => ({ employees: [] })),
       ]);
       setCustomers(customerData.customers || []);
       setBalances(new Map((ledgerData.customers || []).map((row) => [row.id, row.balance])));
-      setServices(serviceData.services || []);
-      setStaff((staffData.employees || []).filter(activeServiceStaffFilter));
     } catch (err) { setLoadError(err.message); }
   };
   useEffect(() => { load(); }, []);
@@ -77,7 +68,7 @@ export default function RemindersPage() {
   }, [customers, balances, search, audience]);
 
   const messageFor = (row) => fillMessageTemplate(template, {
-    name: row.name, salon: SALON_NAME, amount: balances.get(row.id) || 0, service: serviceName, staff: staffName,
+    name: row.name, salon: SALON_NAME, amount: balances.get(row.id) || 0,
   });
   const canMessage = (row) => !whatsAppBlockReason(row.phone);
   const byId = useMemo(() => new Map((customers || []).map((row) => [row.id, row])), [customers]);
@@ -176,21 +167,11 @@ export default function RemindersPage() {
               className="mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-200"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-stone-500">Use <code>{'{name}'}</code>, <code>{'{salon}'}</code>, <code>{'{amount}'}</code> (credit due), <code>{'{service}'}</code>, <code>{'{staff}'}</code>. Saved on this device.</p>
+              <p className="text-xs text-stone-500">Use <code>{'{name}'}</code>, <code>{'{salon}'}</code> and <code>{'{amount}'}</code> (credit due). Saved on this device.</p>
               <div className="flex gap-2">
                 <button type="button" className="text-xs font-semibold text-indigo-700 hover:underline" onClick={() => { setTemplate(DEFAULT_REMINDER_TEMPLATE); saveTemplate(DEFAULT_REMINDER_TEMPLATE); }}>General reminder</button>
                 <button type="button" className="text-xs font-semibold text-indigo-700 hover:underline" onClick={() => { setTemplate(CREDIT_REMINDER_TEMPLATE); saveTemplate(CREDIT_REMINDER_TEMPLATE); }}>Credit due reminder</button>
               </div>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <select value={serviceName} onChange={(event) => setServiceName(event.target.value)} className={FIELD} aria-label="Service for {service}">
-                <option value="">{'{service}'} — none</option>
-                {services.map((service) => <option key={service.id} value={service.name}>{service.name}</option>)}
-              </select>
-              <select value={staffName} onChange={(event) => setStaffName(event.target.value)} className={FIELD} aria-label="Stylist for {staff}">
-                <option value="">{'{staff}'} — none</option>
-                {staff.map((member) => <option key={member.id} value={member.full_name}>{member.full_name}</option>)}
-              </select>
             </div>
             <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900"><span className="font-semibold">Preview:</span> {preview}</p>
           </section>

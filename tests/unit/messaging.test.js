@@ -14,7 +14,7 @@ test('formats large amounts the Indian way', () => {
 });
 
 test('empty placeholders disappear without leaving double spaces', () => {
-  assert.equal(fillMessageTemplate('Hi {name}, book {service} with {staff} .', { name: 'Asha' }), 'Hi Asha, book with.');
+  assert.equal(fillMessageTemplate('Hi {name} , due {amount}', { name: 'Asha' }), 'Hi Asha, due');
   assert.equal(fillMessageTemplate(DEFAULT_REMINDER_TEMPLATE, { name: '', salon: 'The Hair Cut' }), 'Namaste, this is a friendly reminder from The Hair Cut. We look forward to seeing you.');
 });
 
