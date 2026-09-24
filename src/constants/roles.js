@@ -51,6 +51,7 @@ export function canAccessPath(role, pathname) {
   if (
     pathname.startsWith('/admin/billing') ||
     pathname.startsWith('/admin/customers') ||
+    pathname.startsWith('/admin/customer-ledger') ||
     pathname.startsWith('/admin/products') ||
     pathname.startsWith('/admin/stock') ||
     pathname.startsWith('/admin/reminders')

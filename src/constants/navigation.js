@@ -8,10 +8,10 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  BadgeDollarSign, Banknote, BookUser, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle,
-  PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
-  Settings, ShieldCheck, Sparkles, Store, Ticket, TrendingUp, Users, Wallet, WalletCards, Warehouse,
+  PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText,
+  Settings, ShieldCheck, Sparkles, Store, Ticket, TrendingUp, Truck, Users, Wallet, WalletCards, Warehouse,
 } from 'lucide-react';
 
 /**
@@ -39,7 +39,8 @@ const ADMIN_NAV = [
   link('Summary', '/admin/executive-summary', ScrollText),
   // Everyday essentials stay one click away, outside any dropdown.
   link('Customers', '/admin/customers', Contact),
-  link('Customer Ledger', '/admin/reports/center/credit', BookUser),
+  link('Customer Ledger', '/admin/customer-ledger', BookUser),
+  link('Supplier Ledger', '/admin/supplier-ledger', BookOpen),
   group('reports', 'Reports', 'reports', ChartPie, [
     link('Business Overview', '/admin/reports', ChartPie, { exact: true }),
     link('Sales & Invoices', '/admin/reports/center/sales', ReceiptText),
@@ -62,6 +63,8 @@ const ADMIN_NAV = [
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse),
+    link('Purchases', '/admin/purchases', PackagePlus),
+    link('Suppliers', '/admin/suppliers', Truck),
   ]),
   group('finance', 'Finance', 'finance', Wallet, [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
@@ -90,6 +93,7 @@ const CASHIER_NAV = [
   link('POS', '/admin/billing', Store),
   link('Summary', '/cashier/executive-summary', ScrollText),
   link('Customers', '/admin/customers', Contact),
+  link('Customer Ledger', '/admin/customer-ledger', BookUser),
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo),
     link('Services', '/admin/products', Sparkles),

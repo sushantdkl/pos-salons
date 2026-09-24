@@ -577,6 +577,10 @@ export async function PUT(request) {
       return NextResponse.json({ message: 'Salary payment updated', id });
     }
     if (!data.id) return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
+    const linked = await db.get('SELECT supplier_payment_id FROM expenses WHERE id = ?', [Number(data.id)]);
+    if (linked?.supplier_payment_id) {
+      return NextResponse.json({ error: 'This expense is a supplier payment. Change it from Suppliers so the supplier ledger stays correct.' }, { status: 409 });
+    }
     const id = await saveExpense(db, data, user.id);
     await logAction(db, user.id, 'update', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense updated', id });
@@ -622,6 +626,10 @@ export async function DELETE(request) {
         `, [user.id, `SALARY-${salary.salary_month}-${salary.staff_id}`, `COMMISSION-${salary.salary_month}-${salary.staff_id}`]);
       }
     } else {
+      const linked = await db.get('SELECT supplier_payment_id FROM expenses WHERE id = ?', [id]);
+      if (linked?.supplier_payment_id) {
+        return NextResponse.json({ error: 'This expense is a supplier payment. Void it from Suppliers so the supplier ledger stays correct.' }, { status: 409 });
+      }
       await db.run('UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?', [user.id, id]);
     }
     await logAction(db, user.id, 'delete', type === 'salary' ? 'salary_payment' : 'expense', id, 'Soft deleted');

@@ -102,8 +102,14 @@ export function getDashboardPeriodMeta(periodValue, startDate, endDate) {
   return {
     ...meta,
     value: period,
+    startDate: isoDate(start),
+    endDate: isoDate(end),
     displayRange: sameDay(start, end) ? displayDate(start) : `${displayDate(start)} - ${displayDate(end)}`,
   };
+}
+
+function isoDate(parts) {
+  return [parts.year, String(parts.month).padStart(2, '0'), String(parts.day).padStart(2, '0')].join('-');
 }
 
 function sameDay(a, b) {

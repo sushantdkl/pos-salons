@@ -57,6 +57,8 @@ const ADMIN_ONLY = [
   '/api/admin/settings',
   '/api/admin/permissions',
   '/api/admin/website-cms',
+  '/api/suppliers',
+  '/api/purchases',
   '/api/store/history',
   '/api/admin/tokens?mode=analytics',
 ];

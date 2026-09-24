@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
+import { BookUser, Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
@@ -172,7 +173,7 @@ export default function AdminCustomers() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold text-gray-950">{customer.name}</h2>
+                      <h2 className="text-lg font-semibold text-gray-950"><Link href={`/admin/customers/${customer.id}`} className="hover:underline">{customer.name}</Link></h2>
                       {customer.is_repeat ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">Repeat</span> : null}
                     </div>
                     {customer.phone && <p className="mt-1 flex items-center gap-2 text-sm text-gray-600"><Phone className="h-4 w-4" />{customer.phone}</p>}
@@ -193,6 +194,7 @@ export default function AdminCustomers() {
                 <p className="mb-4 text-sm text-gray-600">Preferred stylist: {customer.preferred_stylist_name || 'Any'}</p>
                 <div className="flex flex-wrap justify-end gap-1">
                   <button onClick={() => sendWhatsApp(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-green-600 hover:bg-green-50" title="Send WhatsApp reminder"><MessageCircle className="h-5 w-5" /></button>
+                  <Link href={`/admin/customers/${customer.id}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50" title="Profile & credit ledger" aria-label={`Open ${customer.name} profile and ledger`}><BookUser className="h-5 w-5" /></Link>
                   <button onClick={() => viewHistory(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100" title="View visit history"><History className="h-5 w-5" /></button>
                   <button onClick={() => openForm(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" title="Edit customer"><Edit className="h-5 w-5" /></button>
                   <button onClick={() => setConfirmAction({ type: 'deleteCustomer', customer })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" title="Delete customer"><Trash2 className="h-5 w-5" /></button>

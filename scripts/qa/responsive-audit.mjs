@@ -32,6 +32,12 @@ const PAGES = {
     '/admin/reports',
     '/admin/appointments',
     '/admin/appointments/settings',
+    '/admin/suppliers',
+    '/admin/supplier-ledger',
+    '/admin/customer-ledger',
+    '/admin/reminders',
+    '/admin/purchases',
+    '/admin/purchases/new',
   ],
   cashier: [
     '/dashboard/cashier',
@@ -42,6 +48,8 @@ const PAGES = {
     '/admin/appointments',
     '/dashboard/cashier/daily-expenses',
     '/cashier/credit',
+    '/admin/customer-ledger',
+    '/admin/reminders',
     '/cashier/advances',
   ],
   barber: [
@@ -62,6 +70,23 @@ async function login(username) {
 
 const results = [];
 const record = (label, ok, detail = '') => results.push({ ok, label, detail });
+
+// Profile pages need a real id: use (or create) one supplier and one customer in the QA database.
+{
+  const { token } = await login('qa_admin');
+  const api = (method, route, body) => fetch(`${BASE}${route}`, {
+    method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined,
+  }).then((response) => response.json());
+  let supplier = (await api('GET', '/api/suppliers?all=1')).suppliers?.[0];
+  if (!supplier) supplier = (await api('POST', '/api/suppliers', { name: 'QA UI Supplier', openingBalance: 1500 })).supplier;
+  let customer = (await api('GET', '/api/admin/customers')).customers?.[0];
+  if (!customer) customer = (await api('POST', '/api/admin/customers', { name: 'QA UI Customer' })).customer;
+  if (supplier?.id) PAGES.admin.push(`/admin/suppliers/${supplier.id}`);
+  if (customer?.id) {
+    PAGES.admin.push(`/admin/customers/${customer.id}`);
+    PAGES.cashier.push(`/admin/customers/${customer.id}`);
+  }
+}
 
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch();

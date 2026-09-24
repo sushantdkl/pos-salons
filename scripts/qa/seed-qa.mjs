@@ -32,6 +32,7 @@ const TRANSACTIONAL_TABLES = [
   'store_sessions', 'business_days',
   'appointment_waitlist', 'appointment_events', 'appointment_services', 'appointments',
   'staff_time_off', 'staff_working_hours',
+  'supplier_payments', 'purchase_items', 'purchases', 'suppliers',
 ];
 
 const client = new pg.Client({ connectionString: url });
@@ -39,7 +40,7 @@ await client.connect();
 try {
   await client.query('BEGIN');
   await client.query(`TRUNCATE ${TRANSACTIONAL_TABLES.join(', ')} RESTART IDENTITY CASCADE`);
-  await client.query(`UPDATE document_sequences SET next_value = 1 WHERE document_type IN ('salon_bill', 'appointment')`);
+  await client.query(`UPDATE document_sequences SET next_value = 1 WHERE document_type IN ('salon_bill', 'appointment', 'purchase', 'supplier_payment')`);
 
   const hash = bcrypt.hashSync(QA_PASSWORD, 10);
   const upsertUser = async (username, fullName, role) => {
