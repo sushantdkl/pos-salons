@@ -22,9 +22,20 @@ export function dashboardPathForRole(role) {
   return `/dashboard/${normalized}`;
 }
 
+/**
+ * Admin pages a cashier may open when the owner grants the matching Staff Permission. This is the
+ * ROLE gate only; the sidebar hides links that are not granted, the layout shows "not allowed" for
+ * a typed URL, and every API behind these pages checks the permission itself.
+ */
+const CASHIER_DELEGABLE = [
+  '/dashboard/admin/business-days', '/dashboard/admin/staff-performance', '/dashboard/admin/website',
+  '/admin/analytics', '/admin/reports', '/admin/appointments/settings', '/admin/crm', '/admin/printer',
+];
+
 export function canAccessPath(role, pathname) {
   const normalized = normalizeRole(role);
 
+  if (normalized === 'cashier' && CASHIER_DELEGABLE.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
   if (pathname.startsWith('/dashboard/admin')) return normalized === 'admin';
   if (pathname.startsWith('/dashboard/cashier/tokens')) return normalized === 'cashier';
   if (pathname.startsWith('/dashboard/cashier')) return normalized === 'cashier';
@@ -35,13 +46,29 @@ export function canAccessPath(role, pathname) {
   if (pathname.startsWith('/dashboard/beautician/queue')) return normalized === 'beautician';
   if (pathname.startsWith('/dashboard/beautician')) return normalized === 'beautician';
 
-  if (pathname.startsWith('/admin/employees') || pathname.startsWith('/admin/reports') || pathname.startsWith('/admin/settings')) {
+  if (
+    pathname.startsWith('/admin/employees') ||
+    pathname.startsWith('/admin/reports') ||
+    pathname.startsWith('/admin/settings') ||
+    pathname.startsWith('/admin/appointments/settings')
+  ) {
     return normalized === 'admin';
   }
+
+  // Every employee has their own attendance page (self punches, own history, own leave).
+  if (pathname.startsWith('/attendance/my')) return ['cashier', 'barber', 'stylist', 'beautician'].includes(normalized);
+  // HR workspace: admin, and a cashier the owner delegated HR permissions to (APIs enforce each one).
+  if (pathname.startsWith('/admin/hrm/rules')) return normalized === 'admin';
+  if (pathname.startsWith('/admin/hrm')) return ['admin', 'cashier'].includes(normalized);
+
+  // Front desk runs appointments; service staff see only their own schedule.
+  if (pathname.startsWith('/admin/appointments')) return ['admin', 'cashier'].includes(normalized);
+  if (pathname.startsWith('/appointments/my')) return ['barber', 'stylist', 'beautician'].includes(normalized);
 
   if (
     pathname.startsWith('/admin/billing') ||
     pathname.startsWith('/admin/customers') ||
+    pathname.startsWith('/admin/customer-ledger') ||
     pathname.startsWith('/admin/products') ||
     pathname.startsWith('/admin/stock') ||
     pathname.startsWith('/admin/reminders')
@@ -49,6 +76,16 @@ export function canAccessPath(role, pathname) {
     return ['admin', 'cashier'].includes(normalized);
   }
 
+  // The cashier report area. Admin keeps its own copy under /admin, so this is the
+  // cashier's route; the API enforces the same pair server-side.
+  if (pathname.startsWith('/cashier')) return ['admin', 'cashier'].includes(normalized);
+
+  // Opening & Closing is shared by the two roles that run the till; the store APIs
+  // enforce the same pair server-side.
+  if (pathname.startsWith('/store')) return ['admin', 'cashier'].includes(normalized);
+
+  // Suppliers & purchases can be delegated to the cashier in Staff Permissions (APIs enforce it).
+  if (pathname.startsWith('/admin/suppliers') || pathname.startsWith('/admin/purchases') || pathname.startsWith('/admin/supplier-ledger')) return ['admin', 'cashier'].includes(normalized);
   if (pathname.startsWith('/admin')) return normalized === 'admin';
 
   return true;

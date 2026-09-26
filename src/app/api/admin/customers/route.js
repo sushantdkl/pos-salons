@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { isUniqueViolation, publicErrorMessage } from '@/lib/api/errors';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
@@ -75,7 +76,7 @@ export async function GET(request) {
     const params = [];
     let where = 'WHERE 1=1';
     if (search) {
-      where += ' AND (c.name LIKE ? OR c.phone LIKE ?)';
+      where += ' AND (c.name ILIKE ? OR c.phone ILIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
@@ -101,7 +102,7 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const data = await request.json();
     const validationError = validateCustomer(data);
     if (validationError) {
@@ -153,7 +154,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const data = await request.json();
     if (!data.id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     const validationError = validateCustomer(data);
@@ -208,11 +209,29 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.CUSTOMERS_MANAGE);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
 
+    // A customer with any history (bills, credit, loyalty, bookings, reviews) stays on record so
+    // the books, credit ledger and loyalty cards keep their owner. Only an unused record is deleted.
+    const history = await db.get(`
+      SELECT (SELECT COUNT(*) FROM salon_bills WHERE customer_id = ?)::int AS bills,
+             (SELECT COUNT(*) FROM customer_credit_ledger WHERE customer_id = ?)::int AS credit,
+             (SELECT COUNT(*) FROM loyalty_ledger WHERE customer_id = ?)::int AS loyalty,
+             (SELECT COUNT(*) FROM appointments WHERE customer_id = ?)::int AS appointments
+    `, [id, id, id, id]);
+    const used = [
+      history?.bills ? `${history.bills} bill${history.bills === 1 ? '' : 's'}` : '',
+      history?.credit ? 'credit history' : '',
+      history?.loyalty ? 'loyalty history' : '',
+      history?.appointments ? `${history.appointments} appointment${history.appointments === 1 ? '' : 's'}` : '',
+    ].filter(Boolean);
+    if (used.length) {
+      const message = `This customer has ${used.join(', ')}, so the record is kept for the salon's books. Edit their details instead.`;
+      return NextResponse.json({ error: message, message, code: 'CUSTOMER_HAS_HISTORY' }, { status: 409 });
+    }
     await db.run('DELETE FROM customers WHERE id = ?', [id]);
     await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
       [user.id, 'delete', 'customer', id, 'Customer deleted']);

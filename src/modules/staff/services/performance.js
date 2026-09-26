@@ -25,8 +25,8 @@ export async function getStaffPerformance(db, staffId, options = {}) {
   const metrics = {};
   for (const [period, clause] of Object.entries(STAFF_PERF_PERIODS)) {
     const row = await db.get(`
-      SELECT COUNT(i.id)::int as servicesCompleted,
-             COUNT(DISTINCT b.customer_id)::int as customersServed,
+      SELECT COUNT(i.id)::int as "servicesCompleted",
+             COUNT(DISTINCT b.customer_id)::int as "customersServed",
              COALESCE(SUM(i.subtotal), 0) as revenue,
              COALESCE(SUM(i.commission_amount), 0) as commission
       FROM salon_bill_items i
@@ -40,8 +40,8 @@ export async function getStaffPerformance(db, staffId, options = {}) {
   }
 
   const recentServices = await db.all(`
-    SELECT b.customer_name as customerName,
-           i.name as serviceName,
+    SELECT b.customer_name as "customerName",
+           i.name as "serviceName",
            b.bill_number as invoice,
            ${BILL_DATE_EXPR_B} as date,
            i.subtotal as revenue,
@@ -71,14 +71,14 @@ export async function getStaffPerformance(db, staffId, options = {}) {
   const reportRows = await db.all(`
     SELECT ${BILL_DATE_EXPR_B} as date,
            b.bill_number as invoice,
-           b.customer_name as customerName,
-           i.name as serviceName,
+           b.customer_name as "customerName",
+           i.name as "serviceName",
            i.subtotal as amount,
            i.commission_amount as commission,
            ${ITEM_CASH_SQL} as cash,
            ${ITEM_QR_SQL} as qr,
-           b.payment_method as paymentMethod,
-           b.payment_status as paymentStatus
+           b.payment_method as "paymentMethod",
+           b.payment_status as "paymentStatus"
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     WHERE i.item_type = 'service'
@@ -128,8 +128,8 @@ export async function getStaffLeaderboard(db, period = 'month') {
     SELECT u.id,
            COALESCE(NULLIF(sp.display_name, ''), u.full_name) as name,
            sp.salon_role as role,
-           COUNT(b.id)::int as servicesCompleted,
-           COUNT(DISTINCT b.customer_id)::int as customersServed,
+           COUNT(b.id)::int as "servicesCompleted",
+           COUNT(DISTINCT b.customer_id)::int as "customersServed",
            COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN i.subtotal ELSE 0 END), 0) as revenue,
            COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN i.commission_amount ELSE 0 END), 0) as commission
     FROM users u
@@ -138,7 +138,7 @@ export async function getStaffLeaderboard(db, period = 'month') {
     LEFT JOIN salon_bills b ON b.id = i.bill_id AND b.status = 'paid' AND ${clause}
     WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
     GROUP BY u.id, sp.display_name, u.full_name, sp.salon_role
-    ORDER BY revenue DESC, servicesCompleted DESC
+    ORDER BY revenue DESC, "servicesCompleted" DESC
   `);
 }
 
@@ -157,13 +157,13 @@ function metricValue(row = {}) {
 async function getStaffMetric(db, staffId, period) {
   const clause = STAFF_PERF_PERIODS[period] || STAFF_PERF_PERIODS.month;
   const row = await db.get(`
-    SELECT COUNT(i.id)::int as servicesCompleted,
-           COUNT(DISTINCT b.customer_id)::int as customersServed,
-           COUNT(DISTINCT b.id)::int as invoiceCount,
+    SELECT COUNT(i.id)::int as "servicesCompleted",
+           COUNT(DISTINCT b.customer_id)::int as "customersServed",
+           COUNT(DISTINCT b.id)::int as "invoiceCount",
            COALESCE(SUM(i.subtotal), 0) as revenue,
            COALESCE(SUM(i.commission_amount), 0) as commission,
-           COALESCE(SUM(${ITEM_CASH_SQL}), 0) as cashCollected,
-           COALESCE(SUM(${ITEM_QR_SQL}), 0) as qrCollected
+           COALESCE(SUM(${ITEM_CASH_SQL}), 0) as "cashCollected",
+           COALESCE(SUM(${ITEM_QR_SQL}), 0) as "qrCollected"
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     WHERE i.item_type = 'service'
@@ -198,10 +198,10 @@ async function getTopServicesForStaff(db, staffId) {
 
 async function getRecentServicesForStaff(db, staffId) {
   const rows = await db.all(`
-    SELECT i.id as itemId,
+    SELECT i.id as "itemId",
            b.bill_number as invoice,
-           b.customer_name as customerName,
-           i.name as serviceName,
+           b.customer_name as "customerName",
+           i.name as "serviceName",
            i.subtotal as amount,
            i.commission_amount as commission,
            ${BILL_DATE_EXPR_B} as date
@@ -277,8 +277,8 @@ export async function getAdminStaffAnalytics(db) {
            u.username,
            u.is_active,
            sp.salon_role as role,
-           COALESCE(sp.assigned_services, '') as assignedServices,
-           COALESCE(sp.commission_percentage, 0) as commissionPercentage
+           COALESCE(sp.assigned_services, '') as "assignedServices",
+           COALESCE(sp.commission_percentage, 0) as "commissionPercentage"
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
     WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
@@ -294,8 +294,8 @@ export async function getAdminStaffAnalytics(db) {
       lifetime: await getStaffMetric(db, member.id, 'lifetime'),
     };
     const activeDaysRow = await db.get(`
-      SELECT COUNT(DISTINCT (${BILL_DATE_EXPR_B})::date)::int as activeDays,
-             MAX(${BILL_DATE_EXPR_B}) as lastServiceAt
+      SELECT COUNT(DISTINCT (${BILL_DATE_EXPR_B})::date)::int as "activeDays",
+             MAX(${BILL_DATE_EXPR_B}) as "lastServiceAt"
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
       WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'

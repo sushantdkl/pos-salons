@@ -37,7 +37,7 @@ export function ServiceMenuList({ services }: { services: PublicService[] }) {
     <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-x-10">
       {groups.map(([category, items]) => (
         <div key={category} className="rounded-sm border border-[#e7ded2] bg-white p-5 md:p-6">
-          <h3 className="border-b border-[#e7ded2] pb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9b742d]">
+          <h3 className="border-b border-[#e7ded2] pb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a6727]">
             {category}
           </h3>
           <div className="mt-1">

@@ -1,3 +1,4 @@
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
@@ -11,7 +12,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.WEBSITE_MANAGE);
     return NextResponse.json(await getPublicWebsiteData({ includeHidden: true }));
   } catch (error) {
     const message = publicErrorMessage(error, 'Could not load website CMS. Please try again.');
@@ -23,7 +24,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.WEBSITE_MANAGE);
     const data = await request.json();
     const cms = await saveWebsiteCms(db, data, user.id);
     return NextResponse.json({ success: true, message: 'Website CMS saved successfully', cms });

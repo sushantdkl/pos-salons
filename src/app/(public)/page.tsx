@@ -1,24 +1,26 @@
 import Link from 'next/link';
 import { MessageCircle } from 'lucide-react';
-import { PublicLayout } from '@/modules/public-site/components/public-layout';
+import { SiteShell } from '@/modules/public-site/components/site-shell';
 import { Section } from '@/modules/public-site/components/section';
+import { CustomerReviews } from '@/modules/public-site/components/customer-reviews';
 import { PackageCard, ServiceCard } from '@/modules/public-site/components/cards';
 import { StaffCarousel } from '@/modules/public-site/components/staff-carousel';
 import { CmsImage } from '@/modules/public-site/components/cms-image';
-import { getPublicWebsiteData } from '@/modules/public-site/services/cms';
+import { getSiteContext, staticPageMetadata } from '@/modules/public-site/services/seo';
 import { createWhatsAppLink } from '@/modules/public-site/utils/whatsapp';
-import type { PublicPackage, PublicService } from '@/modules/public-site/types';
+import type { PublicPackage, PublicService, ServicePage } from '@/modules/public-site/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  const cms = await getPublicWebsiteData();
-  return cms.seo;
+  return staticPageMetadata(await getSiteContext(), '/');
 }
 
 export default async function HomePage() {
-  const cms = await getPublicWebsiteData();
-  const { info, sections } = cms;
+  const context = await getSiteContext();
+  const { cms, info, settings, servicePages } = context;
+  const { sections } = cms;
+  const place = [settings.locality, settings.district].filter(Boolean).join(', ');
   const hero = sections.hero;
   const servicesSection = sections.services;
   const packagesSection = sections.packages;
@@ -26,7 +28,7 @@ export default async function HomePage() {
   const about = sections.about;
   const contact = sections.contact;
   return (
-    <PublicLayout info={info} isHome={true}>
+    <SiteShell isHome>
       <main>
         {hero.isVisible ? (
           <section className="relative w-full h-[90vh] min-h-[600px] md:h-screen md:min-h-[750px] bg-[#12100e] overflow-hidden flex items-end">
@@ -55,6 +57,10 @@ export default async function HomePage() {
                 {/* Premium Serif Heading */}
                 <h1 className="text-4xl md:text-6xl lg:text-7xl font-light tracking-tight text-white leading-[1.15] font-serif">
                   {hero.title || info.name}
+                  {/* Says what and where in the one H1, visibly — not hidden SEO text. */}
+                  <span className="mt-3 block font-sans text-base font-medium uppercase tracking-[0.18em] text-white/80 md:text-lg">
+                    {settings.businessDescriptor}{place ? ` in ${place}` : ''}
+                  </span>
                 </h1>
                 
                 {/* Minimal description */}
@@ -115,6 +121,20 @@ export default async function HomePage() {
                     <ServiceCard key={service.name} service={service} variant="menu" compact />
                   ))}
                 </div>
+                {servicePages.length ? (
+                  <ul className="mt-8 flex flex-wrap gap-2" aria-label="Service details">
+                    {servicePages.map((page: ServicePage) => (
+                      <li key={page.slug}>
+                        <Link
+                          href={`/services/${page.slug}`}
+                          className="inline-flex min-h-11 items-center border border-white/15 px-4 text-xs font-semibold uppercase tracking-wider text-white/85 transition-colors hover:border-[#d7b56d]/70 hover:text-[#d7b56d]"
+                        >
+                          {page.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
                   <Link
                     href="/services"
@@ -220,7 +240,7 @@ export default async function HomePage() {
                     .slice(0, 3)
                     .map((item: string, index: number) => (
                       <li key={item} className="flex gap-5 py-5 md:py-6">
-                        <span className="shrink-0 font-serif text-2xl font-light leading-none text-[#d7b56d]/70">
+                        <span className="shrink-0 font-serif text-2xl font-light leading-none text-[#9b742d]">
                           {String(index + 1).padStart(2, '0')}
                         </span>
                         <p className="font-serif text-lg font-light tracking-tight text-[#171411] md:text-xl">{item}</p>
@@ -247,6 +267,8 @@ export default async function HomePage() {
           </Section>
         ) : null}
 
+        <CustomerReviews />
+
         <Section
           theme="dark"
           eyebrow={contact.subtitle || 'Visit us'}
@@ -263,11 +285,11 @@ export default async function HomePage() {
                 </div>
                 <div className="py-7">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Opening hours</p>
-                  <p className="mt-3 font-serif text-xl font-light leading-relaxed text-white/85 md:text-2xl">{info.openingHours}</p>
+                  <p className="mt-3 font-serif text-xl font-light leading-relaxed text-white/85 md:text-2xl">{info.openingHours || "Please call or WhatsApp to confirm today's hours."}</p>
                 </div>
                 <div className="py-7">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d7b56d]">Phone</p>
-                  <p className="mt-3 font-serif text-xl font-light text-white/85 md:text-2xl">{info.phone}</p>
+                  <p className="mt-3 font-serif text-xl font-light text-white/85 md:text-2xl"><a href={`tel:${String(info.phone).replace(/[^\d+]/g, '')}`} className="hover:text-[#d7b56d]">{info.phone}</a></p>
                 </div>
               </div>
               <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -308,6 +330,6 @@ export default async function HomePage() {
           </div>
         </Section>
       </main>
-    </PublicLayout>
+    </SiteShell>
   );
 }

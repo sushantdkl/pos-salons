@@ -1,3 +1,4 @@
+import { refreshServerCalendarSystem } from './dates/calendar-setting.js';
 import bcrypt from 'bcryptjs';
 
 const CUSTOMER_COLUMNS = [
@@ -307,7 +308,7 @@ function seedWebsiteCmsData(db) {
         'hero',
         'The Hair Cut',
         "We'll style, You'll smile!",
-        "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+        "The Hair Cut is a unisex salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair colour, keratin, facials and grooming packages.",
         '/assets/hair_dressing_space1.jpg',
         'Book Appointment',
         '/book-appointment',
@@ -402,9 +403,9 @@ function seedWebsiteCmsData(db) {
       ],
       [
         'seo',
-        "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+        "The Hair Cut | Unisex Salon in Birendranagar, Surkhet",
         '',
-        "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+        "The Hair Cut is a unisex salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair colour, keratin, facials and grooming packages.",
         '/assets/Salon_Banner.jpeg',
         '',
         '',
@@ -413,8 +414,8 @@ function seedWebsiteCmsData(db) {
         1,
         7,
         JSON.stringify({
-          ogTitle: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
-          ogDescription: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+          ogTitle: "The Hair Cut | Unisex Salon in Birendranagar, Surkhet",
+          ogDescription: "The Hair Cut is a unisex salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair colour, keratin, facials and grooming packages.",
           keywords: 'salon, haircut, barber, surkhet, facial, shaving'
         })
       ]
@@ -1151,6 +1152,8 @@ export async function requireAuth(request, db) {
     error.status = 401;
     throw error;
   }
+  // Report periods ("This Month") follow Settings → Calendar; keep the cached value current.
+  await refreshServerCalendarSystem(db);
   return user;
 }
 

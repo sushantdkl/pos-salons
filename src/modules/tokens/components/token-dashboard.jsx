@@ -1,5 +1,7 @@
 'use client';
 
+import { fmtDate } from '@/lib/dates/display';
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Printer, RefreshCw, Ticket, UserCheck, XCircle } from 'lucide-react';
@@ -153,7 +155,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
       return;
     }
     if (data.customer) {
-      const lastVisit = data.customer.lastVisit ? new Date(data.customer.lastVisit).toLocaleDateString() : 'No completed bills yet';
+      const lastVisit = data.customer.lastVisit ? fmtDate(data.customer.lastVisit) : 'No completed bills yet';
       setForm((current) => ({
         ...current,
         customer_name: current.customer_name || data.customer.name || '',
@@ -231,9 +233,10 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter(activeServiceStaffFilter) || []);
   };
 
+  // The service / staff lists only feed the "issue a token" form, which a staff queue never shows.
   useEffect(() => {
-    fetchLookups();
-  }, []);
+    if (!isStaffQueue) fetchLookups();
+  }, [isStaffQueue]);
 
   useEffect(() => {
     fetchTokens();
@@ -462,7 +465,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                             <span className="block text-sm font-semibold text-gray-950">{customer.name}</span>
                             <span className="mt-0.5 block text-xs text-gray-500">
                               {customer.phone || 'No phone'} - {customer.totalVisits || 0} visits
-                              {customer.lastVisit ? ` - Last visit ${new Date(customer.lastVisit).toLocaleDateString()}` : ''}
+                              {customer.lastVisit ? ` - Last visit ${fmtDate(customer.lastVisit)}` : ''}
                             </span>
                           </button>
                         ))}
@@ -573,8 +576,7 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={date}
                     onChange={(event) => setDate(event.target.value)}
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm"

@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useMemo, useState } from 'react';
-import { Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
+import { BookUser, Edit, History, MessageCircle, Phone, Plus, Search, Trash2, UserRound } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { activeServiceStaffFilter } from '@/lib/staff/service-staff';
@@ -29,6 +31,7 @@ export default function AdminCustomers() {
   const [selectedBills, setSelectedBills] = useState([]);
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [confirmAction, setConfirmAction] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -117,10 +120,12 @@ export default function AdminCustomers() {
     const response = await fetch(`/api/admin/customers?id=${id}`, { method: 'DELETE', headers: headers() });
     if (response.ok) {
       setConfirmAction(null);
+      setPageError('');
       fetchCustomers();
     } else {
-      const data = await response.json();
-      setError(data.message || data.error || 'Could not delete customer');
+      const data = await response.json().catch(() => ({}));
+      setConfirmAction(null);
+      setPageError(data.message || data.error || 'Could not delete customer');
     }
     setActionLoading(false);
   };
@@ -158,6 +163,7 @@ export default function AdminCustomers() {
               Add Customer
             </button>
           </div>
+          {pageError ? <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{pageError}<button type="button" onClick={() => setPageError('')} className="font-semibold underline">Dismiss</button></div> : null}
 
           <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
             <div className="relative">
@@ -172,7 +178,7 @@ export default function AdminCustomers() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold text-gray-950">{customer.name}</h2>
+                      <h2 className="text-lg font-semibold text-gray-950"><Link href={`/admin/customers/${customer.id}`} className="hover:underline">{customer.name}</Link></h2>
                       {customer.is_repeat ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">Repeat</span> : null}
                     </div>
                     {customer.phone && <p className="mt-1 flex items-center gap-2 text-sm text-gray-600"><Phone className="h-4 w-4" />{customer.phone}</p>}
@@ -193,6 +199,7 @@ export default function AdminCustomers() {
                 <p className="mb-4 text-sm text-gray-600">Preferred stylist: {customer.preferred_stylist_name || 'Any'}</p>
                 <div className="flex flex-wrap justify-end gap-1">
                   <button onClick={() => sendWhatsApp(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-green-600 hover:bg-green-50" title="Send WhatsApp reminder"><MessageCircle className="h-5 w-5" /></button>
+                  <Link href={`/admin/customers/${customer.id}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50" title="Profile & credit ledger" aria-label={`Open ${customer.name} profile and ledger`}><BookUser className="h-5 w-5" /></Link>
                   <button onClick={() => viewHistory(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100" title="View visit history"><History className="h-5 w-5" /></button>
                   <button onClick={() => openForm(customer)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" title="Edit customer"><Edit className="h-5 w-5" /></button>
                   <button onClick={() => setConfirmAction({ type: 'deleteCustomer', customer })} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" title="Delete customer"><Trash2 className="h-5 w-5" /></button>
@@ -287,7 +294,7 @@ export default function AdminCustomers() {
               {selectedBills.map((bill) => (
                 <div key={bill.id} className="rounded-lg border border-gray-200 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-950">{bill.bill_number}</p>
+                    <p className="font-medium text-gray-950"><BillLink billId={bill.id} number={bill.bill_number} /></p>
                     <p className="font-semibold text-gray-950">{formatCurrency(bill.grand_total)}</p>
                   </div>
                   <p className="mt-1 text-sm text-gray-600">{new Date(bill.created_at).toLocaleString()} • {bill.payment_method}</p>
@@ -301,7 +308,7 @@ export default function AdminCustomers() {
       <ConfirmDialog
         open={confirmAction?.type === 'deleteCustomer'}
         title="Delete Customer"
-        description={`Delete ${confirmAction?.customer?.name || 'this customer'}? This cannot be undone if the record has no protected history.`}
+        description={`Delete ${confirmAction?.customer?.name || 'this customer'}? Only a customer with no bills, credit, loyalty or bookings can be deleted; others are kept for the salon's books.`}
         confirmLabel="Delete"
         destructive
         loading={actionLoading}

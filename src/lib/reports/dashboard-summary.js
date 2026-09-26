@@ -9,6 +9,7 @@ import {
   PAID_BILL_STATUS_SQL_SB,
   paymentMethodLabel,
   qrTypeLabel,
+  revenueScope,
 } from '@/lib/reports/finance-summary';
 
 export { PAID_BILL_STATUS_SQL, PAID_BILL_STATUS_SQL_SB, paymentMethodLabel, qrTypeLabel };
@@ -16,38 +17,38 @@ export { PAID_BILL_STATUS_SQL, PAID_BILL_STATUS_SQL_SB, paymentMethodLabel, qrTy
 export async function getSalonDashboardSummary(db, periodValue, options = {}) {
   const period = resolveDashboardPeriod(periodValue);
   const { startDate = null, endDate = null } = options;
+  // Current-day metrics follow the open Business Day (accumulating across its sessions and
+  // resetting only when a new day starts). Every other period stays on the calendar so
+  // historical reports are untouched. Null businessDayId falls back to calendar today.
+  const useDay = period === 'today' && options.businessDayId ? options.businessDayId : null;
   const periodMeta = getDashboardPeriodMeta(period, startDate, endDate);
-  const billFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
-  const itemFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
-  const tokenFilter = periodDateColumnFilter(period, 'wt.token_date', startDate, endDate);
-  const expenseFilter = periodDateColumnFilter(period, 'expense_date', startDate, endDate);
-  const recentExpenseFilter = periodDateColumnFilter(period, 'e.expense_date', startDate, endDate);
+  // Revenue attribution: a backdated bill belongs to the day the service happened, not to
+  // the day whose drawer took the cash. Collections keep the cash attribution below.
+  const billFilter = revenueScope('b', period, { businessDayId: useDay, startDate, endDate });
+  const itemFilter = billFilter;
+  const tokenFilter = useDay
+    ? { clause: 'wt.business_day_id = ?', params: [useDay] }
+    : periodDateColumnFilter(period, 'wt.token_date', startDate, endDate);
+  const expenseFilter = useDay
+    ? { clause: 'business_day_id = ?', params: [useDay] }
+    : periodDateColumnFilter(period, 'expense_date', startDate, endDate);
+  const recentExpenseFilter = useDay
+    ? { clause: 'e.business_day_id = ?', params: [useDay] }
+    : periodDateColumnFilter(period, 'e.expense_date', startDate, endDate);
   const today = salonDateString();
   const expenseCreatedBy = options.expenseCreatedBy ? 'AND created_by = ?' : '';
   const recentExpenseCreatedBy = options.expenseCreatedBy ? 'AND e.created_by = ?' : '';
   const expenseParams = options.expenseCreatedBy ? [...expenseFilter.params, options.expenseCreatedBy] : expenseFilter.params;
   const recentExpenseParams = options.expenseCreatedBy ? [...recentExpenseFilter.params, options.expenseCreatedBy] : recentExpenseFilter.params;
 
-  const billCash = billCashSql('b');
-  const billQr = billQrSql('b');
-
+  // Revenue-scoped COUNTS of what the salon sold. Money totals come from getFinancialSummary.
   const sales = await db.get(`
     SELECT
       COUNT(DISTINCT b.id)::int as bills,
-      COALESCE(SUM(b.grand_total), 0) as total_sales,
-      COALESCE(SUM(b.subtotal), 0) as gross_before_discount,
-      COALESCE(SUM(b.discount_amount), 0) as total_discounts,
-      COALESCE(SUM(${billCash}), 0) as cash_received,
-      COALESCE(SUM(${billQr}), 0) as qr_received,
-      COALESCE(SUM(CASE WHEN b.qr_type = 'ESEWA_PHONEPAY' THEN ${billQr} ELSE 0 END), 0) as esewa_phonepay_received,
-      COALESCE(SUM(CASE WHEN b.qr_type = 'BANK' THEN ${billQr} ELSE 0 END), 0) as bank_qr_received,
-      COALESCE(SUM(CASE WHEN b.payment_method = 'split' THEN ${billCash} ELSE 0 END), 0) as split_cash,
-      COALESCE(SUM(CASE WHEN b.payment_method = 'split' THEN ${billQr} ELSE 0 END), 0) as split_qr,
       COUNT(DISTINCT CASE WHEN b.token_id IS NULL THEN b.id END)::int as direct_bills,
       COUNT(DISTINCT CASE WHEN b.token_id IS NOT NULL THEN b.id END)::int as token_bills,
       COUNT(DISTINCT b.customer_id)::int as saved_customers,
-      COUNT(DISTINCT CASE WHEN b.customer_id IS NULL THEN b.id END)::int as anonymous_customer_bills,
-      CASE WHEN COUNT(DISTINCT b.id) > 0 THEN COALESCE(SUM(b.grand_total), 0) / COUNT(DISTINCT b.id) ELSE 0 END as avg_bill_value
+      COUNT(DISTINCT CASE WHEN b.customer_id IS NULL THEN b.id END)::int as anonymous_customer_bills
     FROM salon_bills b
     WHERE ${billFilter.clause} AND ${PAID_BILL_STATUS_SQL}
   `, billFilter.params);
@@ -86,16 +87,23 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
     WHERE ${tokenFilter.clause}
   `, tokenFilter.params);
 
-  const waiting = await db.get(`
-    SELECT COUNT(DISTINCT wt.id)::int as waiting
-    FROM walk_in_tokens wt
-    WHERE wt.token_date = ?::date AND wt.status = 'WAITING'
-  `, [today]);
+  const waiting = useDay
+    ? await db.get(`
+        SELECT COUNT(DISTINCT wt.id)::int as waiting
+        FROM walk_in_tokens wt
+        WHERE wt.business_day_id = ? AND wt.status = 'WAITING'
+      `, [useDay])
+    : await db.get(`
+        SELECT COUNT(DISTINCT wt.id)::int as waiting
+        FROM walk_in_tokens wt
+        WHERE wt.token_date = ?::date AND wt.status = 'WAITING'
+      `, [today]);
 
   // Savings live in savings_deposits now, so operating expenses read EXPENSE rows only.
   const financial = await getFinancialSummary(db, period, {
     createdBy: options.expenseCreatedBy || null,
     includeSalary: options.includeSalary !== false,
+    businessDayId: useDay,
     startDate,
     endDate,
   });
@@ -111,7 +119,9 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
   `, expenseParams);
 
   // Build the savings filter once so its custom-range params ($1/$2) are actually bound.
-  const savingsFilter = periodDateColumnFilter(period, 's.deposit_date', startDate, endDate);
+  const savingsFilter = useDay
+    ? { clause: 's.business_day_id = ?', params: [useDay] }
+    : periodDateColumnFilter(period, 's.deposit_date', startDate, endDate);
   const savingsParams = options.expenseCreatedBy ? [...savingsFilter.params, options.expenseCreatedBy] : savingsFilter.params;
   const savingsBreakdown = await db.all(`
     SELECT s.deposit_type, s.source_account, COALESCE(SUM(s.amount), 0) as amount, COUNT(s.id)::int as records
@@ -216,23 +226,33 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
     financial,
     summary: {
       totalBills: Number(sales?.bills || 0),
-      totalSales: numeric(sales?.total_sales),
-      grossSalesBeforeDiscount: numeric(sales?.gross_before_discount),
-      totalDiscounts: numeric(sales?.total_discounts),
-      netSalesAfterDiscount: numeric(sales?.total_sales),
-      cashReceived: numeric(sales?.cash_received),
-      qrReceived: numeric(sales?.qr_received),
-      grossTotalCollected: numeric(sales?.cash_received) + numeric(sales?.qr_received),
-      esewaPhonePayReceived: numeric(sales?.esewa_phonepay_received),
-      bankQrReceived: numeric(sales?.bank_qr_received),
-      splitCash: numeric(sales?.split_cash),
-      splitQr: numeric(sales?.split_qr),
+      // Money figures come from getFinancialSummary only, so the dashboard can never total a
+      // bill differently from the Summary, Opening & Closing or the reports.
+      totalSales: financial.netSalesAfterDiscount,
+      grossSalesBeforeDiscount: financial.grossSalesBeforeDiscount,
+      totalDiscounts: financial.totalDiscounts,
+      finalizedBillTotal: financial.finalizedBillTotal,
+      voidedSales: financial.voidedSales,
+      voidCount: financial.voidCount,
+      netSalesAfterDiscount: financial.netSalesAfterDiscount,
+      cashReceived: financial.grossCashCollected,
+      qrReceived: financial.grossQrCollected,
+      grossTotalCollected: financial.grossTotalCollected,
+      esewaPhonePayReceived: financial.esewaPhonePayCollected,
+      bankQrReceived: financial.bankQrCollected,
+      splitCash: financial.splitCash,
+      splitQr: financial.splitQr,
+      creditSales: financial.creditSales,
+      creditCollectionsCash: financial.creditCollectionsCash,
+      creditCollectionsOnline: financial.creditCollectionsOnline,
+      cashRefunds: financial.cashRefunds,
+      onlineRefunds: financial.onlineRefunds,
       tokenBills: Number(sales?.token_bills || 0),
       directBills: Number(sales?.direct_bills || 0),
       customersServed: Number(sales?.saved_customers || 0) + Number(sales?.anonymous_customer_bills || 0),
       savedCustomers: Number(sales?.saved_customers || 0),
       anonymousCustomerBills: Number(sales?.anonymous_customer_bills || 0),
-      avgBillValue: numeric(sales?.avg_bill_value),
+      avgBillValue: Number(sales?.bills || 0) > 0 ? Math.round((financial.finalizedBillTotal / Number(sales.bills)) * 100) / 100 : 0,
       servicesSold: Number(itemCounts?.services_sold || 0),
       productsSold: Number(itemCounts?.products_sold || 0),
       serviceRevenue,
@@ -251,7 +271,10 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
       savingsTransfers: financial.savingsTransfers,
       savingsFromCash: financial.savingsFromCash,
       savingsFromOnline: financial.savingsFromOnline,
-      netCashInHand: financial.netCashInHand,
+      // Cash MOVEMENT for the period (collections less cash paid out). The physical drawer
+      // position is Expected Cash in Drawer, which adds the store session's starting float.
+      netCashMovement: financial.netCashMovement,
+      netCashInHand: financial.netCashMovement,
       netOnlineBalance: financial.netOnlineBalance,
       netAvailableBalance: financial.netAvailableBalance,
       currentWaitingTokens: Number(waiting?.waiting || 0),
@@ -298,7 +321,13 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
 
 export async function getDashboardTransactions(db, periodValue, options = {}) {
   const period = resolveDashboardPeriod(periodValue);
-  const billFilter = periodDateFilter(period, options.startDate || null, options.endDate || null, BILL_DATE_EXPR_B);
+  const useDay = period === 'today' && options.businessDayId ? options.businessDayId : null;
+  // Listed under the day the sale belongs to, matching the revenue figures above.
+  const billFilter = revenueScope('b', period, {
+    businessDayId: useDay,
+    startDate: options.startDate || null,
+    endDate: options.endDate || null,
+  });
   const limit = Number(options.limit || 10);
   const bills = await db.all(`
     SELECT b.id, b.bill_number, b.customer_name, b.customer_phone, b.grand_total, b.payment_method,

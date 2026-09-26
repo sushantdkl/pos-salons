@@ -16,8 +16,7 @@ export async function GET() {
       SELECT u.id, u.username,
              COALESCE(NULLIF(sp.display_name, ''), u.full_name) as full_name,
              u.role,
-             sp.salon_role,
-             u.email, u.phone
+             sp.salon_role
       FROM users u
       LEFT JOIN staff_profiles sp ON sp.user_id = u.id
       WHERE u.is_active = TRUE

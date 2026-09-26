@@ -2,7 +2,7 @@ export const salonInfo = {
   name: 'The Hair Cut',
   tagline: "We'll style, You'll smile!",
   description:
-    "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+    "The Hair Cut is a unisex salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair colour, keratin, facials and grooming packages.",
   address: 'Birendranagar-7, Surkhet',
   phone: '+977 9858051694',
   whatsappNumber: '9779858051694',

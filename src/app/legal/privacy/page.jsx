@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Privacy Policy | The Hair Cut Pos',
+  title: 'Privacy Policy',
   description: 'Privacy policy placeholder for The Hair Cut Pos launch checklist.',
 };
 

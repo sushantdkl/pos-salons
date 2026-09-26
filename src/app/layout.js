@@ -1,25 +1,23 @@
 import './globals.css'
+import { Cormorant_Garamond, IBM_Plex_Sans, Manrope, Outfit } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-context'
 import { ToastProvider } from '@/components/ui/toast'
+import { siteUrl } from '@/lib/seo/site'
 
+// Defaults only. Public pages set their own title, description, canonical and Open Graph via
+// modules/public-site/services/seo.js; private areas are noindexed by header (next.config.mjs).
 export const metadata = {
-  title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
-  description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
+  title: { default: 'The Hair Cut', template: '%s | The Hair Cut' },
+  description: 'The Hair Cut, unisex salon in Birendranagar-7, Surkhet.',
   applicationName: 'The Hair Cut',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pos-salons.vercel.app'),
+  metadataBase: new URL(siteUrl()),
   openGraph: {
-    title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
-    description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
-    images: ['/assets/Salon_Banner.jpeg'],
     type: 'website',
-    url: '/',
-    siteName: 'The Hair Cut Pos',
+    siteName: 'The Hair Cut',
+    locale: 'en_US',
+    images: ['/assets/Salon_Banner.jpeg'],
   },
-  twitter: {
-    card: 'summary',
-    title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
-    description: "The Hair Cut is a modern men's salon in Birendranagar-7, Surkhet offering haircuts, shaving, hair color, hair spa, facials, and grooming packages.",
-  },
+  twitter: { card: 'summary_large_image' },
   icons: {
     icon: [
       {
@@ -39,15 +37,17 @@ export const metadata = {
   },
 }
 
+// Self-hosted at build time (no render-blocking Google Fonts request). Public-site fonts are
+// preloaded; dashboard fonts are declared but only downloaded on screens that use them.
+const outfit = Outfit({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700', '800'], variable: '--font-outfit', display: 'swap' })
+const cormorant = Cormorant_Garamond({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700'], style: ['normal', 'italic'], variable: '--font-cormorant', display: 'swap' })
+const manrope = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'], variable: '--font-manrope', display: 'swap', preload: false })
+const plex = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex', display: 'swap', preload: false })
+
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${cormorant.variable} ${manrope.variable} ${plex.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-        {/* Dashboard redesign typography: Manrope (headings + tabular figures) and IBM Plex Sans (body). Additive — other pages keep Outfit. */}
-        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
         <script dangerouslySetInnerHTML={{
           __html: `
             (function() {
@@ -63,7 +63,7 @@ export default function RootLayout({ children }) {
           `
         }} />
       </head>
-      <body className={`font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <AuthProvider>
           <ToastProvider>
             {children}

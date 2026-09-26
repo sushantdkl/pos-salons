@@ -405,6 +405,9 @@ export default function WebsiteCmsPage() {
           <Link href="/" target="_blank" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700">
             <Eye className="h-4 w-4" /> Preview Website
           </Link>
+          <Link href="/dashboard/admin/website/seo" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700">
+            SEO &amp; Local Search
+          </Link>
           <button onClick={save} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-gray-950 px-5 py-3 font-semibold text-white disabled:opacity-60">
             <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save CMS'}
           </button>

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
+import { mapApiError } from '@/lib/db/api-errors';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getDashboardTransactions, getSalonDashboardSummary, PAID_BILL_STATUS_SQL } from '@/lib/reports/dashboard-summary';
-import { getSalesSeries } from '@/lib/reports/finance-summary';
+import { getSalesSeries, revenueScope } from '@/lib/reports/finance-summary';
 import { isValidCustomRange, resolveDashboardPeriod } from '@/lib/reports/dashboard-period';
+import { getCurrentBusinessDay, getStoreStatus } from '@/lib/business-day/service';
+import { getFrontDeskNow } from '@/lib/reports/front-desk';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,10 +30,14 @@ export async function GET(request) {
     const period = requestedPeriod === 'custom' && !useCustom ? 'today' : requestedPeriod;
     const startDate = useCustom ? rawStart : null;
     const endDate = useCustom ? rawEnd : null;
-    const range = { startDate, endDate };
+    // Only "today" is scoped to the current Business Day; other periods stay calendar-based.
+    const currentDay = period === 'today' ? await getCurrentBusinessDay(db) : null;
+    const businessDayId = currentDay?.id || null;
+    const range = { startDate, endDate, businessDayId };
 
     const dashboard = await getSalonDashboardSummary(db, period, range);
-    const itemFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    // Same revenue-day rule as every sales figure: a backdated bill counts on the day it was sold.
+    const itemFilter = revenueScope('b', period, range);
 
     const totalServicesRow = await db.get('SELECT COUNT(*)::int as count FROM salon_services WHERE is_active = TRUE');
     const totalStaffRow = await db.get('SELECT COUNT(*)::int as count FROM users WHERE is_active = TRUE');
@@ -44,7 +50,7 @@ export async function GET(request) {
       WHERE i.item_type = 'service' AND ${PAID_BILL_STATUS_SQL} AND ${itemFilter.clause}
     `, itemFilter.params);
 
-    const billFilter = periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR_B);
+    const billFilter = itemFilter;
     const topCustomers = await db.all(`
       SELECT b.customer_name as name, COALESCE(SUM(b.grand_total), 0) as total_spent, COUNT(DISTINCT b.id)::int as visits
       FROM salon_bills b
@@ -65,6 +71,12 @@ export async function GET(request) {
     `, itemFilter.params);
 
     const recentTransactions = await getDashboardTransactions(db, period, { limit: 8, ...range });
+
+    // "Right now" widgets: the live store state and who is waiting in the queue.
+    const store = await getStoreStatus(db);
+    const frontDesk = await getFrontDeskNow(db, businessDayId);
+    // Admin-only: low ratings waiting for a look (management information, not a staff score).
+    const lowRatings = await db.get("SELECT COUNT(*)::int AS n FROM customer_reviews r, crm_settings s WHERE s.id = 1 AND r.status = 'PENDING' AND r.overall_rating <= s.low_rating_threshold").catch(() => ({ n: 0 }));
     const salesSeries = await getSalesSeries(db, period, range);
     const totalCustomers = Number(totalCustomersRow?.count || 0);
     const repeatCustomers = Number(repeatCustomersRow?.count || 0);
@@ -132,13 +144,19 @@ export async function GET(request) {
         expenseBreakdown: dashboard.expenseBreakdown,
         savingsBreakdown: dashboard.savingsBreakdown,
         recentTransactions,
+        staffActivity: dashboard.staffActivity,
+        alerts: dashboard.alerts,
+        store,
+        ...frontDesk,
+        lowRatingReviews: Number(lowRatings?.n || 0),
       },
     });
   } catch (error) {
-    console.error('Admin dashboard error:', error);
+    console.error('Admin dashboard summary failed:', error);
+    const mapped = mapApiError(error, 'Unable to load the dashboard summary.');
     return NextResponse.json(
-      { error: 'Failed to fetch dashboard stats' },
-      { status: error.status || 500 }
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status }
     );
   }
 }

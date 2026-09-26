@@ -1,27 +1,33 @@
 import { CmsImage } from './cms-image';
+import { Breadcrumbs, type Crumb } from './breadcrumbs';
 
 export function PageHero({
   eyebrow,
   title,
   description,
   imageUrl,
+  breadcrumbs,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   imageUrl?: string;
+  /** Trail after Home, ending with the current page. Renders visible crumbs + BreadcrumbList. */
+  breadcrumbs?: Crumb[];
 }) {
   return (
     <section className="relative overflow-hidden border-b border-[#e7ded2]/60 bg-[#fbfaf7]">
       {imageUrl ? (
         <div className="pointer-events-none absolute inset-0">
-          <CmsImage src={imageUrl} alt="" fill priority sizes="100vw" className="object-cover opacity-[0.12]" />
+          {/* Decorative wash at 12% opacity: low quality is invisible here and keeps LCP fast. */}
+          <CmsImage src={imageUrl} alt="" fill priority quality={30} sizes="100vw" className="object-cover opacity-[0.12]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#fbfaf7] via-[#fbfaf7]/95 to-[#fbfaf7]/80" />
         </div>
       ) : null}
       <div className="relative mx-auto max-w-7xl px-6 pb-10 pt-28 md:pb-14 md:pt-32">
+        {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : null}
         {eyebrow ? (
-          <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-[#9b742d] md:text-sm">
+          <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-[#8a6727] md:text-sm">
             {eyebrow}
           </span>
         ) : null}

@@ -31,7 +31,7 @@ export function StaffCarousel({
   const arrowClass =
     tone === 'dark'
       ? 'border border-white/20 bg-[#0d0b0a]/90 text-white backdrop-blur-sm hover:border-[#d7b56d]/60 hover:text-[#d7b56d]'
-      : 'border border-[#e7ded2] bg-white/95 text-[#171411] backdrop-blur-sm hover:border-[#9b742d]/60 hover:text-[#9b742d]';
+      : 'border border-[#e7ded2] bg-white/95 text-[#171411] backdrop-blur-sm hover:border-[#8a6727]/60 hover:text-[#8a6727]';
 
   return (
     <div className="relative">

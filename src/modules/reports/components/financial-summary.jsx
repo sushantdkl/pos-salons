@@ -1,6 +1,6 @@
 'use client';
 
-import { formatCurrency } from '@/lib/currency';
+import { money as formatCurrency } from '@/components/erp/tokens';
 
 /**
  * The one financial summary block used by the Admin dashboard, the Cashier dashboard and
@@ -8,16 +8,26 @@ import { formatCurrency } from '@/lib/currency';
  * same labels. Every value arrives from getFinancialSummary() — nothing is derived here.
  */
 
-function Group({ title, rows, note }) {
+// Same meaning-colours as the ERP kit: sales = emerald, collected = sky, out = rose, balance = indigo.
+const GROUP_TONES = {
+  inflow: { bar: 'bg-emerald-500', title: 'text-emerald-700', total: 'text-emerald-800' },
+  online: { bar: 'bg-sky-500', title: 'text-sky-700', total: 'text-sky-800' },
+  outflow: { bar: 'bg-rose-500', title: 'text-rose-700', total: 'text-rose-800' },
+  ledger: { bar: 'bg-indigo-500', title: 'text-indigo-700', total: 'text-indigo-800' },
+};
+
+function Group({ title, rows, note, tone = 'ledger' }) {
+  const t = GROUP_TONES[tone] || GROUP_TONES.ledger;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+    <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <span className={`absolute inset-x-0 top-0 h-1 ${t.bar}`} aria-hidden="true" />
+      <h3 className={`text-xs font-bold uppercase tracking-wide ${t.title}`}>{title}</h3>
       <dl className="mt-3 divide-y divide-gray-100">
         {rows.map(([label, value, emphasis]) => (
           <div key={label} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
             <dt className={`text-sm ${emphasis ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{label}</dt>
             <dd className={`whitespace-nowrap text-right text-sm tabular-nums ${
-              emphasis ? 'font-bold text-gray-950' : 'font-semibold text-gray-800'
+              emphasis ? `font-bold ${t.total}` : 'font-semibold text-gray-800'
             }`}>
               {formatCurrency(value)}
             </dd>
@@ -59,6 +69,7 @@ export default function FinancialSummary({ financial, showSalary = true, classNa
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Group
           title="Sales"
+          tone="inflow"
           rows={[
             ['Gross Sales Before Discount', financial.grossSalesBeforeDiscount],
             ['Total Discounts', financial.totalDiscounts],
@@ -67,6 +78,7 @@ export default function FinancialSummary({ financial, showSalary = true, classNa
         />
         <Group
           title="Payment"
+          tone="online"
           rows={[
             ['Gross Cash Collected', financial.grossCashCollected],
             ['Gross QR Collected', financial.grossQrCollected],
@@ -75,13 +87,15 @@ export default function FinancialSummary({ financial, showSalary = true, classNa
         />
         <Group
           title="Outflows"
+          tone="outflow"
           rows={outflowRows}
           note="Savings transfers move money between the salon's own accounts. They reduce available balances but are never counted as an operating expense."
         />
         <Group
           title="Available"
+          tone="ledger"
           rows={[
-            ['Net Cash in Hand', financial.netCashInHand],
+            ['Net Cash Collections', financial.netCashInHand],
             ['Net Online Balance', financial.netOnlineBalance],
             ['Net Available Balance', financial.netAvailableBalance, true],
           ]}

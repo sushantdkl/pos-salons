@@ -1,3 +1,4 @@
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
@@ -25,12 +26,12 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SERVICES_MANAGE);
     const data = await request.json();
     const service = await new ServiceManagementService(db).create(data, user.id);
     return NextResponse.json({ message: 'Service created successfully', service }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to create service' }, { status: error.status || 500 });
+    return NextResponse.json({ error: error.message || 'Failed to create service' }, { status: error.status || (/required|valid|must|positive|number/i.test(error.message || '') ? 400 : 500) });
   }
 }
 
@@ -38,12 +39,12 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SERVICES_MANAGE);
     const data = await request.json();
     const service = await new ServiceManagementService(db).update(data, user.id);
     return NextResponse.json({ message: 'Service updated successfully', service });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to update service' }, { status: error.status || 500 });
+    return NextResponse.json({ error: error.message || 'Failed to update service' }, { status: error.status || (/required|valid|must|positive|number/i.test(error.message || '') ? 400 : 500) });
   }
 }
 
@@ -51,12 +52,14 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'cashier']);
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.SERVICES_MANAGE);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
-    await new ServiceManagementService(db).delete(id, user.id);
-    return NextResponse.json({ message: 'Service deleted successfully' });
+    const result = await new ServiceManagementService(db).delete(id, user.id);
+    return NextResponse.json(result.archived
+      ? { archived: true, message: 'This service has past bills or bookings, so it was archived (hidden from billing and booking) instead of deleted.' }
+      : { archived: false, message: 'Service deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to delete service' }, { status: error.status || 500 });
+    return NextResponse.json({ error: error.message || 'Failed to delete service' }, { status: error.status || (/required|valid|must|positive|number/i.test(error.message || '') ? 400 : 500) });
   }
 }

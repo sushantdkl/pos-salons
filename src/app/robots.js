@@ -1,10 +1,18 @@
+import { PRIVATE_PATH_PREFIXES, absoluteUrl } from '@/lib/seo/site';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * Crawl rules for the public website. Private app areas are disallowed here AND sent with
+ * `X-Robots-Tag: noindex` (next.config.mjs); login/authorisation is what actually protects them.
+ */
 export default function robots() {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/services', '/packages', '/staff', '/gallery', '/contact', '/book-appointment', '/login', '/legal/privacy', '/legal/terms'],
-      disallow: ['/admin/', '/dashboard/', '/api/'],
+      allow: '/',
+      disallow: PRIVATE_PATH_PREFIXES.map((prefix) => (prefix === '/api' ? '/api/' : prefix)),
     },
-    sitemap: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://pos-salons.vercel.app'}/sitemap.xml`,
+    sitemap: absoluteUrl('/sitemap.xml'),
   };
 }

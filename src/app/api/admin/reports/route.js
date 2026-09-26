@@ -1,3 +1,4 @@
+import { hasPermission, PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
@@ -7,17 +8,23 @@ import {
   billQrSql,
   getFinancialSummary,
   numeric,
+  PAID_BILL_STATUS_SQL,
   paymentMethodLabel,
   qrTypeLabel,
 } from '@/lib/reports/finance-summary';
 
-const PAID_BILL_STATUS_B = "LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')";
+// Shared sold-bill rule: a voided bill stays a sale on its sale day; the void is deducted on
+// the day it was processed (see finance-summary).
+const PAID_BILL_STATUS_B = PAID_BILL_STATUS_SQL;
 
 export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    // Admin, or a cashier granted “Business overview”. Commission stays admin-only unless the
+    // owner also granted “Show commission, cost & profit in reports”.
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.REPORTS_OVERVIEW);
+    const showCommission = user.role === 'admin' || await hasPermission(db, user, PERMISSIONS.REPORTS_SENSITIVE);
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'today';
     const startDate = searchParams.get('startDate');
@@ -194,17 +201,19 @@ export async function GET(request) {
       ORDER BY COALESCE(total_visits, 0) DESC, COALESCE(total_spent, 0) DESC
       LIMIT 1
     `);
+    const rupees = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const insights = [
       topService ? `${topService.name} generated the highest service revenue for this period.` : null,
-      topStaff ? `${topStaff.name} generated ${numeric(topStaff.revenue)} in service revenue for this period.` : null,
-      mostActiveCustomer ? `${mostActiveCustomer.name} has visited ${mostActiveCustomer.total_visits || 0} times.` : null,
-      commissionSummary > 0 ? `Total staff commission for this period is ${commissionSummary}.` : null,
+      topStaff ? `${topStaff.name} generated ${rupees(topStaff.revenue)} in service revenue for this period.` : null,
+      mostActiveCustomer ? `${mostActiveCustomer.name} is the most regular customer: ${mostActiveCustomer.total_visits || 0} visits, ${rupees(mostActiveCustomer.total_spent)} spent in total.` : null,
+      showCommission && commissionSummary > 0 ? `Total staff commission for this period is ${rupees(commissionSummary)}.` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
       period: financial.period,
       financial,
-      totalSales: numeric(summary.total_sales ?? summary.totalsales ?? summary.totalSales),
+      // Net sales after voids, from the shared financial summary.
+      totalSales: numeric(financial.netSalesAfterDiscount),
       totalBills: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
       totalOrders: Number(summary.total_bills ?? summary.totalbills ?? summary.totalBills ?? 0),
       avgBillValue: numeric(summary.avg_bill_value ?? summary.avgbillvalue ?? summary.avgBillValue),
@@ -253,10 +262,10 @@ export async function GET(request) {
         ...staff,
         services: Number(staff.services || 0),
         revenue: numeric(staff.revenue),
-        commission: numeric(staff.commission),
+        commission: showCommission ? numeric(staff.commission) : undefined,
       })),
       lowStockProducts,
-      commissionSummary: numeric(commissionSummary),
+      commissionSummary: showCommission ? numeric(commissionSummary) : undefined,
       mostActiveCustomer,
       insights,
     });

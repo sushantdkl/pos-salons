@@ -1,0 +1,29 @@
+/**
+ * The ordered list of forward-only migrations (docs/migrations/*.sql) the app expects to be
+ * applied. `npm run db:migrate` applies them; /api/health reports any still pending.
+ * Plain ESM with no path aliases so scripts/ can import it directly.
+ *
+ * Older SQL files in docs/migrations were operational/manual scripts, not a replayable chain;
+ * only files listed here are applied by the runner.
+ */
+export const TRACKED_MIGRATIONS = [
+  '2026-08-11-salary-advances.sql',
+  '2026-09-20-production-foundations.sql',
+  '2026-09-20-payment-allocation-backfill.sql',
+  '2026-09-20-credit-collections.sql',
+  '2026-09-20-payment-corrections.sql',
+  '2026-09-20-permission-matrix.sql',
+  '2026-09-23-void-event-attribution.sql',
+  '2026-09-24-cash-denominations.sql',
+  '2026-09-25-appointments.sql',
+  '2026-09-26-suppliers.sql',
+  '2026-09-27-hrm-attendance.sql',
+  '2026-09-28-loyalty-reviews.sql',
+  '2026-09-29-permission-modules.sql',
+  '2026-09-30-permissions-frontdesk-cash-inventory.sql',
+  '2026-10-01-crm-public-join.sql',
+  '2026-10-02-seo-local-search.sql',
+  '2026-10-03-bill-payment-method-change.sql',
+  '2026-10-04-unisex-salon-copy.sql',
+  '2026-10-05-delegable-permissions.sql',
+];

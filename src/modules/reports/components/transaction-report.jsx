@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Download } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
@@ -45,7 +46,9 @@ export default function TransactionReport({ basePath, backPath, title }) {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    if (queryPeriod !== period) setPeriod(queryPeriod);
+    // Never override a Custom Range the user is still filling in (prevents picker flicker).
+    if (period === 'custom') return;
+    if (queryPeriod !== 'custom' && queryPeriod !== period) setPeriod(queryPeriod);
   }, [queryPeriod, period]);
 
   // A custom period only carries its dates through to the fetch.
@@ -74,6 +77,12 @@ export default function TransactionReport({ basePath, backPath, title }) {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Bill cancelled / payment method changed from the bill drawer: reload the list and totals.
+  useEffect(() => {
+    window.addEventListener('salon:bill-changed', load);
+    return () => window.removeEventListener('salon:bill-changed', load);
   }, [load]);
 
   const changePeriod = (next) => {
@@ -224,9 +233,9 @@ export default function TransactionReport({ basePath, backPath, title }) {
                   </tr>
                 ) : pageTransactions.length ? (
                   pageTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="align-top hover:bg-gray-50">
+                    <tr key={transaction.id} className="cursor-pointer align-top hover:bg-gray-50" onClick={() => setSelected(transaction)} title="Open bill details">
                       <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">{formatDateTime(transaction.transactionDate)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900">{transaction.billNumber}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900"><BillLink billId={transaction.id} number={transaction.billNumber} /></td>
                       <td className="px-3 py-3 text-sm">
                         <div className="font-medium text-gray-900">{transaction.customerName}</div>
                         {transaction.customerPhone ? <div className="text-xs text-gray-500">{transaction.customerPhone}</div> : null}
@@ -328,7 +337,7 @@ export default function TransactionReport({ basePath, backPath, title }) {
         </div>
       </div>
 
-      <TransactionDetail transaction={selected} onClose={() => setSelected(null)} />
+      {selected?.id ? <BillDetailDrawer billId={selected.id} onClose={() => setSelected(null)} /> : <TransactionDetail transaction={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

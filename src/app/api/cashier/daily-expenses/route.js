@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { logAction } from '@/lib/db/helpers';
-import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
+import { mapApiError } from '@/lib/db/api-errors';
+import { cleanText, ensureSalonSchema } from '@/lib/salon-schema';
+import { assertDrawerCashAvailable, requireOpenSession } from '@/lib/business-day/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -111,7 +114,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['cashier', 'admin']);
+    const user = await requireRoleWithPermission(request, db, ['cashier', 'admin'], PERMISSIONS.EXPENSES_DAILY);
     const { searchParams } = new URL(request.url);
     const userId = user.role === 'admin' && searchParams.get('createdBy')
       ? Number(searchParams.get('createdBy'))
@@ -123,7 +126,12 @@ export async function GET(request) {
       expenses: await getCashierExpenses(db, userId, searchParams),
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to load daily expenses' }, { status: error.status || 500 });
+    console.error('Cashier daily expenses load failed:', error);
+    const mapped = mapApiError(error, 'Failed to load daily expenses');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status }
+    );
   }
 }
 
@@ -131,7 +139,8 @@ export async function POST(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['cashier', 'admin']);
+    const user = await requireRoleWithPermission(request, db, ['cashier', 'admin'], PERMISSIONS.EXPENSES_DAILY);
+    const { sessionId, businessDayId } = await requireOpenSession(db);
     const data = await request.json();
     const title = cleanText(data.title, '');
     const category = cleanText(data.category, '');
@@ -157,12 +166,19 @@ export async function POST(request) {
     const cashAmount = dbPayment === 'cash' ? amount : 0;
     const onlineAmount = dbPayment === 'cash' ? 0 : amount;
 
+    // Cash cannot leave a drawer that does not hold it. An admin may record a payment funded
+    // from outside the drawer by confirming the overdraw; a cashier cannot.
+    await assertDrawerCashAvailable(db, cashAmount, {
+      allowOverdraw: data.allowOverdraw === true && user.role === 'admin',
+      label: 'expense',
+    });
+
     const result = await db.run(`
       INSERT INTO expenses (
         title, category, amount, payment_method, cash_amount, online_amount,
         paid_by, paid_to, expense_date, notes, reference_number, attachment_url,
-        record_type, created_by, updated_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?, ?)
+        record_type, created_by, updated_by, business_day_id, store_session_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       title,
       category,
@@ -179,11 +195,18 @@ export async function POST(request) {
       recordType,
       user.id,
       user.id,
+      businessDayId,
+      sessionId,
     ]);
 
     await logAction(db, user.id, 'create', 'daily_expense', result.lastInsertRowid, title);
     return NextResponse.json({ message: 'Daily expense recorded', id: result.lastInsertRowid }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Failed to save daily expense' }, { status: error.status || 400 });
+    console.error('Cashier daily expense save failed:', error);
+    const mapped = mapApiError(error, 'Failed to save daily expense');
+    return NextResponse.json(
+      { success: false, code: mapped.code, error: mapped.message },
+      { status: mapped.status === 500 ? 400 : mapped.status }
+    );
   }
 }
