@@ -22,9 +22,20 @@ export function dashboardPathForRole(role) {
   return `/dashboard/${normalized}`;
 }
 
+/**
+ * Admin pages a cashier may open when the owner grants the matching Staff Permission. This is the
+ * ROLE gate only; the sidebar hides links that are not granted, the layout shows "not allowed" for
+ * a typed URL, and every API behind these pages checks the permission itself.
+ */
+const CASHIER_DELEGABLE = [
+  '/dashboard/admin/business-days', '/dashboard/admin/staff-performance', '/dashboard/admin/website',
+  '/admin/analytics', '/admin/reports', '/admin/appointments/settings', '/admin/crm', '/admin/printer',
+];
+
 export function canAccessPath(role, pathname) {
   const normalized = normalizeRole(role);
 
+  if (normalized === 'cashier' && CASHIER_DELEGABLE.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
   if (pathname.startsWith('/dashboard/admin')) return normalized === 'admin';
   if (pathname.startsWith('/dashboard/cashier/tokens')) return normalized === 'cashier';
   if (pathname.startsWith('/dashboard/cashier')) return normalized === 'cashier';

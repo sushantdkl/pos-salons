@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
-import { flattenNavigation, NAV_TINTS, navigationForRole, resolveActiveHref, tileFor } from '@/constants/navigation';
+import { flattenNavigation, NAV_TINTS, navigationForRole, permissionForPath, resolveActiveHref, tileFor } from '@/constants/navigation';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useCalendarSystem } from '@/lib/dates/display';
 
@@ -163,12 +163,14 @@ export default function AdminLayout({ children }) {
     if (!currentRole || currentRole === 'admin') return undefined;
     let alive = true;
     const token = localStorage.getItem('pos_token');
-    fetch('/api/hrm/me', { headers: { Authorization: `Bearer ${token}` } })
+    // Re-read on every page change so a permission the owner just granted or removed shows up
+    // without logging out.
+    fetch('/api/hrm/me?only=permissions', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => { if (alive && data?.permissions) setGrants(data.permissions); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [currentRole]);
+  }, [currentRole, pathname]);
 
   const toggleGroup = (id) => {
     setOpenGroups((current) => {
@@ -228,6 +230,9 @@ export default function AdminLayout({ children }) {
   };
 
   const navEntries = navigationForRole(currentRole, grants);
+  // A typed URL for a page whose Staff Permission is off: say so instead of a page full of 403s.
+  const pagePermission = currentRole !== 'admin' ? permissionForPath(currentRole, pathname || '') : null;
+  const blockedPermission = pagePermission && grants && !grants[pagePermission] ? pagePermission : null;
   const activeHref = resolveActiveHref(navEntries, pathname);
 
   if (loading) {
@@ -428,7 +433,13 @@ export default function AdminLayout({ children }) {
           </div>
         </div>
         <div className="min-w-0 pb-[env(safe-area-inset-bottom)]">
-          <Fragment key={calendarSystem}>{children}</Fragment>
+          {blockedPermission ? (
+            <div className="mx-auto max-w-lg px-4 py-16 text-center">
+              <p className="text-lg font-bold text-stone-900">This page is not turned on for you</p>
+              <p className="mt-2 text-sm text-stone-600">The owner can allow it in <b>Staff Permissions</b>. Ask an admin if you need it.</p>
+              <Link href={dashboardPathForRole(currentRole)} className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-stone-900 px-4 text-sm font-semibold text-white">Back to dashboard</Link>
+            </div>
+          ) : <Fragment key={calendarSystem}>{children}</Fragment>}
         </div>
       </div>
 

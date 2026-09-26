@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
+import { hasPermission, PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
+import { redactReport, SENSITIVE_REPORT_FIELDS } from '@/lib/reports/redact';
 import { isCanonicalAdDate, nepalDateString } from '@/lib/dates/calendar';
 import { PAID_BILL_STATUS_SQL, SALARY_EXPENSE_CATEGORIES } from '@/lib/reports/finance-summary';
 
@@ -17,7 +18,10 @@ export async function GET(request) {
     const user = await requirePermission(request, db, PERMISSIONS.REPORTS_VIEW);
     const params = new URL(request.url).searchParams;
     const report = REPORTS.has(params.get('report')) ? params.get('report') : 'overview';
-    if (report === 'advances' && user.role !== 'admin') return NextResponse.json({ error: 'Payroll reports are Admin only' }, { status: 403 });
+    if (report === 'advances' && user.role !== 'admin' && !(await hasPermission(db, user, PERMISSIONS.REPORTS_ADVANCES))) {
+      return NextResponse.json({ error: 'The Advances Report needs the “Advances report” permission' }, { status: 403 });
+    }
+    const showSensitive = user.role === 'admin' || await hasPermission(db, user, PERMISSIONS.REPORTS_SENSITIVE);
     const start = params.get('start') || nepalDateString();
     const end = params.get('end') || start;
     if (!isCanonicalAdDate(start) || !isCanonicalAdDate(end) || start > end) return NextResponse.json({ error: 'Invalid report date range' }, { status: 400 });
@@ -64,6 +68,7 @@ export async function GET(request) {
       rows=await db.all(`SELECT a.id,u.full_name employee,a.amount,a.applied_amount,(a.amount-a.applied_amount) outstanding,a.payment_method,a.payment_date,a.status FROM salary_advances a JOIN users u ON u.id=a.staff_id WHERE a.deleted_at IS NULL AND a.status<>'CANCELLED' AND a.payment_date BETWEEN ?::date AND ?::date ORDER BY a.payment_date DESC,a.id DESC LIMIT ? OFFSET ?`,[start,end,pageSize,offset]);
       const sum=await db.get(`SELECT COALESCE(SUM(amount),0) issued,COALESCE(SUM(amount-applied_amount),0) outstanding FROM salary_advances WHERE deleted_at IS NULL AND status<>'CANCELLED' AND payment_date BETWEEN ?::date AND ?::date`,[start,end]); metrics={ issued:money(sum.issued),outstanding:money(sum.outstanding) };
     }
-    return NextResponse.json({ report, definition: { start, end, dateBasis: report === 'expenses' ? 'expense date' : report === 'advances' ? 'advance date' : 'transaction time / Nepal business date', statuses: report.includes('sale') || ['overview','services','products','payments'].includes(report) ? ['paid'] : ['active'], currency: 'NPR', taxTreatment: 'Gross billed and tax are separate metrics; revenue includes tax as recorded', rounding: 'two decimal places' }, metrics, rows, pagination: { page,pageSize,total,pages:Math.ceil(total/pageSize) } });
+    const payload = { report, definition: { start, end, dateBasis: report === 'expenses' ? 'expense date' : report === 'advances' ? 'advance date' : 'transaction time / Nepal business date', statuses: report.includes('sale') || ['overview','services','products','payments'].includes(report) ? ['paid'] : ['active'], currency: 'NPR', taxTreatment: 'Gross billed and tax are separate metrics; revenue includes tax as recorded', rounding: 'two decimal places' }, metrics, rows, pagination: { page,pageSize,total,pages:Math.ceil(total/pageSize) } };
+    return NextResponse.json(showSensitive ? payload : { ...redactReport(payload), hiddenFields: SENSITIVE_REPORT_FIELDS });
   } catch (error) { return NextResponse.json({ error:error.message || 'Unable to generate report' },{ status:error.status || 500 }); }
 }

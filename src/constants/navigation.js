@@ -52,7 +52,7 @@ export const ICON_TILES = {
 };
 const TOP_COLOURS = {
   Dashboard: 'sky', POS: 'emerald', Analytics: 'indigo', Summary: 'amber', Customers: 'rose', 'Customer Ledger': 'fuchsia',
-  'Supplier Ledger': 'orange', 'Staff Permissions': 'cyan', 'Website CMS': 'blue', Printer: 'teal', Settings: 'slate',
+  'Supplier Ledger': 'orange', 'Staff Permissions': 'cyan', 'Website CMS': 'blue', 'Printer & Documents': 'teal', Settings: 'slate',
   Queue: 'teal', 'My Appointments': 'rose', 'My Attendance': 'violet',
 };
 export function tileFor(item) {
@@ -126,30 +126,49 @@ const ADMIN_NAV = [
   link('Settings', '/admin/settings', Settings),
 ];
 
-// Cashier: the operational items it had before, grouped, plus front-desk Appointments.
+// Cashier: the same layout as the admin sidebar. Every link carries the Staff Permissions key
+// that governs it and appears only when the owner grants it (the page's APIs enforce the same
+// key). Admin-only by design: Employees, HR Rules, Staff Permissions, Settings, the admin
+// expense & payroll book and the admin dashboard.
 const CASHIER_NAV = [
   link('Dashboard', '/dashboard/cashier', LayoutDashboard, { exact: true }),
-  link('POS', '/admin/billing', Store),
+  link('POS', '/admin/billing', Store, { permission: 'billing.create' }),
+  link('Analytics', '/admin/analytics', ChartColumnBig, { permission: 'reports.analytics' }),
   link('Summary', '/cashier/executive-summary', ScrollText),
   link('Customers', '/admin/customers', Contact, { permission: 'customers.manage' }),
   link('Customer Ledger', '/admin/customer-ledger', BookUser),
-  // Reports appear only when the owner grants them in Staff Permissions.
+  link('Supplier Ledger', '/admin/supplier-ledger', BookOpen, { permission: 'suppliers.manage' }),
   group('reports', 'Reports', 'reports', ChartPie, [
+    link('Business Overview', '/admin/reports', ChartPie, { exact: true, permission: 'reports.overview' }),
+    link('Sales & Invoices', '/admin/reports/center/sales', ReceiptText, { permission: 'reports.view' }),
+    link('Services Report', '/admin/reports/center/services', Scissors, { permission: 'reports.view' }),
+    link('Products & Retail', '/admin/reports/center/products', PackageSearch, { permission: 'reports.view' }),
+    link('Payment Reconciliation', '/admin/reports/center/payments', WalletCards, { permission: 'reports.view' }),
+    link('Customer Credit', '/admin/reports/center/credit', HandCoins, { permission: 'reports.view' }),
+    link('Expenses Report', '/admin/reports/center/expenses', BadgeDollarSign, { permission: 'reports.view' }),
+    link('Transactions', '/dashboard/cashier/transactions', ListOrdered, { permission: 'reports.view' }),
+    link('Business Day History', '/dashboard/admin/business-days', CalendarDays, { permission: 'reports.business_days' }),
+    link('Staff Performance', '/dashboard/admin/staff-performance', TrendingUp, { permission: 'reports.staff' }),
     link('Attendance Reports', '/admin/hrm/reports', ClipboardList, { permission: 'attendance.view' }),
+    link('Advances Report', '/admin/reports/center/advances', Scale, { permission: 'reports.advances' }),
+    link('Compare Periods', '/admin/reports/compare', GitCompareArrows, { permission: 'reports.view' }),
   ]),
   group('operations', 'Salon Operations', 'operations', Scissors, [
     link('Tokens / Queue', '/dashboard/cashier/tokens', ListTodo, { permission: 'tokens.manage' }),
-    link('Services', '/admin/products', Sparkles),
-    link('Reminders', '/admin/reminders', MessageCircle),
+    link('Services', '/admin/products', Sparkles, { permission: 'services.manage' }),
+    link('Reminders', '/admin/reminders', MessageCircle, { permission: 'reminders.send' }),
   ]),
   group('crm', 'CRM & Growth', 'crm', HeartHandshake, [
     link('Appointments', '/admin/appointments', CalendarClock, { permission: 'appointments.manage' }),
+    link('Hours & Booking', '/admin/appointments/settings', CalendarCog, { permission: 'appointments.settings' }),
+    link('Loyalty', '/admin/crm/loyalty', Award, { permission: 'loyalty.view' }),
+    link('Customer Reviews', '/admin/crm/reviews', MessageSquareHeart, { permission: 'reviews.view' }),
+    link('Feedback Forms', '/admin/crm/reviews/forms', ClipboardPen, { permission: 'reviews.manage' }),
   ]),
   group('inventory', 'Inventory', 'inventory', Warehouse, [
     link('Products & Stock', '/admin/stock', Warehouse, { permission: 'stock.manage' }),
     link('Purchases', '/admin/purchases', PackagePlus, { permission: 'suppliers.manage' }),
     link('Suppliers', '/admin/suppliers', Truck, { permission: 'suppliers.manage' }),
-    link('Supplier Ledger', '/admin/supplier-ledger', BookOpen, { permission: 'suppliers.manage' }),
   ]),
   group('finance', 'Finance', 'finance', Wallet, [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
@@ -159,13 +178,15 @@ const CASHIER_NAV = [
   ]),
   group('hrm', 'HRM', 'hrm', Users, [
     link('My Attendance', '/attendance/my', UserCheck),
-    // Shown only when the owner grants the permission in Staff Permissions.
     link('Attendance', '/admin/hrm/attendance', ClipboardCheck, { permission: 'attendance.view' }),
     link('Shifts & Roster', '/admin/hrm/shifts', Clock, { permission: 'shift.manage' }),
     link('Leave Management', '/admin/hrm/leave', CalendarOff, { permission: 'leave.view' }),
     link('Overtime', '/admin/hrm/overtime', Timer, { permission: 'overtime.view' }),
     link('Salary Advance', '/cashier/advances', Coins, { permission: 'payroll.advances.create' }),
   ]),
+  link('Website CMS', '/dashboard/admin/website', Globe, { exact: true, permission: 'website.manage', separatorBefore: true }),
+  link('SEO & Local Search', '/dashboard/admin/website/seo', SearchCheck, { color: 'blue', permission: 'website.manage' }),
+  link('Printer & Documents', '/admin/printer', Printer, { permission: 'documents.manage' }),
 ];
 
 const serviceStaffNav = (role) => [
@@ -212,4 +233,17 @@ export function resolveActiveHref(entries, pathname) {
   ));
   if (!matches.length) return null;
   return matches.sort((a, b) => b.href.length - a.href.length)[0].href;
+}
+
+/**
+ * The Staff Permissions key that governs a page for a role: the most specific link of the role's
+ * FULL navigation (before permission filtering) that matches the path. null = no permission needed.
+ */
+export function permissionForPath(role, pathname) {
+  let best = null;
+  for (const item of flattenNavigation(NAVIGATION[role] || [])) {
+    const matches = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (matches && (!best || item.href.length > best.href.length)) best = item;
+  }
+  return best?.permission || null;
 }

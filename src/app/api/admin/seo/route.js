@@ -1,3 +1,4 @@
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
@@ -26,7 +27,7 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.WEBSITE_MANAGE);
     return NextResponse.json(await loadSeoAdmin(), { headers: NO_STORE });
   } catch (error) {
     return fail(error, 'Could not load SEO settings.');
@@ -43,7 +44,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.WEBSITE_MANAGE);
     await assertSeoSchema(db);
     const { action, data = {} } = await request.json().catch(() => ({}));
 

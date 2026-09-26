@@ -1,3 +1,4 @@
+import { hasPermission, PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { BILL_DATE_EXPR_B, periodDateFilter } from '@/lib/db/postgres-dates';
@@ -20,7 +21,10 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
+    // Admin, or a cashier granted “Business overview”. Commission stays admin-only unless the
+    // owner also granted “Show commission, cost & profit in reports”.
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.REPORTS_OVERVIEW);
+    const showCommission = user.role === 'admin' || await hasPermission(db, user, PERMISSIONS.REPORTS_SENSITIVE);
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'today';
     const startDate = searchParams.get('startDate');
@@ -202,7 +206,7 @@ export async function GET(request) {
       topService ? `${topService.name} generated the highest service revenue for this period.` : null,
       topStaff ? `${topStaff.name} generated ${rupees(topStaff.revenue)} in service revenue for this period.` : null,
       mostActiveCustomer ? `${mostActiveCustomer.name} is the most regular customer: ${mostActiveCustomer.total_visits || 0} visits, ${rupees(mostActiveCustomer.total_spent)} spent in total.` : null,
-      commissionSummary > 0 ? `Total staff commission for this period is ${rupees(commissionSummary)}.` : null,
+      showCommission && commissionSummary > 0 ? `Total staff commission for this period is ${rupees(commissionSummary)}.` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
@@ -258,10 +262,10 @@ export async function GET(request) {
         ...staff,
         services: Number(staff.services || 0),
         revenue: numeric(staff.revenue),
-        commission: numeric(staff.commission),
+        commission: showCommission ? numeric(staff.commission) : undefined,
       })),
       lowStockProducts,
-      commissionSummary: numeric(commissionSummary),
+      commissionSummary: showCommission ? numeric(commissionSummary) : undefined,
       mostActiveCustomer,
       insights,
     });

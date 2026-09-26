@@ -1,3 +1,4 @@
+import { assertPermission, PERMISSIONS } from '@/lib/auth/permissions';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
@@ -160,7 +161,7 @@ export async function GET(request) {
     // Printed documents (credit statements, Review QR sheets) for Admin and Cashier: layout and
     // wording plus the salon letterhead — no payment or bank details.
     if (mode === 'documents') {
-      const documentKeys = Object.keys(DOCUMENT_DEFAULTS).filter((key) => key.startsWith('statement_') || key.startsWith('qr_'));
+      const documentKeys = Object.keys(DOCUMENT_DEFAULTS).filter((key) => /^(receipt|statement|qr)_/.test(key));
       const normalized = await withQrFallback(db, settings, normalizeDocumentSettings({ ...DOCUMENT_DEFAULTS, ...settings }));
       return NextResponse.json({
         settings: {
@@ -183,7 +184,14 @@ export async function PUT(request) {
   try {
     const data = await request.json();
     const db = Database.getInstance();
-    await requireRole(request, db, 'admin');
+    // Admin changes any setting. A cashier granted “Printer & documents” may change only the
+    // printed-document layout (receipt_*, statement_*, qr_*) — never tax, bank or salon details.
+    const user = await requireRole(request, db, ['admin', 'cashier']);
+    if (user.role !== 'admin') {
+      await assertPermission(db, user, PERMISSIONS.DOCUMENTS_MANAGE);
+      const outside = Object.keys(data).find((key) => !/^(receipt|statement|qr)_/.test(key));
+      if (outside) return NextResponse.json({ error: `Only printer and document settings can be changed here (${outside} is admin only)` }, { status: 403 });
+    }
     if (String(data.salon_phone || '').trim() && !phoneOrNull(data.salon_phone)) {
       return NextResponse.json({ error: PHONE_ERROR_MESSAGE, message: PHONE_ERROR_MESSAGE, field: 'salon_phone' }, { status: 400 });
     }

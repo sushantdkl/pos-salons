@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
+import { hasPermission, PERMISSIONS } from '@/lib/auth/permissions';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { getAdminStaffAnalytics, getStaffPerformance } from '@/modules/staff/services/performance';
 
@@ -7,13 +8,19 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, ['admin', 'barber', 'stylist', 'beautician']);
+    const user = await requireRole(request, db, ['admin', 'cashier', 'barber', 'stylist', 'beautician']);
     const { searchParams } = new URL(request.url);
     const staffId = Number(searchParams.get('staffId') || user.id);
 
-    if (user.role === 'admin' && searchParams.get('scope') === 'admin') {
-      return NextResponse.json(await getAdminStaffAnalytics(db));
+    // The team view: admin, or a cashier granted “Staff performance” in Staff Permissions.
+    if (searchParams.get('scope') === 'admin') {
+      if (user.role === 'admin' || (user.role === 'cashier' && await hasPermission(db, user, PERMISSIONS.REPORTS_STAFF))) {
+        return NextResponse.json(await getAdminStaffAnalytics(db));
+      }
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
+    // A cashier has no personal service figures; only the team view above.
+    if (user.role === 'cashier') return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
     // user.id arrives from Postgres as a string; compare numerically so a staff member
     // can always open their own report.

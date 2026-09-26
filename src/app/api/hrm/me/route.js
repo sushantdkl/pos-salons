@@ -11,6 +11,8 @@ export async function GET(request) {
   try {
     const { db, user, isEmployee } = await hrmContext(request);
     const permissions = await myPermissions(db, user);
+    // The sidebar polls this on every navigation, so it can ask for the grants alone.
+    if (new URL(request.url).searchParams.get('only') === 'permissions') return NextResponse.json({ permissions });
     if (!isEmployee) return NextResponse.json({ permissions, employee: null });
     const params = new URL(request.url).searchParams;
     const range = params.get('period') || params.get('from') ? rangeFrom(params) : { from: addDays(nepalDateOf(), -29), to: nepalDateOf() };

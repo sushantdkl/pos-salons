@@ -130,6 +130,13 @@ export default function PermissionsPage() {
             </div>
           </section>
 
+          {selectedRole === 'cashier' ? (
+            <p className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+              Every item below is one page or action in the sidebar. When you allow it, it appears in the cashier&apos;s sidebar on their next page change.
+              <span className="mt-1 block text-xs text-gray-500">Admin only, by design: Employees (logins, PINs, salaries), HR Rules, Staff Permissions, Settings (tax, bank &amp; payment QR), the admin Expenses &amp; Payroll book and the admin Dashboard.</span>
+            </p>
+          ) : null}
+
           <div className="flex flex-col gap-3 lg:flex-row">
             <label className="relative flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><span className="sr-only">Search permissions</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${role?.label?.toLowerCase()} permissions…`} className="min-h-12 w-full rounded-xl border border-gray-300 bg-white pl-11 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
             <div className="grid grid-cols-3 gap-2">

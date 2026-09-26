@@ -12,8 +12,10 @@ import { chromium } from '@playwright/test';
 
 const BASE = process.env.QA_BASE_URL || 'http://localhost:3013';
 const PASSWORD = process.env.QA_PASSWORD || 'QaPass!2026';
+// 'cashier-all' is the cashier again with every delegable Staff Permission switched on, so every
+// admin page the owner can hand over is crawled as a cashier too (restored afterwards).
 const ROLES = [
-  ['qa_admin', 'admin'], ['qa_cashier', 'cashier'], ['qa_barber', 'barber'],
+  ['qa_admin', 'admin'], ['qa_cashier', 'cashier'], ['qa_cashier', 'cashier-all'], ['qa_barber', 'barber'],
   ['demo_anita', 'stylist'], ['demo_puja', 'beautician'],
 ];
 const BAD_TEXT = [/Something went wrong/i, /Unable to load/i, /Failed to load/i, /\bNaN\b/, /Rs undefined/, /\bundefined\b/, /Invalid Date/, /This page could not be found/i, /Application error/i];
@@ -101,10 +103,23 @@ async function auditPage(page, role, path, { fromNav }) {
   }
 }
 
+const { PERMISSION_GROUPS } = await import('../../src/lib/auth/permission-catalog.js');
+const adminToken = (await login('qa_admin')).token;
+const patchCashier = (changes) => fetch(`${BASE}/api/admin/permissions`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ role: 'cashier', changes }) });
+let savedCashier = null;
+
 const browser = await chromium.launch();
-for (const [username, role] of ROLES) {
+for (const [username, roleLabel] of ROLES) {
+  const role = roleLabel === 'cashier-all' ? 'cashier' : roleLabel;
+  if (roleLabel === 'cashier-all') {
+    const rows = (await (await fetch(`${BASE}/api/admin/permissions`, { headers: { Authorization: `Bearer ${adminToken}` } })).json()).permissions.filter((row) => row.role === 'cashier');
+    savedCashier = rows;
+    const groups = PERMISSION_GROUPS.filter((group) => group.key !== 'payroll');
+    await patchCashier(groups.map((group) => ({ permission: `module.${group.key}`, allowed: true })));
+    await patchCashier(groups.flatMap((group) => group.permissions.map((permission) => ({ permission: permission.key, allowed: true }))));
+  }
   let session;
-  try { session = await login(username); } catch (error) { fail(role, '-', error.message); continue; }
+  try { session = await login(username); } catch (error) { fail(roleLabel, '-', error.message); continue; }
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('pos_token', token);
@@ -120,10 +135,17 @@ for (const [username, role] of ROLES) {
   const navLinks = [...new Set(await page.locator('nav[aria-label="Main navigation"] a[href]').evaluateAll((links) => links.map((a) => new URL(a.href).pathname)))];
   if (!navLinks.length) fail(role, home, 'sidebar has no links');
   const extra = await extraRoutes(role, session.token);
-  console.log(`${role}: ${navLinks.length} sidebar links + ${extra.length} extra routes`);
-  for (const path of navLinks) await auditPage(page, role, path, { fromNav: true });
-  for (const path of extra) await auditPage(page, role, path, { fromNav: false });
+  console.log(`${roleLabel}: ${navLinks.length} sidebar links + ${extra.length} extra routes`);
+  for (const path of navLinks) await auditPage(page, roleLabel, path, { fromNav: true });
+  for (const path of extra) await auditPage(page, roleLabel, path, { fromNav: false });
   await context.close();
+  if (roleLabel === 'cashier-all' && savedCashier) {
+    // Restore: modules on first, then each permission, then modules that were off.
+    const on = savedCashier.filter((row) => row.permission_key.startsWith('module.') && row.allowed).map((row) => ({ permission: row.permission_key, allowed: true }));
+    const leaves = savedCashier.filter((row) => !row.permission_key.startsWith('module.')).map((row) => ({ permission: row.permission_key, allowed: row.allowed === true }));
+    const off = savedCashier.filter((row) => row.permission_key.startsWith('module.') && !row.allowed).map((row) => ({ permission: row.permission_key, allowed: false }));
+    for (const changes of [on, leaves, off]) if (changes.length) await patchCashier(changes);
+  }
 }
 await browser.close();
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
+import { PERMISSIONS, requireRoleWithPermission } from '@/lib/auth/permissions';
 import { ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import {
   addTimeOff, getStaffSchedule, removeTimeOff, saveSchedulingSettings, saveStaffWeek,
@@ -10,7 +11,7 @@ import { appointmentError, MANAGER_ROLES } from '../_shared';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Staff working hours, time off and booking settings. Reading: front desk. Changing: admin. */
+/** Staff working hours, time off and booking settings. Reading: front desk. Changing: admin, or a cashier granted “Change hours & online booking”. */
 export async function GET(request) {
   try {
     const db = Database.getInstance();
@@ -31,7 +32,7 @@ export async function PUT(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.APPOINTMENTS_SETTINGS);
     const data = await request.json();
     if (data.type === 'week') {
       await saveStaffWeek(db, user, Number(data.staffId), data.week);
@@ -55,7 +56,7 @@ export async function DELETE(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    const user = await requireRole(request, db, 'admin');
+    const user = await requireRoleWithPermission(request, db, ['admin', 'cashier'], PERMISSIONS.APPOINTMENTS_SETTINGS);
     const id = Number(new URL(request.url).searchParams.get('timeOffId') || 0);
     if (!id) return NextResponse.json({ error: 'Time off entry is required' }, { status: 400 });
     await removeTimeOff(db, id);

@@ -56,6 +56,9 @@ export default function AnalyticsPage() {
   const [tab, setTab] = useState('overview');
   // Settings → Calendar, shared by every screen (see lib/dates/display).
   const calendarSystem = useCalendarSystem();
+  // A cashier granted analytics opens its own token screen, not the admin one.
+  const [isCashier, setIsCashier] = useState(false);
+  useEffect(() => { try { setIsCashier(JSON.parse(localStorage.getItem('pos_user') || '{}').role === 'cashier'); } catch { /* storage unavailable */ } }, []);
   const url = period.ready ? `/api/admin/analytics?${period.query}` : null;
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const a = data?.analytics;
@@ -102,7 +105,7 @@ export default function AnalyticsPage() {
         <div className="print-hide flex flex-wrap items-center gap-2 xl:max-w-[640px] xl:justify-end">
           <Link href="/admin/billing" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#1C1917] px-3.5 text-sm font-semibold text-white hover:bg-stone-800"><Plus className="h-4 w-4" />New Bill</Link>
           <Link href="/admin/appointments" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><CalendarClock className="h-4 w-4" />Appointments</Link>
-          <Link href="/dashboard/admin/tokens" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Ticket className="h-4 w-4" />Queue</Link>
+          <Link href={isCashier ? '/dashboard/cashier/tokens' : '/dashboard/admin/tokens'} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Ticket className="h-4 w-4" />Queue</Link>
           <ExportButtons filename={`Salon analytics ${a?.period?.startDate || ''} to ${a?.period?.endDate || ''}`} title="Salon Analytics" subtitle={periodText} getSheets={async () => analyticsSheets(a, prev)} disabled={!a} />
           <PrintButton />
           <button type="button" onClick={reload} disabled={loading} aria-label="Refresh" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-50">

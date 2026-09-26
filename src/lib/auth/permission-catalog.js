@@ -17,11 +17,14 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
-    key: 'frontdesk', label: 'Front desk & customers', description: 'Queue tokens, appointments and the customer list.',
+    key: 'frontdesk', label: 'Front desk & customers', description: 'Queue tokens, appointments, customers, services and reminders.',
     permissions: [
-      { key: 'tokens.manage', label: 'Manage queue tokens', description: 'Issue, cancel and mark tokens no-show.' },
+      { key: 'tokens.manage', label: 'Manage queue tokens', description: 'Issue, cancel and mark tokens no-show; token report.' },
       { key: 'appointments.manage', label: 'Manage appointments', description: 'Book, confirm, check in, reschedule and cancel appointments; manage the waitlist.' },
+      { key: 'appointments.settings', label: 'Change hours & online booking', description: 'Staff working hours, days off, time off and online booking settings (Hours & Booking).' },
       { key: 'customers.manage', label: 'Add and edit customers', description: 'Create, edit and delete customer records. (Picking a customer while billing needs only “Create bills”.)' },
+      { key: 'services.manage', label: 'Edit services & prices', description: 'Add, edit, archive services and change their prices (Services). Billing always uses the current price list.' },
+      { key: 'reminders.send', label: 'Send customer reminders', description: 'Open Reminders and message customers about visits and dues.' },
     ],
   },
   {
@@ -39,9 +42,14 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
-    key: 'reports', label: 'Reports', description: 'Salon reporting center and comparison tools.',
+    key: 'reports', label: 'Reports', description: 'Reports, analytics and business history. Each item below is one entry in the Reports menu.',
     permissions: [
-      { key: 'reports.view', label: 'View operational reports', description: 'Open permitted sales, service, product, payment, credit, and expense reports.' },
+      { key: 'reports.view', label: 'Sales, service & money reports', description: 'Sales & Invoices, Services, Products, Payment Reconciliation, Customer Credit, Expenses, Transactions and Compare Periods.' },
+      { key: 'reports.overview', label: 'Business overview', description: 'The Business Overview report: sales, payments and expenses at a glance.' },
+      { key: 'reports.business_days', label: 'Business day history', description: 'Every business day and session: floats, expected and counted cash, differences.' },
+      { key: 'reports.staff', label: 'Staff performance — Admin-sensitive', description: 'Revenue, services and commission per team member.' },
+      { key: 'reports.analytics', label: 'Salon analytics — Admin-sensitive', description: 'The full Analytics dashboard, including payroll, commission and profit figures.' },
+      { key: 'reports.sensitive', label: 'Show commission, cost & profit in reports — Admin-sensitive', description: 'Without this, reports hide commission, product cost and profit columns.' },
     ],
   },
   {
@@ -49,6 +57,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: 'payroll.view', label: 'View advance workspace', description: 'See employee identity and advance information required for an advance.' },
       { key: 'payroll.advances.create', label: 'Issue salary advances', description: 'Issue an advance within the configured cumulative payroll-period ceiling.' },
+      { key: 'reports.advances', label: 'Advances report — Admin-sensitive', description: 'The Advances Report: every advance given, applied and still outstanding per employee.' },
     ],
   },
   {
@@ -79,6 +88,13 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'website', label: 'Website & printed documents', description: 'The public website and what the salon prints.',
+    permissions: [
+      { key: 'website.manage', label: 'Edit website & SEO', description: 'Website CMS (pages, gallery, offers) and SEO & Local Search.' },
+      { key: 'documents.manage', label: 'Printer & documents', description: 'Receipt, credit statement and Review QR sheet layout and wording.' },
+    ],
+  },
+  {
     key: 'payroll', label: 'Full payroll — Admin-sensitive', description: 'Final salary payments and historical payroll corrections.',
     permissions: [
       { key: 'payroll.payments.create', label: 'Create full salary payments', description: 'Finalize a full payroll settlement. Blocked for Cashier by policy.' },
@@ -101,7 +117,7 @@ export const ALL_PERMISSION_KEYS = [...MODULE_KEYS, ...PERMISSION_KEYS];
 
 export const DEFAULT_ROLE_PERMISSIONS = {
   cashier: ['billing.create', 'billing.credit.create', 'billing.payment_method.change', 'reports.view', 'payroll.view', 'payroll.advances.create', 'leave.request',
-    'tokens.manage', 'appointments.manage', 'customers.manage', 'expenses.daily', 'savings.deposit', 'stock.manage'],
+    'tokens.manage', 'appointments.manage', 'customers.manage', 'services.manage', 'reminders.send', 'expenses.daily', 'savings.deposit', 'stock.manage'],
   barber: ['leave.request'], stylist: ['leave.request'], beautician: ['leave.request'],
 };
 

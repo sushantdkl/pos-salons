@@ -57,12 +57,14 @@ export default function PrinterPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ tone: '', text: '' });
   const [origin, setOrigin] = useState('');
+  const [isCashier, setIsCashier] = useState(false);
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    try { setIsCashier(JSON.parse(localStorage.getItem('pos_user') || '{}').role === 'cashier'); } catch { /* storage unavailable */ }
     try { const saved = sessionStorage.getItem('printer_tab'); if (TABS.some((item) => item.key === saved)) setTab(saved); } catch { /* storage unavailable */ }
-    fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${localStorage.getItem('pos_token')}` } })
+    fetch('/api/admin/settings?mode=documents', { headers: { Authorization: `Bearer ${localStorage.getItem('pos_token')}` } })
       .then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Unable to load printer settings'); return body.settings || {}; })
       .then((settings) => setForm((current) => {
         const next = { ...current, ...settings };
@@ -129,7 +131,7 @@ export default function PrinterPage() {
       <header className="print-hide border-b border-[#E8E2DB] bg-white px-4 py-5 sm:px-8">
         <div className="mx-auto flex max-w-[1420px] flex-wrap items-end justify-between gap-4">
           <div>
-            <Link href="/admin/settings" className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#6B625A] hover:text-[#17140F]"><ArrowLeft className="h-4 w-4" />Configuration Center</Link>
+            <Link href={isCashier ? '/dashboard/cashier' : '/admin/settings'} className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#6B625A] hover:text-[#17140F]"><ArrowLeft className="h-4 w-4" />{isCashier ? 'Dashboard' : 'Configuration Center'}</Link>
             <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-[-0.025em] text-[#17140F] sm:text-3xl"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#171E2D] text-white"><Printer className="h-5 w-5" /></span>Printer & Documents</h1>
             <p className="mt-1.5 text-sm text-[#6B625A]">Edit every printed label and see exactly how the page will print.</p>
           </div>

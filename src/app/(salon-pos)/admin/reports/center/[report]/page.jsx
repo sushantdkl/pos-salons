@@ -15,6 +15,7 @@ import { exportColumnsFor, ReportTable, statusLabel } from '@/components/reports
 import { adToBsIso, bsToAdIso, formatCalendarDate } from '@/lib/dates/calendar';
 import { REPORT_CATALOG } from '@/lib/reports/report-catalog';
 import { WORKSPACE_COLUMNS, WORKSPACE_METRICS, WORKSPACE_SNAPSHOT } from '@/lib/reports/workspace-columns';
+import { isSensitiveReportField } from '@/lib/reports/redact';
 
 const REPORT_ICONS = { sales: Receipt, services: Scissors, products: Package, payments: CreditCard, credit: Wallet, expenses: Banknote, advances: FileText };
 const REPORT_TONES = { sales: 'inflow', services: 'ops', products: 'ops', payments: 'online', credit: 'ledger', expenses: 'outflow', advances: 'hrm' };
@@ -72,6 +73,8 @@ export default function ReportWorkspacePage() {
   const [filters, setFilters] = useState({ basis: 'calendar', staff: '', method: '', category: '' });
   const [search, setSearch] = useState('');
   const [data, setData] = useState(null);
+  // Commission / cost / profit columns disappear when the server withheld them (Staff Permissions).
+  const visibleColumns = (key) => (columnsByTable?.[key] || []).filter((column) => !(data?.hiddenFields && isSensitiveReportField(column.key)));
   const [previous, setPrevious] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -150,7 +153,7 @@ export default function ReportWorkspacePage() {
       note: `Previous period: ${previousLabel}.`,
     };
     return [metricsSheet, ...tables.map((item) => {
-      const columns = columnsByTable[item.key] || [];
+      const columns = visibleColumns(item.key);
       const firstText = columns.find((column) => !['money', 'number', 'percent'].includes(column.type))?.key;
       return {
         name: item.title,
@@ -261,7 +264,7 @@ export default function ReportWorkspacePage() {
             <ReportTable
               key={`${item.key}-${index}`}
               title={item.title}
-              columns={columnsByTable[item.key] || []}
+              columns={visibleColumns(item.key)}
               rows={item.rows}
               totals={item.totals}
               truncated={item.truncated}

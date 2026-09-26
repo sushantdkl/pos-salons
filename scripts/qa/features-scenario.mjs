@@ -235,6 +235,68 @@ for (const path of [...new Set(['/', '/services', '/book-appointment', '/review'
   check(`Website: ${path} answers`, response.status, 200);
 }
 
+/* ------------------------------------------- J. delegating admin pages to the cashier */
+const cashierRows = (await call(admin, 'GET', '/api/admin/permissions')).json.permissions.filter((row) => row.role === 'cashier');
+const originalGrants = Object.fromEntries(cashierRows.map((row) => [row.permission_key, row.allowed === true]));
+const setCashier = (changes) => call(admin, 'PATCH', '/api/admin/permissions', { role: 'cashier', changes });
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+const DELEGATED = [
+  // [permission, module, method, path, body, status when allowed]
+  ['reports.analytics', 'module.reports', 'GET', '/api/admin/analytics?period=today', null, 200],
+  ['reports.overview', 'module.reports', 'GET', '/api/admin/reports?period=today', null, 200],
+  ['reports.business_days', 'module.reports', 'GET', '/api/store/history', null, 200],
+  ['reports.staff', 'module.reports', 'GET', '/api/admin/staff-performance?scope=admin', null, 200],
+  ['reports.view', 'module.reports', 'GET', `/api/reports/workspace?report=sales&start=${today}&end=${today}`, null, 200],
+  ['reports.advances', 'module.advances', 'GET', `/api/reports/workspace?report=advances&start=${today}&end=${today}`, null, 200],
+  ['website.manage', 'module.website', 'GET', '/api/admin/website-cms', null, 200],
+  ['website.manage', 'module.website', 'GET', '/api/admin/seo', null, 200],
+  ['documents.manage', 'module.website', 'PUT', '/api/admin/settings', { qr_footer: 'QA footer' }, 200],
+  ['appointments.settings', 'module.frontdesk', 'DELETE', '/api/appointments/schedule?timeOffId=0', null, 400],
+  ['services.manage', 'module.frontdesk', 'POST', '/api/admin/services', { name: 'QA probe' }, 400],
+  ['loyalty.view', 'module.crm', 'GET', '/api/crm/loyalty', null, 200],
+  ['reviews.view', 'module.crm', 'GET', '/api/crm/reviews', null, 200],
+  ['suppliers.manage', 'module.inventory', 'GET', '/api/suppliers', null, 200],
+];
+for (const [permission, moduleKey, method, path, body, allowedStatus] of DELEGATED) {
+  await setCashier([{ permission, allowed: false }]);
+  const denied = await call(cashier, method, path, body, soft);
+  check(`Delegation: ${permission} off -> cashier refused (${path.split('?')[0]})`, denied.status, 403);
+  await setCashier([{ permission: moduleKey, allowed: true }, { permission, allowed: true }]);
+  const allowed = await call(cashier, method, path, body, soft);
+  check(`Delegation: ${permission} on -> cashier allowed (${path.split('?')[0]})`, allowed.status, allowedStatus);
+}
+// Printer permission never unlocks tax, bank or salon settings.
+const taxChange = await call(cashier, 'PUT', '/api/admin/settings', { vat_percentage: 1 }, soft);
+check('Delegation: printer permission cannot change tax', taxChange.status, 403);
+// Commission / cost / profit stay hidden in reports unless separately granted.
+await setCashier([{ permission: 'reports.sensitive', allowed: false }]);
+// The payload names what it withheld (hiddenFields); everything else must be free of it.
+const withoutList = ({ hiddenFields, ...rest }) => ({ listed: Array.isArray(hiddenFields), text: JSON.stringify(rest) });
+const hiddenReport = withoutList((await call(cashier, 'GET', `/api/reports/workspace?report=services&start=${today}&end=${today}`)).json);
+check('Delegation: services report hides commission from the cashier', /commission|profit/.test(hiddenReport.text), (value) => value === false);
+check('Delegation: services report says which columns are hidden', hiddenReport.listed, (value) => value === true);
+const hiddenCenter = withoutList((await call(cashier, 'GET', `/api/reports/center?report=services&start=${today}&end=${today}`)).json);
+check('Delegation: report center hides commission from the cashier', /commission/.test(hiddenCenter.text), (value) => value === false);
+const hiddenOverview = (await call(cashier, 'GET', '/api/admin/reports?period=today')).json;
+check('Delegation: business overview hides staff commission', JSON.stringify(hiddenOverview.bestStaff || []).includes('commission'), (value) => value === false);
+await setCashier([{ permission: 'reports.sensitive', allowed: true }]);
+const shownReport = JSON.stringify((await call(cashier, 'GET', `/api/reports/workspace?report=services&start=${today}&end=${today}`)).json);
+check('Delegation: granted -> services report shows commission', /commission/.test(shownReport), (value) => value === true);
+const adminReport = JSON.stringify((await call(admin, 'GET', `/api/reports/workspace?report=services&start=${today}&end=${today}`)).json);
+check('Delegation: admin always sees commission', /commission/.test(adminReport), (value) => value === true);
+// Payroll stays policy-locked for the cashier.
+const payrollLock = await setCashier([{ permission: 'module.payroll', allowed: true }]).catch((error) => ({ status: Number(String(error.message).match(/-> (\d+)/)?.[1]) }));
+check('Delegation: full payroll cannot be given to the cashier', payrollLock.status, 422);
+// Live menu: the permissions endpoint the sidebar reads reflects the change at once.
+const livePermissions = (await call(cashier, 'GET', '/api/hrm/me?only=permissions')).json.permissions;
+check('Delegation: sidebar permissions update live', livePermissions['reports.sensitive'], (value) => value === true);
+// Put the cashier back exactly as it was.
+const restore = Object.keys(Object.fromEntries(DELEGATED.flatMap(([permission, moduleKey]) => [[permission], [moduleKey]]).concat([['reports.sensitive']])))
+  .map((permission) => ({ permission, allowed: Boolean(originalGrants[permission]) }));
+await setCashier(restore.filter((row) => row.permission.startsWith('module.') && row.allowed));
+await setCashier(restore.filter((row) => !row.permission.startsWith('module.')));
+await setCashier(restore.filter((row) => row.permission.startsWith('module.') && !row.allowed));
+
 /* ------------------------------------------------------------------ report */
 const failed = results.filter((row) => !row.ok);
 for (const row of results) console.log(`${row.ok ? 'PASS' : 'FAIL'}  ${row.label}  actual=${JSON.stringify(row.actual)}  expected=${row.expected}`);
