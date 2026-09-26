@@ -308,7 +308,7 @@ export function StatStrip({ items = [] }) {
 }
 
 /** Simple money table with a TOTAL row. columns: [{ key, label, align, render, className }]. */
-export function PlainTable({ columns, rows, total, rowKey = (row, index) => row.key ?? index, empty = 'No data for this period.' }) {
+export function PlainTable({ columns, rows, total, rowKey = (row, index) => row.key ?? index, empty = 'No data for this period.', onRowClick, rowTitle = 'Open details' }) {
   return (
     <div className="min-w-0 overflow-x-auto rounded-xl border border-stone-200/80">
       <table className="w-full text-sm">
@@ -319,7 +319,12 @@ export function PlainTable({ columns, rows, total, rowKey = (row, index) => row.
         </thead>
         <tbody className="divide-y divide-stone-100">
           {rows.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-stone-400">{empty}</td></tr> : rows.map((row, index) => (
-            <tr key={rowKey(row, index)} className="hover:bg-stone-50/70">
+            <tr key={rowKey(row, index)}
+              className={onRowClick ? 'cursor-pointer hover:bg-amber-50/60 focus:bg-amber-50/70 focus:outline-none' : 'hover:bg-stone-50/70'}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={onRowClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onRowClick(row); } } : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              title={onRowClick ? rowTitle : undefined}>
               {columns.map((column) => <td key={column.key} className={`whitespace-nowrap px-4 py-3 ${column.align === 'right' ? 'text-right tabular-nums' : ''} ${column.className || 'text-stone-800'}`}>{column.render ? column.render(row) : row[column.key]}</td>)}
             </tr>
           ))}

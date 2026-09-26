@@ -1,5 +1,6 @@
 'use client';
 
+import { useBillDrill } from '@/components/analytics/bill-drill';
 import {
   AlertTriangle, Ban, BadgePercent, Boxes, CalendarCheck, CalendarClock, CalendarX, Clock, Coins, Crown, Gift, HeartHandshake, History,
   PackageSearch, Receipt, Repeat, Scissors, ShieldAlert, Sparkles, Star, Ticket, TicketCheck, UserMinus, UserPlus, Users, UsersRound,
@@ -14,6 +15,7 @@ const Grid = ({ children, cols = 4 }) => <div className={`grid grid-cols-2 gap-3
 /* ---------------------------------------------------------------- services */
 
 export function ServicesTab({ a }) {
+  const [drill, openDrill] = useBillDrill();
   const s = a.services;
   return (
     <div className="space-y-5">
@@ -29,9 +31,11 @@ export function ServicesTab({ a }) {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartPanel title="Service category mix"><RingDonut centerLabel="Service sales" rows={s.categories.map((row) => ({ label: row.category, value: row.revenue, sub: `${count(row.quantity)} done` }))} /></ChartPanel>
-        <DashSection title="Service menu performance" description="Top services in this period.">
+        <DashSection title="Service menu performance" description="Top services in this period. Click a service to see its bills.">
           <PlainTable
             rowKey={(row) => row.id}
+            onRowClick={(row) => openDrill('service', row.id, row.name, `${row.category} · ${count(row.quantity)} done · ${money(row.revenue)}`)}
+            rowTitle="Show the bills for this service"
             columns={[
               { key: 'name', label: 'Service', className: 'font-semibold text-stone-900' },
               { key: 'category', label: 'Category', className: 'text-stone-500' },
@@ -43,6 +47,7 @@ export function ServicesTab({ a }) {
           />
         </DashSection>
       </div>
+      {drill}
     </div>
   );
 }
@@ -50,6 +55,7 @@ export function ServicesTab({ a }) {
 /* --------------------------------------------------------------- customers */
 
 export function CustomersTab({ a }) {
+  const [drill, openDrill] = useBillDrill();
   const c = a.customers;
   const crm = c.crm;
   return (
@@ -87,9 +93,11 @@ export function CustomersTab({ a }) {
             <ColumnBars rows={[5, 4, 3, 2, 1].map((star) => ({ label: `${star} ★`, total: crm.reviews.ratings[star] }))} format={count} color={TONES.cash.hex} name="Reviews" />
           </ChartPanel>
         ) : null}
-        <DashSection title="Top customers by spend" description="Saved customers billed in this period.">
+        <DashSection title="Top customers by spend" description="Saved customers billed in this period. Click a customer to see their bills.">
           <PlainTable
             rowKey={(row) => row.id}
+            onRowClick={(row) => openDrill('customer', row.id, row.name, `${count(row.bills)} bills · ${money(row.spend)}`)}
+            rowTitle="Show this customer's bills"
             empty="No saved customers billed in this period."
             columns={[
               { key: 'name', label: 'Customer', className: 'font-semibold text-stone-900' },
@@ -100,6 +108,7 @@ export function CustomersTab({ a }) {
           />
         </DashSection>
       </div>
+      {drill}
     </div>
   );
 }
@@ -107,6 +116,7 @@ export function CustomersTab({ a }) {
 /* ------------------------------------------------------------------- staff */
 
 export function StaffTab({ a }) {
+  const [drill, openDrill] = useBillDrill();
   const staff = a.staff;
   return (
     <div className="space-y-5">
@@ -119,9 +129,11 @@ export function StaffTab({ a }) {
         <ChartPanel title="Staff earnings" note="Service revenue by team member"><RankedBars rows={staff.map((row) => ({ label: row.staffName, value: row.revenue }))} color={TONES.hrm.hex} /></ChartPanel>
         <ChartPanel title="Services done" note="Count of service lines"><RankedBars rows={staff.map((row) => ({ label: row.staffName, value: row.servicesCompleted }))} color={TONES.ops.hex} format={count} name="Services" /></ChartPanel>
       </div>
-      <DashSection title="Team performance" description="Revenue is the value of service lines assigned at billing. Shift length and assisting work are not captured, so read it with context.">
+      <DashSection title="Team performance" description="Revenue is the value of service lines assigned at billing. Shift length and assisting work are not captured, so read it with context. Click a team member to see their bills.">
         <PlainTable
           rowKey={(row) => row.staffId}
+          onRowClick={(row) => openDrill('staff', row.staffId, row.staffName, `${row.role} · ${count(row.servicesCompleted)} services · ${money(row.revenue)}`)}
+          rowTitle="Show this team member's bills"
           empty="No service lines with an assigned staff member in this period."
           columns={[
             { key: 'staffName', label: 'Staff', className: 'font-semibold text-stone-900' },
@@ -136,6 +148,7 @@ export function StaffTab({ a }) {
           rows={staff}
         />
       </DashSection>
+      {drill}
     </div>
   );
 }

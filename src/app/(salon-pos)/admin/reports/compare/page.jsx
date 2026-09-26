@@ -1,4 +1,5 @@
 'use client';
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDateInput } from '@/components/shared/calendar-date-input';
 
@@ -8,7 +9,7 @@ const format = (value) => typeof value === 'number' ? new Intl.NumberFormat('en-
 
 export default function CompareReportsPage() {
   const [sides,setSides]=useState([{report:'overview',start:today(),end:today(),page:1},{report:'payments',start:today(),end:today(),page:1}]);
-  const [calendarSystem,setCalendarSystem]=useState('AD');
+  const [calendarSystem,setCalendarSystem]=useState(getCalendarSystem);
   const [data,setData]=useState([null,null]); const [error,setError]=useState(''); const [mobileSide,setMobileSide]=useState(0);
   const load=useCallback(async()=>{setError(''); try { const token=localStorage.getItem('pos_token'); const values=await Promise.all(sides.map(async(side)=>{const q=new URLSearchParams(side);const r=await fetch(`/api/reports/center?${q}`,{headers:{Authorization:`Bearer ${token}`}});const body=await r.json();if(!r.ok)throw new Error(body.error);return body;}));setData(values);}catch(e){setError(e.message||'Unable to compare reports');}},[sides]);
   useEffect(()=>{load();},[load]);

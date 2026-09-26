@@ -8,6 +8,7 @@
  * payroll to a cashier, so this component shows only what it is given.
  */
 
+import { fmtDate } from '@/lib/dates/display';
 import { useState } from 'react';
 import Link from 'next/link';
 import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
@@ -83,7 +84,7 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
         subtitle="What is happening in the salon right now."
         meta={store ? (
           <>
-            <span>{store.state === 'NO_DAY' ? 'No business day open' : `Business Day ${store.businessDate}`}</span>
+            <span>{store.state === 'NO_DAY' ? 'No business day open' : `Business Day ${fmtDate(store.businessDate)}`}</span>
             {open ? <span>Session {store.session?.sessionNumber} · opened {timeLabel(store.session?.openedAt)} by {store.session?.openedBy || '—'}</span> : null}
           </>
         ) : null}

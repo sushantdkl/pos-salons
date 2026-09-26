@@ -96,11 +96,11 @@ export async function GET(request) {
       const summary = await db.get(`
         SELECT
           COUNT(*)::int as generated,
-          SUM(CASE WHEN NOT COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as digitalTokens,
-          SUM(CASE WHEN COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as printedTokens,
+          SUM(CASE WHEN NOT COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as "digitalTokens",
+          SUM(CASE WHEN COALESCE(wt.is_printed, FALSE) THEN 1 ELSE 0 END)::int as "printedTokens",
           SUM(CASE WHEN wt.status = 'WAITING' THEN 1 ELSE 0 END)::int as waiting,
           SUM(CASE WHEN wt.status = 'CANCELLED' THEN 1 ELSE 0 END)::int as cancelled,
-          SUM(CASE WHEN wt.status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as noShow
+          SUM(CASE WHEN wt.status = 'NO_SHOW' THEN 1 ELSE 0 END)::int as "noShow"
         FROM walk_in_tokens wt
         WHERE wt.token_date = ?::date AND wt.status IN ('WAITING', 'BILLED', 'CANCELLED', 'NO_SHOW')
       `, [date]);
@@ -116,9 +116,9 @@ export async function GET(request) {
           AND ((COALESCE(wt.billed_at, sb.transaction_time, sb.created_at)) AT TIME ZONE 'Asia/Kathmandu')::date = ?::date
       `, [date]);
       const bills = await db.get(`
-        SELECT COUNT(DISTINCT sb.id)::int as tokenBills,
-               COUNT(DISTINCT CASE WHEN NOT COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as digitalBills,
-               COUNT(DISTINCT CASE WHEN COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as printedBills
+        SELECT COUNT(DISTINCT sb.id)::int as "tokenBills",
+               COUNT(DISTINCT CASE WHEN NOT COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as "digitalBills",
+               COUNT(DISTINCT CASE WHEN COALESCE(sb.is_printed, FALSE) THEN sb.id END)::int as "printedBills"
         FROM walk_in_tokens wt
         JOIN salon_bills sb
           ON sb.id = wt.invoice_id
@@ -129,7 +129,7 @@ export async function GET(request) {
           AND wt.invoice_id IS NOT NULL
       `, [date]);
       const directBills = await db.get(`
-        SELECT COUNT(DISTINCT sb.id)::int as directBills
+        SELECT COUNT(DISTINCT sb.id)::int as "directBills"
         FROM salon_bills sb
         WHERE sb.token_id IS NULL
           AND sb.status = 'paid'

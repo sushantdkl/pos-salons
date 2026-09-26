@@ -2,6 +2,7 @@
 
 /** Shared HRM presentation: status badges and codes, Nepal time formatting, modal, permissions hook. */
 
+import { fmtDate as displayDate } from '@/lib/dates/display';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { StatusBadge } from '@/components/erp';
@@ -42,12 +43,12 @@ export function fmtPunch(value, attendanceDate) {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(value));
   const time = fmtTime(value);
   if (!attendanceDate || day === attendanceDate) return time;
-  return `${time} (${new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short' }).format(new Date(value))})`;
+  return `${time} (${displayDate(value, { year: false })})`;
 }
 
 export function fmtDate(date) {
   if (!date) return '—';
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${date}T00:00:00Z`));
+  return displayDate(date, { weekday: 'short' });
 }
 
 export function fmtMinutes(minutes) {

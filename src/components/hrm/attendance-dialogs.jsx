@@ -2,6 +2,7 @@
 
 /** Correct / manual-entry / history dialogs for one attendance day. The server recomputes everything. */
 
+import { fmtDateTime } from '@/lib/dates/display';
 import { useEffect, useState } from 'react';
 import { AlertBanner, ErpButton, LoadingState } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
@@ -141,7 +142,7 @@ export function AttendanceHistoryDialog({ row, onClose }) {
         <ol className="space-y-2">
           {history.map((entry) => (
             <li key={entry.id} className="rounded-lg border border-stone-200 p-3 text-sm">
-              <p className="font-semibold text-stone-900">{ACTION_LABEL[entry.action] || entry.action} <span className="font-normal text-stone-500">· {entry.actor} · {new Date(entry.at).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' })}</span></p>
+              <p className="font-semibold text-stone-900">{ACTION_LABEL[entry.action] || entry.action} <span className="font-normal text-stone-500">· {entry.actor} · {fmtDateTime(entry.at)}</span></p>
               {entry.oldValue ? <p className="mt-1 text-xs text-stone-500">Before: {describe(entry.oldValue)}</p> : null}
               {entry.newValue ? <p className="text-xs text-stone-600">After: {describe(entry.newValue)}</p> : null}
               {entry.reason ? <p className="mt-1 text-xs font-medium text-stone-700">Reason: {entry.reason}</p> : null}

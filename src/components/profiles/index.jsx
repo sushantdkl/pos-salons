@@ -6,6 +6,7 @@
  * balance and allocation arrives computed from the server.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import { useState } from 'react';
 import { ChevronDown, CreditCard, Download, PackageCheck, Printer, ReceiptText, RotateCcw, UserRoundPlus, WalletCards } from 'lucide-react';
 import { money } from '@/components/erp';
@@ -14,16 +15,12 @@ const TZ = 'Asia/Kathmandu';
 
 export function formatDate(value) {
   if (!value) return '—';
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? new Date(`${value}T00:00:00+05:45`) : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return fmtDate(value);
 }
 
 export function formatDateTime(value) {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+  return fmtDateTime(value);
 }
 
 export function ProfileStat({ label, value, tone }) {
@@ -92,7 +89,7 @@ export function ProfileTable({ headers, rows, empty, onRowClick, align = {} }) {
         </thead>
         <tbody className="divide-y divide-stone-100">
           {rows.map((row, index) => (
-            <tr key={index} onClick={onRowClick ? () => onRowClick(index) : undefined} className={`hover:bg-stone-50 ${onRowClick ? 'cursor-pointer' : ''}`}>
+            <tr key={index} onClick={onRowClick ? () => onRowClick(index) : undefined} onKeyDown={onRowClick ? (event) => { if (event.key === 'Enter') onRowClick(index); } : undefined} tabIndex={onRowClick ? 0 : undefined} className={`hover:bg-stone-50 ${onRowClick ? 'cursor-pointer focus:bg-amber-50/60 focus:outline-none' : ''}`}>
               {row.map((cell, cellIndex) => <td key={cellIndex} className={`px-4 py-3 text-stone-700 ${align[cellIndex] === 'right' ? 'text-right tabular-nums' : ''}`}>{cell}</td>)}
             </tr>
           ))}

@@ -6,6 +6,8 @@
  * /api/appointments returns only their own bookings (without customer phone numbers).
  */
 
+import { fmtDateTime } from '@/lib/dates/display';
+import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowRight, CalendarClock, Scissors } from 'lucide-react';
@@ -21,7 +23,7 @@ function nepalToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
 }
 function dateTime(value) {
-  return value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  return value ? fmtDateTime(value, { year: false }) : '—';
 }
 
 export default function StaffPerformanceDashboard({ title }) {
@@ -124,8 +126,8 @@ export default function StaffPerformanceDashboard({ title }) {
           />
           {period === 'custom' ? (
             <div className="mb-3 flex flex-wrap gap-2">
-              <input type="date" aria-label="From" value={customDates.start} onChange={(event) => setCustomDates({ ...customDates, start: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
-              <input type="date" aria-label="To" value={customDates.end} onChange={(event) => setCustomDates({ ...customDates, end: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
+              <DateInput aria-label="From" value={customDates.start} onChange={(event) => setCustomDates({ ...customDates, start: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
+              <DateInput aria-label="To" value={customDates.end} onChange={(event) => setCustomDates({ ...customDates, end: event.target.value })} className="h-10 rounded-lg border border-stone-300 bg-white px-3 text-sm" />
             </div>
           ) : null}
           <div className="mb-3">

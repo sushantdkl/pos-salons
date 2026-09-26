@@ -1,3 +1,6 @@
+import { BS_MONTH_NAMES, adToBsParts } from '../dates/calendar.js';
+import { getServerCalendarSystem } from '../dates/calendar-setting.js';
+import { bsMonthRange } from '../db/postgres-dates.js';
 /**
  * THE period vocabulary for Dashboard, Summary, Analytics and Reports. The SQL bounds for each
  * value live in periodBoundsSql (lib/db/postgres-dates.js); this file owns labels and the
@@ -59,6 +62,12 @@ function addCalendarDays(parts, days) {
 }
 
 function displayDate(parts) {
+  if (getServerCalendarSystem() === 'BS') {
+    try {
+      const bs = adToBsParts(isoDate(parts));
+      return `${bs.day} ${BS_MONTH_NAMES[bs.month - 1]}`;
+    } catch { /* fall back to AD */ }
+  }
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -86,7 +95,15 @@ export function getDashboardPeriodMeta(periodValue, startDate, endDate) {
   const today = nepalDateParts();
   let start;
   let end = today;
-  if (meta.startOfMonth) start = { ...today, day: 1 };
+  if ((meta.startOfMonth || meta.lastMonth) && getServerCalendarSystem() === 'BS') {
+    try {
+      const range = bsMonthRange(period);
+      start = partsFromIso(range.start);
+      end = meta.lastMonth ? partsFromIso(range.end) : today;
+    } catch { /* fall back to the AD month below */ }
+  }
+  if (start) { /* BS month resolved above */ }
+  else if (meta.startOfMonth) start = { ...today, day: 1 };
   else if (meta.startOfWeek) {
     const weekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay();
     start = addCalendarDays(today, -weekday);

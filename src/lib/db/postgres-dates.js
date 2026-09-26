@@ -1,4 +1,6 @@
 /** Postgres date filters (replaces SQLite DATE('now', ...) patterns). */
+import { adToBsParts, bsDaysInMonth, bsToAdIso, nepalDateString } from '../dates/calendar.js';
+import { getServerCalendarSystem } from '../dates/calendar-setting.js';
 
 export const BILL_DATE_EXPR = 'COALESCE(transaction_time, created_at)';
 export const BILL_DATE_EXPR_B = 'COALESCE(b.transaction_time, b.created_at)';
@@ -17,11 +19,34 @@ export function currentWeekStartSql() {
  *
  *   today · yesterday · 3days · 7days (alias week) · 30days
  *   this_week  Sunday -> today (the Nepal working week starts on Sunday)
- *   month      1st of this month -> end of month
- *   last_month the whole previous calendar month
+ *   month      1st of this month -> end of month (the BS month when Settings → Calendar is BS)
+ *   last_month the whole previous calendar month (BS or AD, same rule)
  *   custom     startDate..endDate inclusive
  */
+/**
+ * BS month bounds (inclusive AD start / end) for 'month' and 'last_month' when Settings →
+ * Calendar is BS. The dates are computed here and inlined as validated literals.
+ */
+export function bsMonthRange(period, today = nepalDateString()) {
+  const now = adToBsParts(today);
+  let { year, month } = now;
+  if (period === 'last_month') { month -= 1; if (month === 0) { month = 12; year -= 1; } }
+  const pad = (value) => String(value).padStart(2, '0');
+  return { start: bsToAdIso(`${year}-${pad(month)}-01`), end: bsToAdIso(`${year}-${pad(month)}-${pad(bsDaysInMonth(year, month))}`) };
+}
+
+const literalDate = (iso) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error('Invalid period date');
+  return `'${iso}'::date`;
+};
+
 export function periodBoundsSql(period, startDate, endDate) {
+  if ((period === 'month' || period === 'last_month') && getServerCalendarSystem() === 'BS') {
+    try {
+      const range = bsMonthRange(period);
+      return { startSql: literalDate(range.start), endSql: `(${literalDate(range.end)} + INTERVAL '1 day')::date`, params: [] };
+    } catch { /* outside the BS table: fall back to the AD month */ }
+  }
   const days = (n) => ({ startSql: `(${TODAY} - INTERVAL '${n} days')::date`, endSql: `(${TODAY} + INTERVAL '1 day')::date`, params: [] });
   switch (period) {
     case 'yesterday':
@@ -63,10 +88,11 @@ export function reportsBillDateFilter(period, startDate, endDate) {
   return periodDateFilter(period, startDate, endDate, BILL_DATE_EXPR);
 }
 
+// Getters so "month" follows the calendar setting at query time (BS or AD).
 export const STAFF_PERF_PERIODS = {
-  today: periodDateFilter('today', null, null, BILL_DATE_EXPR_B).clause,
-  week: periodDateFilter('week', null, null, BILL_DATE_EXPR_B).clause,
-  month: periodDateFilter('month', null, null, BILL_DATE_EXPR_B).clause,
+  get today() { return periodDateFilter('today', null, null, BILL_DATE_EXPR_B).clause; },
+  get week() { return periodDateFilter('week', null, null, BILL_DATE_EXPR_B).clause; },
+  get month() { return periodDateFilter('month', null, null, BILL_DATE_EXPR_B).clause; },
   lifetime: 'TRUE',
 };
 

@@ -5,6 +5,7 @@
  * One active form is the default for the QR page; a form can target specific services.
  */
 
+import { fmtDate } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowUp, ClipboardPen, Plus, Trash2 } from 'lucide-react';
@@ -121,7 +122,7 @@ export default function FeedbackFormsPage() {
           { key: 'flags', label: 'Includes', render: (row) => [row.ratingEnabled && 'rating', row.reviewTextEnabled && 'review', row.staffFeedbackEnabled && 'staff', row.publicConsentEnabled && 'publish consent'].filter(Boolean).join(', ') },
           { key: 'responses', label: 'Responses', align: 'right', render: (row) => row.responses },
           { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} label={row.status.charAt(0) + row.status.slice(1).toLowerCase()} tone={row.status === 'ACTIVE' ? 'inflow' : 'neutral'} /> },
-          { key: 'updated', label: 'Updated', render: (row) => new Date(row.updatedAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', year: 'numeric' }) },
+          { key: 'updated', label: 'Updated', render: (row) => fmtDate(row.updatedAt) },
           { key: 'edit', label: '', render: (row) => <button type="button" onClick={() => setEditing(row)} className="text-xs font-bold text-pink-700 hover:underline">Edit</button> },
         ]} />
       ) : null}

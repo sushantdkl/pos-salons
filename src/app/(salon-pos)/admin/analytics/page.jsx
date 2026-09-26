@@ -6,6 +6,8 @@
  * analytics-money.js, which reuse the Summary's money services). This page only lays it out.
  */
 
+import { AnalyticsQueryContext } from '@/components/analytics/bill-drill';
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -52,7 +54,7 @@ function nepalTime(iso) {
 export default function AnalyticsPage() {
   const period = usePeriod('today');
   const [tab, setTab] = useState('overview');
-  const [calendarSystem, setCalendarSystem] = useState('AD');
+  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
   const url = period.ready ? `/api/admin/analytics?${period.query}` : null;
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const a = data?.analytics;
@@ -134,7 +136,7 @@ export default function AnalyticsPage() {
             })}
           </div>
           <div role="tabpanel" aria-label={active.label}>
-            <Body a={a} calendarSystem={calendarSystem} />
+            <AnalyticsQueryContext.Provider value={period.query}><Body a={a} calendarSystem={calendarSystem} /></AnalyticsQueryContext.Provider>
           </div>
         </div>
       ) : null}

@@ -6,6 +6,7 @@
  * pop-up. Figures come from /api/ledgers/overview (summed on the server).
  */
 
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Printer, Search } from 'lucide-react';
 import { count, money } from '@/components/erp';
@@ -74,7 +75,7 @@ const COPY = {
 export function LedgerOverview({ kind, title, subtitle, accent = 'rose' }) {
   const copy = COPY[kind];
   const today = useMemo(nepalToday, []);
-  const [calendarSystem, setCalendarSystem] = useState('AD');
+  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
   const [tab, setTab] = useState('outstanding');
   const [preset, setPreset] = useState('all');
   const [range, setRange] = useState({ from: '', to: '' });

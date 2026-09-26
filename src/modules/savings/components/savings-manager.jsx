@@ -1,5 +1,7 @@
 'use client';
 
+import { fmtDate } from '@/lib/dates/display';
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Banknote, Landmark, Plus, RefreshCw, Search, Wallet, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
@@ -28,9 +30,7 @@ function todayInNepal() {
 
 function formatDate(value) {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+  return fmtDate(value);
 }
 
 const FIELD =
@@ -70,6 +70,7 @@ export default function SavingsManager({ title, description }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FORM, depositDate: todayInNepal() });
   const [filters, setFilters] = useState({ search: '', depositType: 'all', sourceAccount: 'all', from: '', to: '' });
 
@@ -351,9 +352,8 @@ export default function SavingsManager({ title, description }) {
 
               <div>
                 <label className={LABEL} htmlFor="savings-date">Deposit Date</label>
-                <input
+                <DateInput
                   id="savings-date"
-                  type="date"
                   required
                   max={todayInNepal()}
                   className={FIELD}
@@ -426,15 +426,13 @@ export default function SavingsManager({ title, description }) {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <input
-            type="date"
+          <DateInput
             className={FIELD}
             aria-label="From date"
             value={filters.from}
             onChange={(event) => setFilters({ ...filters, from: event.target.value })}
           />
-          <input
-            type="date"
+          <DateInput
             className={FIELD}
             aria-label="To date"
             value={filters.to}
@@ -466,7 +464,14 @@ export default function SavingsManager({ title, description }) {
                   </tr>
                 ) : deposits.length ? (
                   deposits.map((deposit) => (
-                    <tr key={deposit.id} className={`hover:bg-gray-50 ${deposit.status === 'CANCELLED' ? 'opacity-60' : ''}`}>
+                    <tr
+                      key={deposit.id}
+                      onClick={() => setDetail(deposit)}
+                      onKeyDown={(event) => { if (event.key === 'Enter') setDetail(deposit); }}
+                      tabIndex={0}
+                      title="Open deposit details"
+                      className={`cursor-pointer hover:bg-amber-50/50 focus:bg-amber-50/60 focus:outline-none ${deposit.status === 'CANCELLED' ? 'opacity-60' : ''}`}
+                    >
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{formatDate(deposit.depositDate)}</td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{deposit.depositTypeLabel}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">{deposit.institutionName || '-'}</td>
@@ -485,7 +490,7 @@ export default function SavingsManager({ title, description }) {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
                         {canEdit && deposit.status === 'ACTIVE' ? (
-                          <div className="flex justify-end gap-3">
+                          <div className="flex justify-end gap-3" onClick={(event) => event.stopPropagation()}>
                             <button type="button" onClick={() => openEdit(deposit)} className="font-semibold text-gray-950 hover:underline">
                               Edit
                             </button>
@@ -509,6 +514,74 @@ export default function SavingsManager({ title, description }) {
           </div>
         </div>
       </div>
+      {detail ? (
+        <DepositDrawer
+          deposit={detail}
+          canEdit={canEdit}
+          onClose={() => setDetail(null)}
+          onEdit={() => { const deposit = detail; setDetail(null); openEdit(deposit); }}
+          onCancel={() => { const deposit = detail; setDetail(null); cancelDeposit(deposit); }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Side panel with every detail of one savings deposit (opens from a table row). */
+function DepositDrawer({ deposit, canEdit, onClose, onEdit, onCancel }) {
+  useEffect(() => {
+    const onKey = (event) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const active = deposit.status === 'ACTIVE';
+  const when = (value) => (value ? `${fmtDate(value)}, ${new Date(value).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kathmandu', hour: 'numeric', minute: '2-digit', hour12: true })}` : '—');
+  const rows = [
+    ['Deposit date', formatDate(deposit.depositDate)],
+    ['Deposit type', deposit.depositTypeLabel],
+    ['Bank / Sahakari', deposit.institutionName || '—'],
+    ['Paid from', deposit.sourceAccountLabel],
+    ['Reference', deposit.referenceNumber || '—'],
+    ['Recorded by', deposit.createdByName || '—'],
+    ['Recorded at', when(deposit.createdAt)],
+    ['Last changed', when(deposit.updatedAt)],
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal="true" aria-label="Savings deposit details" onClick={onClose}>
+      <aside className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500"><Landmark className="h-4 w-4" aria-hidden="true" />Savings deposit</p>
+            <h2 className="mt-1 text-2xl font-extrabold tabular-nums text-gray-950">{formatCurrency(deposit.amount)}</h2>
+            <p className="text-sm text-gray-500">{deposit.depositTypeLabel}{deposit.institutionName ? ` · ${deposit.institutionName}` : ''}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{active ? 'Active' : 'Cancelled'}</span>
+            <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <dl className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-4 px-4 py-2.5 text-sm">
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="text-right font-medium text-gray-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div>
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">Notes</p>
+            <p className="whitespace-pre-wrap rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">{deposit.notes || 'No notes.'}</p>
+          </div>
+          <p className="text-xs text-gray-500">{deposit.sourceAccount === 'CASH' ? 'Paid from the cash drawer — it lowers Expected Cash for its session.' : 'Paid from the online balance.'} Savings are transfers, not expenses, so they never reduce profit.</p>
+        </div>
+        {canEdit && active ? (
+          <footer className="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
+            <button type="button" onClick={onCancel} className="inline-flex min-h-10 items-center rounded-lg border border-red-200 bg-white px-3.5 text-sm font-semibold text-red-600 hover:bg-red-50">Cancel deposit</button>
+            <button type="button" onClick={onEdit} className="inline-flex min-h-10 items-center rounded-lg bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800">Edit</button>
+          </footer>
+        ) : null}
+      </aside>
     </div>
   );
 }

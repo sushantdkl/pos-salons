@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { requireRole } from '@/lib/salon-schema';
 import { PHONE_ERROR_MESSAGE, phoneOrNull } from '@/lib/validation/phone';
+import { setServerCalendarSystem } from '@/lib/dates/calendar-setting';
 import { DOCUMENT_DEFAULTS, QR_PRINT_SIZES, QR_SHEET_SIZES, SETTING_KEYS, STATEMENT_PAPER_SIZES, normalizeDocumentSettings } from '@/lib/documents/settings';
 
 const DEFAULT_KEYS = [
@@ -228,6 +229,7 @@ export async function PUT(request) {
       }
     });
 
+    if (data.calendar_system !== undefined) setServerCalendarSystem(data.calendar_system);
     return NextResponse.json({ message: 'Settings updated successfully' });
   } catch (error) {
     console.error('Update settings error:', error);

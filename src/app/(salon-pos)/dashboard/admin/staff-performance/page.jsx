@@ -1,5 +1,6 @@
 'use client';
 
+import { fmtDate, fmtDayNumber } from '@/lib/dates/display';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
@@ -262,8 +263,8 @@ export default function AdminStaffPerformancePage() {
                 const height = trendMax > 0 ? Math.max(6, Math.round((numberValue(row.revenue) / trendMax) * 100)) : 0;
                 return (
                   <div key={row.date} className="flex h-full flex-1 flex-col justify-end gap-2">
-                    <div className="rounded-t-lg bg-gray-950 transition-all" style={{ height: `${height}%` }} title={`${row.date}: ${formatCurrency(row.revenue)}`} />
-                    <p className="truncate text-center text-[10px] text-gray-500">{new Date(row.date).toLocaleDateString('en-US', { day: '2-digit' })}</p>
+                    <div className="rounded-t-lg bg-gray-950 transition-all" style={{ height: `${height}%` }} title={`${fmtDate(row.date)}: ${formatCurrency(row.revenue)}`} />
+                    <p className="truncate text-center text-[10px] text-gray-500">{fmtDayNumber(row.date)}</p>
                   </div>
                 );
               })}

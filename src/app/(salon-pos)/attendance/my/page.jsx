@@ -5,6 +5,7 @@
  * leave. Punches are always "now" on the server; past records can only be changed by HR.
  */
 
+import { fmtDate as displayDate } from '@/lib/dates/display';
 import { useEffect, useState } from 'react';
 import { CalendarOff, Coffee, LogIn, LogOut, Plus, UserCheck } from 'lucide-react';
 import {
@@ -60,7 +61,7 @@ export default function MyAttendancePage() {
           <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-violet-900">{now ? now.toLocaleDateString('en-GB', { timeZone: 'Asia/Kathmandu', weekday: 'long', day: 'numeric', month: 'long' }) : ''}</p>
+                <p className="text-sm font-semibold text-violet-900">{now ? displayDate(now, { weekday: 'long', month: 'long', year: false }) : ''}</p>
                 <p className="text-3xl font-extrabold tabular-nums text-stone-950">{now ? fmtTime(now) : '—'}</p>
                 <p className="mt-1 text-sm text-stone-600">
                   {current?.shift ? `Shift ${current.shift.startTime}–${current.shift.endTime}` : current?.offDay ? 'Day off' : current?.holiday ? `Holiday · ${current.holiday.name}` : 'No shift assigned'}

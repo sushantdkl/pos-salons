@@ -2,6 +2,7 @@
 
 /** PURCHASES — stock received from suppliers in the chosen period (admin). */
 
+import { fmtDate } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useState } from 'react';
 import { PackagePlus } from 'lucide-react';
@@ -41,7 +42,7 @@ export default function PurchasesPage() {
               empty="No purchases in this period."
               onRowClick={(row) => setOpenId(row.id)}
               columns={[
-                { key: 'date', label: 'Date', render: (row) => row.date },
+                { key: 'date', label: 'Date', render: (row) => fmtDate(row.date) },
                 { key: 'number', label: 'No.', render: (row) => <button type="button" className="font-semibold text-indigo-700 hover:underline" onClick={(event) => { event.stopPropagation(); setOpenId(row.id); }}>{row.number}</button> },
                 { key: 'supplier', label: 'Supplier', render: (row) => <Link href={`/admin/suppliers/${row.supplierId}`} onClick={(event) => event.stopPropagation()} className="hover:underline">{row.supplierName}</Link> },
                 { key: 'invoice', label: 'Invoice', render: (row) => row.supplierInvoice || '—' },

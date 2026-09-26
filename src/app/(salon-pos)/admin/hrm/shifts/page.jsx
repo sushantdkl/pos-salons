@@ -5,6 +5,7 @@
  * and one-day roster changes. Assigning a new shift closes the old one; history is never rewritten.
  */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useState } from 'react';
 import { CalendarClock, Clock, Moon, Pencil, Plus, UserCog } from 'lucide-react';
 import {
@@ -57,8 +58,8 @@ function ShiftEditor({ initial, onClose, onSaved }) {
         </div>
       </fieldset>
       <div className="grid grid-cols-2 gap-3">
-        <label className={LABEL}>Effective from<input type="date" className={FIELD} value={form.effectiveFrom} onChange={(event) => set('effectiveFrom', event.target.value)} /></label>
-        <label className={LABEL}>Effective to<input type="date" className={FIELD} value={form.effectiveTo} onChange={(event) => set('effectiveTo', event.target.value)} /></label>
+        <label className={LABEL}>Effective from<DateInput className={FIELD} value={form.effectiveFrom} onChange={(event) => set('effectiveFrom', event.target.value)} /></label>
+        <label className={LABEL}>Effective to<DateInput className={FIELD} value={form.effectiveTo} onChange={(event) => set('effectiveTo', event.target.value)} /></label>
       </div>
       <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={form.isActive} onChange={(event) => set('isActive', event.target.checked)} /> Active</label>
       {error ? <AlertBanner tone="outflow">{error}</AlertBanner> : null}
@@ -94,7 +95,7 @@ function AssignDialog({ employee, shifts, history, onClose, onSaved }) {
             {shifts.filter((shift) => shift.isActive).map((shift) => <option key={shift.id} value={shift.id}>{shift.name} · {shift.startTime}–{shift.endTime}</option>)}
           </select>
         </label>
-        <label className={LABEL}>From<input type="date" className={FIELD} value={form.effectiveFrom} onChange={(event) => set('effectiveFrom', event.target.value)} /></label>
+        <label className={LABEL}>From<DateInput className={FIELD} value={form.effectiveFrom} onChange={(event) => set('effectiveFrom', event.target.value)} /></label>
       </div>
       <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={form.customOff} onChange={(event) => set('customOff', event.target.checked)} /> Personal weekly off days (instead of the shift&apos;s working days)</label>
       {form.customOff ? (
@@ -146,7 +147,7 @@ function OverrideDialog({ employees, shifts, onClose, onSaved }) {
         </select>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className={LABEL}>Date<input type="date" className={FIELD} value={form.date} onChange={(event) => set('date', event.target.value)} /></label>
+        <label className={LABEL}>Date<DateInput className={FIELD} value={form.date} onChange={(event) => set('date', event.target.value)} /></label>
         <label className={LABEL}>That day
           <select className={FIELD} value={form.shiftId} onChange={(event) => set('shiftId', event.target.value)}>
             <option value="OFF">Day off</option>

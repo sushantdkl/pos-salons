@@ -6,6 +6,7 @@
  * Components format and lay out values; they never derive financial figures.
  */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useId } from 'react';
 import { AlertTriangle, CircleAlert, Info, Inbox, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { DASHBOARD_PERIOD_OPTIONS } from '@/lib/reports/dashboard-period';
@@ -111,9 +112,8 @@ export function PeriodFilter({
         <div className="flex flex-wrap items-end gap-2">
           <label htmlFor={`${id}-from`} className="text-xs font-semibold text-stone-500">
             From
-            <input
+            <DateInput
               id={`${id}-from`}
-              type="date"
               value={startDate}
               max={endDate || undefined}
               onChange={(event) => onRangeChange?.(event.target.value, endDate)}
@@ -122,9 +122,8 @@ export function PeriodFilter({
           </label>
           <label htmlFor={`${id}-to`} className="text-xs font-semibold text-stone-500">
             To
-            <input
+            <DateInput
               id={`${id}-to`}
-              type="date"
               value={endDate}
               min={startDate || undefined}
               onChange={(event) => onRangeChange?.(startDate, event.target.value)}

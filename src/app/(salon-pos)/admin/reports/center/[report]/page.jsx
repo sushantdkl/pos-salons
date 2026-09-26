@@ -1,5 +1,6 @@
 'use client';
 
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -64,7 +65,7 @@ export default function ReportWorkspacePage() {
   const catalog = REPORT_CATALOG[report];
   const columnsByTable = WORKSPACE_COLUMNS[report];
   const today = useMemo(nepalToday, []);
-  const [calendarSystem, setCalendarSystem] = useState('AD');
+  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
   const [presetKey, setPresetKey] = useState('today');
   const [range, setRange] = useState({ start: today, end: today });
   const [filters, setFilters] = useState({ basis: 'calendar', staff: '', method: '', category: '' });

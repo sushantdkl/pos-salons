@@ -6,6 +6,8 @@
  * enforced by /api/appointments; this page only presents and submits.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
+import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { BillLink } from '@/components/bills/bill-detail';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -52,7 +54,7 @@ function weekStart(iso) {
   return addDays(iso, -new Date(`${iso}T00:00:00Z`).getUTCDay());
 }
 function dateLabel(iso, options = { weekday: 'short', day: 'numeric', month: 'short' }) {
-  return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+  return fmtDate(iso, { weekday: options.weekday, month: options.month === 'long' ? 'long' : 'short', year: Boolean(options.year) });
 }
 function toMinutes(value) {
   const [hours, minutes] = String(value || '0:0').split(':').map(Number);
@@ -307,7 +309,7 @@ function AppointmentForm({ initial, services, staff, isAdmin, onSaved, onClose }
             {staff.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}
           </select>
         </label>
-        <label className={LABEL}>Date *<input type="date" className={FIELD} value={form.date} min={editing ? undefined : nepalToday()} onChange={(event) => set('date', event.target.value)} /></label>
+        <label className={LABEL}>Date *<DateInput className={FIELD} value={form.date} min={editing ? undefined : nepalToday()} onChange={(event) => set('date', event.target.value)} /></label>
         <div className="sm:col-span-2">
           <label className={LABEL}>Start time *<input type="time" step="300" className={FIELD} value={form.startTime} onChange={(event) => set('startTime', event.target.value)} /></label>
           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-500">
@@ -496,7 +498,7 @@ function AppointmentDetail({ id, isAdmin, onClose, onChanged, onEdit, onWaitlist
               <li key={event.id} className="text-xs text-stone-600">
                 <span className="font-semibold capitalize text-stone-800">{event.type.replaceAll('_', ' ')}</span>
                 {event.to && event.from !== event.to ? <span> → {STATUS_META[event.to]?.label || event.to}</span> : null}
-                <span className="text-stone-400"> · {event.actor} · {new Date(event.at).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-stone-400"> · {event.actor} · {fmtDateTime(event.at, { year: false })}</span>
                 {event.note ? <span className="block text-stone-500">“{event.note}”</span> : null}
               </li>
             ))}
@@ -520,7 +522,7 @@ function WaitlistForm({ services, staff, onSaved, onClose }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={LABEL}>Customer name *<input className={FIELD} value={form.customerName} onChange={(event) => set('customerName', event.target.value)} /></label>
         <label className={LABEL}>Phone<input className={FIELD} inputMode="tel" value={form.customerPhone} onChange={(event) => set('customerPhone', event.target.value)} /></label>
-        <label className={LABEL}>Requested date<input type="date" className={FIELD} value={form.requestedDate} onChange={(event) => set('requestedDate', event.target.value)} /></label>
+        <label className={LABEL}>Requested date<DateInput className={FIELD} value={form.requestedDate} onChange={(event) => set('requestedDate', event.target.value)} /></label>
         <label className={LABEL}>Preferred time<input className={FIELD} placeholder="e.g. after 4pm" value={form.preferredTime} onChange={(event) => set('preferredTime', event.target.value)} /></label>
         <label className={LABEL}>Service
           <select className={FIELD} value={form.serviceId} onChange={(event) => set('serviceId', event.target.value)}>
@@ -644,7 +646,7 @@ export default function AppointmentsPage() {
             <button type="button" aria-label="Previous" onClick={() => setDate(addDays(date, -step))} className="rounded-lg border border-stone-200 bg-white p-2 hover:bg-stone-50"><ChevronLeft className="h-4 w-4" /></button>
             <button type="button" onClick={() => setDate(nepalToday())} className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[13px] font-semibold hover:bg-stone-50">Today</button>
             <button type="button" aria-label="Next" onClick={() => setDate(addDays(date, step))} className="rounded-lg border border-stone-200 bg-white p-2 hover:bg-stone-50"><ChevronRight className="h-4 w-4" /></button>
-            <input type="date" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} aria-label="Go to date" className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-[13px]" />
+            <DateInput value={date} onChange={(event) => event.target.value && setDate(event.target.value)} aria-label="Go to date" className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-[13px]" />
           </div>
           <span className="text-sm font-bold text-stone-800">
             {range.from === range.to ? dateLabel(range.from, { weekday: 'long', day: 'numeric', month: 'long' }) : `${dateLabel(range.from)} – ${dateLabel(range.to)}`}

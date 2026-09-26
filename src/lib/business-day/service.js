@@ -334,7 +334,7 @@ async function recordOpeningTransfer(tx, { businessDayId, sessionId, startingCas
       title, category, amount, payment_method, cash_amount, online_amount,
       paid_by, paid_to, expense_date, notes, reference_number, attachment_url,
       record_type, business_day_id, store_session_id, created_by, updated_by
-    ) VALUES (?, ?, ?, 'cash', ?, 0, ?, ?, CURRENT_DATE, ?, ?, '', 'CASH_TRANSFER', ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, 'cash', ?, 0, ?, ?, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kathmandu')::date, ?, ?, '', 'CASH_TRANSFER', ?, ?, ?, ?)
   `, [
     title, CASH_ADJUSTMENT_CATEGORY, amount, amount,
     detail.paidBy, detail.paidTo, notes, `${direction}-${detail.kind}`,

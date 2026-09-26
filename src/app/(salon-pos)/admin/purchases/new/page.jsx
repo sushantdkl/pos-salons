@@ -6,6 +6,7 @@
  * are a preview; the server recomputes everything.
  */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -111,7 +112,7 @@ export default function NewPurchasePage() {
                 {suppliers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
             </label>
-            <label className={`${LABEL} min-w-0`}>Received on<input className={FIELD} type="date" max={today()} value={form.purchaseDate} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} /></label>
+            <label className={`${LABEL} min-w-0`}>Received on<DateInput className={FIELD} max={today()} value={form.purchaseDate} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} /></label>
             <label className={`${LABEL} min-w-0`}>Supplier invoice no.<input className={FIELD} value={form.supplierInvoice} onChange={(event) => setForm({ ...form, supplierInvoice: event.target.value })} /></label>
           </div>
           {supplier ? <p className="text-xs text-stone-500">{supplier.name} — owed now {money(supplier.balance)}</p> : null}

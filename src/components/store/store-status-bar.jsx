@@ -1,5 +1,6 @@
 'use client';
 
+import { fmtDate } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -33,9 +34,7 @@ function authHeaders() {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  const [year, month, day] = String(iso).slice(0, 10).split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    .format(new Date(Date.UTC(year, month - 1, day)));
+  return fmtDate(String(iso).slice(0, 10));
 }
 
 function formatTime(value) {

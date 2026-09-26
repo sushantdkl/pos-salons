@@ -5,6 +5,7 @@
  * snapshots and counted note breakdown). Used by Opening & Closing and Business Day History.
  */
 
+import { fmtDate } from '@/lib/dates/display';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { CASH_DENOMINATIONS } from '@/lib/business-day/denominations';
@@ -12,9 +13,7 @@ import { FinancialTable, money, StatusBadge } from '@/components/erp';
 
 export function formatBusinessDate(iso) {
   if (!iso) return '—';
-  const [year, month, day] = String(iso).slice(0, 10).split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(year, month - 1, day)));
+  return fmtDate(String(iso).slice(0, 10));
 }
 
 export function formatNepalTime(value) {

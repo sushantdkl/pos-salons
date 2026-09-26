@@ -12,6 +12,7 @@
  * Admin and cashier share this page; cashier payloads never contain salary figures.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, DoorOpen, Landmark } from 'lucide-react';
@@ -27,9 +28,7 @@ import { erpFetch } from '@/components/erp/use-report';
 
 function formatDate(iso) {
   if (!iso) return '—';
-  const [year, month, day] = String(iso).slice(0, 10).split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(year, month - 1, day)));
+  return fmtDate(String(iso).slice(0, 10));
 }
 
 function formatTime(value) {
@@ -204,7 +203,7 @@ export default function OpeningClosingPage() {
     loadAll();
   };
 
-  const generatedAt = report?.generatedAt ? new Date(report.generatedAt).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }) : '';
+  const generatedAt = report?.generatedAt ? fmtDateTime(report.generatedAt) : '';
 
   return (
     <ErpPage>

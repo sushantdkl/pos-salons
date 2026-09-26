@@ -25,3 +25,16 @@ test('custom reversed ranges are normalized and BS month starts use BS boundary'
   const range = resolveReportPeriod('this_month', { calendarSystem: 'BS', now: new Date('2026-09-20T12:00:00+05:45') });
   assert.equal(range.start, bsToAdIso('2083-06-01'));
 });
+
+test('display dates follow the salon calendar', async () => {
+  const { fmtDate, fmtDateTime, fmtDayNumber } = await import('../../src/lib/dates/display.js');
+  assert.equal(fmtDate('2026-09-24', { system: 'AD' }), '24 Sept 2026');
+  assert.match(fmtDate('2026-09-24', { system: 'BS' }), /^\d{1,2} Ashwin 2083$/);
+  assert.match(fmtDate('2026-09-24', { system: 'BS', year: false, weekday: 'short' }), /^Thu, \d{1,2} Ashwin$/);
+  // A timestamp is read in Nepal time: 20:00 UTC on the 23rd is already the 24th in Kathmandu.
+  assert.equal(fmtDate('2026-09-23T20:00:00Z', { system: 'AD' }), '24 Sept 2026');
+  assert.match(fmtDateTime('2026-09-23T20:00:00Z', { system: 'BS' }), /Ashwin 2083, 1:45 am$/);
+  assert.equal(fmtDayNumber('2026-09-24', { system: 'AD' }), '24');
+  assert.equal(fmtDate(null), '—');
+  assert.equal(fmtDate('not a date'), '—');
+});

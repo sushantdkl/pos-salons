@@ -1,5 +1,6 @@
 'use client';
 
+import { fmtDateTime } from '@/lib/dates/display';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, GitCompareArrows, Lightbulb, PieChart } from 'lucide-react';
@@ -41,7 +42,7 @@ function formatDateTime(value) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return fmtDateTime(date, { year: false });
 }
 
 const TRANSACTION_COLUMNS = [

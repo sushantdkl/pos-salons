@@ -2,6 +2,7 @@
 
 /** Purchase detail drawer: lines, totals, how it was paid, and void (stock must still be on hand). */
 
+import { fmtDate } from '@/lib/dates/display';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { AlertBanner, ErpButton, FinancialTable, LoadingState, money, StatusBadge } from '@/components/erp';
@@ -34,7 +35,7 @@ export default function PurchaseDrawer({ id, onClose, onVoided }) {
           {purchase ? (
             <>
               <p className="text-sm text-stone-600">
-                {purchase.date}
+                {fmtDate(purchase.date)}
                 {purchase.supplierInvoice ? ` · Invoice ${purchase.supplierInvoice}` : ''}
                 {purchase.createdBy ? ` · by ${purchase.createdBy}` : ''}
                 {' '}{purchase.status === 'VOID' ? <StatusBadge status="CANCELLED" label="Void" /> : <StatusBadge status="COMPLETED" label="Received" />}

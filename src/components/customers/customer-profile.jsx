@@ -237,6 +237,7 @@ export default function CustomerProfileView({ customerId }) {
         {tab === 'ledger' ? (
           <ProfileTable
             empty="This customer has never used credit."
+            onRowClick={(index) => { if (ledger[index].billId) setBillId(ledger[index].billId); }}
             align={{ 3: 'right', 4: 'right', 5: 'right' }}
             headers={['When', 'Activity', 'Bill', 'Credit given (+)', 'Reduced (−)', 'Balance', 'Note']}
             rows={ledger.map((row) => [
@@ -249,6 +250,7 @@ export default function CustomerProfileView({ customerId }) {
         {tab === 'payments' ? (
           <ProfileTable
             empty="No credit payments yet."
+            onRowClick={(index) => { const first = payments[index].allocations.find((a) => a.billId); if (first) setBillId(first.billId); }}
             align={{ 4: 'right', 5: 'right' }}
             headers={['When', 'Method', 'Reference', 'Bills covered', 'Amount', 'Balance after', 'Received by']}
             rows={payments.map((row) => [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { Fragment, useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
@@ -8,6 +8,7 @@ import { ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { canAccessPath, dashboardPathForRole, normalizeRole } from '@/constants/roles';
 import { flattenNavigation, NAV_TINTS, navigationForRole, resolveActiveHref, tileFor } from '@/constants/navigation';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useCalendarSystem } from '@/lib/dates/display';
 
 const SIDEBAR_SCROLL_KEY = 'salon_pos_sidebar_scroll';
 const NAV_GROUPS_KEY = 'salon_pos_nav_groups';
@@ -32,6 +33,8 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const navRef = useRef(null);
+  // Settings → Calendar (AD / BS). The page remounts when it changes so every date re-renders.
+  const calendarSystem = useCalendarSystem();
   const [loading, setLoading] = useState(() => !authInitialized);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
@@ -425,7 +428,7 @@ export default function AdminLayout({ children }) {
           </div>
         </div>
         <div className="min-w-0 pb-[env(safe-area-inset-bottom)]">
-          {children}
+          <Fragment key={calendarSystem}>{children}</Fragment>
         </div>
       </div>
 

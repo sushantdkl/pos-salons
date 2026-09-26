@@ -1,3 +1,4 @@
+import { refreshServerCalendarSystem } from './dates/calendar-setting.js';
 import bcrypt from 'bcryptjs';
 
 const CUSTOMER_COLUMNS = [
@@ -1151,6 +1152,8 @@ export async function requireAuth(request, db) {
     error.status = 401;
     throw error;
   }
+  // Report periods ("This Month") follow Settings → Calendar; keep the cached value current.
+  await refreshServerCalendarSystem(db);
   return user;
 }
 

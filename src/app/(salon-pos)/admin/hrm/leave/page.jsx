@@ -5,6 +5,7 @@
  * allocation, carry forward, usage, reversals, adjustments), leave types and holidays.
  */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useState } from 'react';
 import { CalendarHeart, CalendarOff, Check, Plus, Trash2, X } from 'lucide-react';
 import {
@@ -192,7 +193,7 @@ export default function LeavePage() {
             <>
               {perms?.['shift.manage'] ? (
                 <div className="grid gap-2 rounded-xl border border-stone-200 bg-white p-3 sm:grid-cols-[10rem_1fr_auto_auto] sm:items-end">
-                  <label className={LABEL}>Date<input type="date" className={FIELD} value={holiday.date} onChange={(event) => setHoliday({ ...holiday, date: event.target.value })} /></label>
+                  <label className={LABEL}>Date<DateInput className={FIELD} value={holiday.date} onChange={(event) => setHoliday({ ...holiday, date: event.target.value })} /></label>
                   <label className={LABEL}>Holiday<input className={FIELD} value={holiday.name} placeholder="Dashain, Tihar…" onChange={(event) => setHoliday({ ...holiday, name: event.target.value })} /></label>
                   <label className="flex items-center gap-2 pb-3 text-sm text-stone-700"><input type="checkbox" checked={holiday.isMandatory} onChange={(event) => setHoliday({ ...holiday, isMandatory: event.target.checked })} /> Salon closed</label>
                   <ErpButton variant="primary" icon={Plus} disabled={!holiday.name.trim()} onClick={() => run({ __url: '/api/hrm/shifts', action: 'holiday', ...holiday }, () => setHoliday({ ...holiday, name: '' }))}>Add</ErpButton>

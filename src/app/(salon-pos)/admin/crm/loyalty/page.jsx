@@ -6,6 +6,8 @@
  * a reason and are audited. Rewards are applied at the POS by the cashier.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
+import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useMemo, useState } from 'react';
@@ -21,7 +23,7 @@ const TYPE_LABEL = { EARN: 'Paid visit', REDEEM: 'Reward used', REVERSAL: 'Rever
 
 function fmt(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', year: 'numeric' });
+  return fmtDate(value);
 }
 
 function ProgressDots({ progress, total }) {
@@ -88,8 +90,8 @@ function ProgramEditor({ initial, services, onClose, onSaved }) {
       ) : <label className={LABEL}>{form.rewardType === 'FIXED_DISCOUNT' ? 'Amount off (Rs)' : 'Percent off'}<input type="number" min="0" className={FIELD} value={form.rewardValue} onChange={(event) => set('rewardValue', event.target.value)} /></label>}
       <label className={LABEL}>Reward name shown to customers (optional)<input className={FIELD} value={form.rewardLabel} placeholder="Free Haircut" onChange={(event) => set('rewardLabel', event.target.value)} /></label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className={LABEL}>Starts<input type="date" className={FIELD} value={form.startDate} onChange={(event) => set('startDate', event.target.value)} /></label>
-        <label className={LABEL}>Ends (optional)<input type="date" className={FIELD} value={form.endDate} onChange={(event) => set('endDate', event.target.value)} /></label>
+        <label className={LABEL}>Starts<DateInput className={FIELD} value={form.startDate} onChange={(event) => set('startDate', event.target.value)} /></label>
+        <label className={LABEL}>Ends (optional)<DateInput className={FIELD} value={form.endDate} onChange={(event) => set('endDate', event.target.value)} /></label>
       </div>
       <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={form.rewardCountsAsVisit} onChange={(event) => set('rewardCountsAsVisit', event.target.checked)} /> The free visit also counts as the first visit of the next card</label>
       <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={form.isActive} onChange={(event) => set('isActive', event.target.checked)} /> Active</label>
@@ -189,7 +191,7 @@ export default function LoyaltyPage() {
 
           {tab === 'transactions' ? (
             <FinancialTable caption="Loyalty ledger" rows={data.transactions} empty="No loyalty entries yet." columns={[
-              { key: 'at', label: 'When', render: (row) => new Date(row.at).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }) },
+              { key: 'at', label: 'When', render: (row) => fmtDateTime(row.at) },
               { key: 'who', label: 'Customer', render: (row) => <Link href={`/admin/customers/${row.customerId}`} className="hover:underline">{row.customerName}</Link> },
               { key: 'program', label: 'Program', render: (row) => row.programName },
               { key: 'type', label: 'Type', render: (row) => (row.type === 'REVERSAL' ? `Reversal of ${TYPE_LABEL[row.reversedType]?.toLowerCase() || 'entry'}` : TYPE_LABEL[row.type]) },

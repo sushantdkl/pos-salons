@@ -5,6 +5,7 @@
  * time off. Availability, conflict checks and the website booking form all read these.
  */
 
+import { fmtDateTime } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, CalendarCog, Trash2 } from 'lucide-react';
@@ -123,7 +124,7 @@ export default function AppointmentSettingsPage() {
     } catch (saveError) { setTimeOffError(saveError.message); }
   };
 
-  const nepal = (value) => new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const nepal = (value) => fmtDateTime(value, { year: false });
 
   return (
     <ErpPage narrow>

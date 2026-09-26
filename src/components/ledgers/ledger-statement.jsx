@@ -6,6 +6,7 @@
  * profile APIs (every figure is server-side); nothing is summed here.
  */
 
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, ExternalLink, Loader2, Printer, Wallet, X } from 'lucide-react';
@@ -31,7 +32,7 @@ function Kpi({ title, value, sub, danger }) {
   );
 }
 
-export function LedgerStatement({ kind, id, onClose, onChanged, calendarSystem = 'AD' }) {
+export function LedgerStatement({ kind, id, onClose, onChanged, calendarSystem = getCalendarSystem() }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [openBill, setOpenBill] = useState(null);

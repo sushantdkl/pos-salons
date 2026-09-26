@@ -5,6 +5,7 @@
  * reviews. Moderation only controls PUBLIC display: feedback (including low ratings) is kept.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import Link from 'next/link';
 import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useState } from 'react';
@@ -33,7 +34,7 @@ function ReviewDetail({ review, onClose, onChanged }) {
   };
   return (
     <Modal wide title={`${review.customerName || review.displayName || 'Guest'} · ${review.rating ? `${review.rating}★` : 'no rating'}`}
-      subtitle={`${new Date(review.submittedAt).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' })}${review.formName ? ` · ${review.formName}` : ''}`} onClose={onClose}
+      subtitle={`${fmtDateTime(review.submittedAt)}${review.formName ? ` · ${review.formName}` : ''}`} onClose={onClose}
       footer={(
         <>
           <ErpButton onClick={() => act({ action: 'moderate', status: 'PUBLISHED' })} disabled={!review.publicConsent}>Publish</ErpButton>
@@ -74,7 +75,7 @@ function ReviewDetail({ review, onClose, onChanged }) {
 function ReviewsTable({ reviews, onOpen }) {
   return (
     <FinancialTable caption="Reviews" rows={reviews} empty="No responses here yet." onRowClick={onOpen} columns={[
-      { key: 'when', label: 'Submitted', render: (row) => new Date(row.submittedAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short' }) },
+      { key: 'when', label: 'Submitted', render: (row) => fmtDate(row.submittedAt, { year: false }) },
       { key: 'who', label: 'Customer', render: (row) => <span className="font-semibold text-stone-900">{row.customerName || row.displayName || 'Guest'}</span> },
       { key: 'rating', label: 'Rating', render: (row) => <StarsText value={row.rating} /> },
       { key: 'text', label: 'Review', render: (row) => <span className="line-clamp-2 max-w-md text-stone-700">{row.text || '—'}</span> },

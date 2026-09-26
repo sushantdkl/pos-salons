@@ -5,6 +5,7 @@
  * Payroll only ever reads APPROVED minutes; extra time is never paid automatically.
  */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Check, Plus, Timer, X } from 'lucide-react';
@@ -113,7 +114,7 @@ export default function OvertimePage() {
             </select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className={LABEL}>Date<input type="date" className={FIELD} max={nepalToday()} value={request.date} onChange={(event) => setRequest({ ...request, date: event.target.value })} /></label>
+            <label className={LABEL}>Date<DateInput className={FIELD} max={nepalToday()} value={request.date} onChange={(event) => setRequest({ ...request, date: event.target.value })} /></label>
             <label className={LABEL}>Hours<input type="number" min="0.25" step="0.25" className={FIELD} value={request.hours} onChange={(event) => setRequest({ ...request, hours: event.target.value })} /></label>
           </div>
           <label className={LABEL}>Reason<input className={FIELD} value={request.reason} onChange={(event) => setRequest({ ...request, reason: event.target.value })} /></label>

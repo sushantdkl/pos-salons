@@ -6,6 +6,7 @@
  * them start and complete their own services.
  */
 
+import { fmtDate } from '@/lib/dates/display';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { EmptyState, ErpButton, ErpPage, ErrorState, LoadingState, PageHeader, RefreshButton, StatusBadge } from '@/components/erp';
@@ -22,7 +23,7 @@ function plus(iso, days) {
   return date.toISOString().slice(0, 10);
 }
 function dayLabel(iso) {
-  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+  return fmtDate(iso, { weekday: 'long', year: false });
 }
 
 export default function MyAppointmentsPage() {

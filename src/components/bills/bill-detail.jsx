@@ -8,6 +8,7 @@
  *   <BillLink billId={id} number="SALON-0000123" />   — a clickable bill number
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, Ban, CheckCircle2, Gift, History, Printer, ReceiptText, Star, X } from 'lucide-react';
@@ -21,7 +22,7 @@ const PROVIDER = { ESEWA_PHONEPAY: 'eSewa / PhonePay', BANK: 'Bank QR' };
 
 function when(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return fmtDateTime(value);
 }
 
 function Row({ label, value, strong = false, tone = '' }) {
@@ -131,7 +132,7 @@ export function BillDetailDrawer({ billId, onClose, onChanged }) {
                 <div className="rounded-xl bg-stone-50 p-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500">Visit</p>
                   <p className="font-semibold text-stone-800">{b.tokenNumber ? `Token ${b.tokenNumber}` : 'No token'}</p>
-                  {b.appointmentNumber ? <p className="text-xs text-stone-500">Appointment {b.appointmentNumber}</p> : <p className="text-xs text-stone-500">Business day {b.businessDate || b.date}</p>}
+                  {b.appointmentNumber ? <p className="text-xs text-stone-500">Appointment {b.appointmentNumber}</p> : <p className="text-xs text-stone-500">Business day {fmtDate(b.businessDate || b.date)}</p>}
                 </div>
               </section>
 

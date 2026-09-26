@@ -200,6 +200,20 @@ check('Analytics top service by revenue', analytics1.services.byRevenue[0]?.name
 check('Analytics voids control', analytics1.controls.voids, 1);
 check('Analytics trend sums to net sales', analytics1.salesTrend.reduce((sum, point) => sum + point.netSales, 0), 8500);
 check('Analytics staff revenue (barber, 3 services)', analytics1.staff[0]?.servicesCompleted, 3);
+// Drill-down: the bills behind a staff / service row add up to that row.
+const staffRow = analytics1.staff[0];
+const staffBills = (await call(admin, 'GET', `/api/admin/analytics/bills?period=today&kind=staff&id=${staffRow.staffId}`)).json;
+check('Drill-down staff bills add up to staff revenue', staffBills.totals.lineValue, staffRow.revenue);
+const serviceRow = analytics1.services.byRevenue[0];
+const serviceBills = (await call(admin, 'GET', `/api/admin/analytics/bills?period=today&kind=service&id=${serviceRow.id}`)).json;
+check('Drill-down service bills add up to service revenue', serviceBills.totals.lineValue, serviceRow.revenue);
+// Staff dashboard (barber's own view): counts and names come through, not zero / blank.
+const barberView = (await call(barberToken, 'GET', '/api/admin/staff-performance?period=today')).json;
+check('Barber dashboard counts services done today', barberView.metrics?.today?.servicesCompleted, (value) => Number(value) >= 2);
+check('Barber dashboard lists customer names', barberView.recentServices?.[0]?.customerName, (value) => Boolean(value));
+check('Barber dashboard lists service names', barberView.recentServices?.[0]?.serviceName, (value) => Boolean(value));
+const cashierDrill = await call(cashier, 'GET', `/api/admin/analytics/bills?period=today&kind=staff&id=${staffRow.staffId}`, null, { 'x-expect-error': '1' });
+check('Cashier cannot open analytics drill-down', cashierDrill.status, 403);
 const cashierAnalytics = await call(cashier, 'GET', '/api/admin/analytics?period=today', null, { 'x-expect-error': '1' });
 check('Cashier cannot read analytics', cashierAnalytics.status, 403);
 for (const periodValue of ['yesterday', '3days', '7days', '30days', 'this_week', 'month', 'last_month']) {
@@ -280,6 +294,31 @@ const controls = (await call(admin, 'GET', '/api/admin/analytics?period=today'))
 check('Analytics same-day reopen counted', controls.reopenedSessions, 1);
 check('Analytics shortage counted', controls.shortages, 1);
 check('Analytics shortage total', controls.shortageTotal, -100);
+
+/* ------------------------------------------------ calendar: BS month = Nepali month */
+const bs = await import('../../src/lib/dates/calendar.js');
+const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+const bsNow = bs.adToBsParts(todayIso);
+const bsMonthStart = bs.bsToAdIso(`${bsNow.year}-${String(bsNow.month).padStart(2, '0')}-01`);
+const bsMonthEnd = bs.bsToAdIso(`${bsNow.year}-${String(bsNow.month).padStart(2, '0')}-${String(bs.bsDaysInMonth(bsNow.year, bsNow.month)).padStart(2, '0')}`);
+await call(admin, 'PUT', '/api/admin/settings', { calendar_system: 'BS' });
+check('Calendar endpoint reports BS', (await call(cashier, 'GET', '/api/settings/calendar')).json.calendarSystem, (value) => value === 'BS');
+const bsMonth = (await call(admin, 'GET', '/api/admin/executive-summary?period=month')).json;
+const bsSummary = bsMonth.summary || bsMonth;
+check('BS: "This month" starts on the 1st of the Nepali month', bsSummary.period?.startDate, (value) => value === bsMonthStart);
+const bsCustom = (await call(admin, 'GET', `/api/admin/executive-summary?period=custom&startDate=${bsMonthStart}&endDate=${bsMonthEnd}`)).json;
+check('BS: month net sales = the same dates as a custom range', bsSummary.revenue.netSales, (bsCustom.summary || bsCustom).revenue.netSales);
+const bsAnalytics = (await call(admin, 'GET', '/api/admin/analytics?period=month')).json.analytics;
+check('BS: analytics month = summary month', bsAnalytics.kpis.netSales, bsSummary.revenue.netSales);
+await call(admin, 'PUT', '/api/admin/settings', { calendar_system: 'AD' });
+const adMonth = (await call(admin, 'GET', '/api/admin/executive-summary?period=month')).json;
+check('AD: "This month" starts on the 1st of the English month', (adMonth.summary || adMonth).period?.startDate, (value) => value === `${todayIso.slice(0, 7)}-01`);
+
+/* ------------------------------------------ advances: a blank limit means 100% */
+await call(admin, 'PUT', '/api/admin/settings', { advance_ceiling_percent: '' });
+const openPolicy = (await call(cashier, 'GET', '/api/payroll/advances')).json.policy;
+check('Blank advance limit does not lock cashier advances', openPolicy.configured, (value) => value === true);
+await call(admin, 'PUT', '/api/admin/settings', { advance_ceiling_percent: '50' });
 
 /* ------------------------------------------------------------------- history */
 const history = (await call(admin, 'GET', '/api/store/history')).json;

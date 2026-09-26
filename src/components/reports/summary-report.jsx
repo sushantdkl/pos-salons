@@ -9,6 +9,7 @@
  * sections — they are absent from the response, not hidden here.
  */
 
+import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import { ScrollText } from 'lucide-react';
 import {
   AlertBanner, BreakdownCard, count, ErpPage, humanize, ErrorState, line, LoadingState, money, PageHeader,
@@ -19,7 +20,7 @@ import { CashPositionBoard } from '@/components/reports/cash-position-board';
 
 function generatedLabel(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return fmtDateTime(iso);
 }
 
 function MoneyIn({ s }) {
@@ -222,7 +223,7 @@ export default function SummaryReport({ scope = 'admin' }) {
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const s = data?.summary;
   const businessDayNote = s?.businessDay?.scoped
-    ? `Business Day ${s.businessDay.date || ''} · ${s.businessDay.sessions} session(s)`
+    ? `Business Day ${fmtDate(s.businessDay.date)} · ${s.businessDay.sessions} session(s)`
     : s?.period?.displayRange;
 
   return (
@@ -231,7 +232,7 @@ export default function SummaryReport({ scope = 'admin' }) {
         title="Summary Report"
         period={`${s?.period?.label || ''} · ${s?.period?.displayRange || ''}`}
         generatedAt={generatedLabel(s?.generatedAt)}
-        context={s?.businessDay?.scoped ? `Business Day ${s.businessDay.date} (${s.businessDay.sessions} session(s))` : undefined}
+        context={s?.businessDay?.scoped ? `Business Day ${fmtDate(s.businessDay.date)} (${s.businessDay.sessions} session(s))` : undefined}
       />
       <PageHeader
         icon={ScrollText}

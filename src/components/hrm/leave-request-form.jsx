@@ -2,6 +2,7 @@
 
 /** Leave request form — for oneself, or (with employees passed) on an employee's behalf. */
 
+import { DateInput } from '@/components/shared/calendar-date-input';
 import { useState } from 'react';
 import { AlertBanner, ErpButton } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
@@ -46,8 +47,8 @@ export default function LeaveRequestForm({ employees, types, staffId = null, onC
         </select>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className={LABEL}>{form.partialDay === 'FULL' ? 'From' : 'Date'}<input type="date" className={FIELD} value={form.startDate} onChange={(event) => { set('startDate', event.target.value); if (event.target.value > form.endDate) set('endDate', event.target.value); }} /></label>
-        {form.partialDay === 'FULL' ? <label className={LABEL}>To<input type="date" className={FIELD} min={form.startDate} value={form.endDate} onChange={(event) => set('endDate', event.target.value)} /></label> : null}
+        <label className={LABEL}>{form.partialDay === 'FULL' ? 'From' : 'Date'}<DateInput className={FIELD} value={form.startDate} onChange={(event) => { set('startDate', event.target.value); if (event.target.value > form.endDate) set('endDate', event.target.value); }} /></label>
+        {form.partialDay === 'FULL' ? <label className={LABEL}>To<DateInput className={FIELD} min={form.startDate} value={form.endDate} onChange={(event) => set('endDate', event.target.value)} /></label> : null}
       </div>
       <label className={LABEL}>Reason<input className={FIELD} value={form.reason} onChange={(event) => set('reason', event.target.value)} /></label>
       {type?.documentRequired ? <label className={LABEL}>Supporting document link *<input className={FIELD} value={form.attachmentUrl} onChange={(event) => set('attachmentUrl', event.target.value)} placeholder="Link to the document" /></label> : null}

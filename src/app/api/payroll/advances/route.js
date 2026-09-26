@@ -13,8 +13,12 @@ const money = (value) => Math.round(Number(value) * 100) / 100;
 async function policy(db) {
   const rows = await db.all(`SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('advance_ceiling_percent','calendar_system')`);
   const values = Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
-  const percent = Number(values.advance_ceiling_percent);
-  return { configured: Number.isFinite(percent) && percent > 0 && percent <= 100, percent, calendarSystem: values.calendar_system === 'BS' ? 'BS' : 'AD' };
+  const raw = String(values.advance_ceiling_percent ?? '').trim();
+  const percent = Number(raw);
+  const valid = raw !== '' && Number.isFinite(percent) && percent > 0 && percent <= 100;
+  // No ceiling set: a staff member may receive up to one month's base salary per payroll period.
+  if (!raw) return { configured: true, defaulted: true, percent: 100, calendarSystem: values.calendar_system === 'BS' ? 'BS' : 'AD' };
+  return { configured: valid, defaulted: false, percent, calendarSystem: values.calendar_system === 'BS' ? 'BS' : 'AD' };
 }
 
 async function createExpense(tx, input, userId, scope) {
@@ -63,7 +67,8 @@ export async function POST(request) {
       const period = resolveReportPeriod('this_month', { calendarSystem: advancePolicy.calendarSystem });
       const issued = await tx.get(`SELECT COALESCE(SUM(amount),0) AS total FROM salary_advances WHERE staff_id=? AND deleted_at IS NULL AND status <> 'CANCELLED' AND payment_date >= ?::date AND payment_date <= ?::date`, [staffId, period.start, period.end]);
       const maximum = money(Number(staff.base_salary) * advancePolicy.percent / 100);
-      if (money(Number(issued.total || 0) + amount) > maximum) { const error = new Error(`Advance exceeds the employee's remaining period allowance`); error.status = 422; throw error; }
+      if (maximum <= 0) { const error = new Error(`${staff.full_name} has no base salary set, so no advance can be issued. Ask an admin to set it in Staff.`); error.status = 422; throw error; }
+      if (money(Number(issued.total || 0) + amount) > maximum) { const error = new Error(`Advance exceeds the employee's remaining period allowance (Rs ${Math.max(0, money(maximum - Number(issued.total || 0))).toFixed(2)} left)`); error.status = 422; throw error; }
       const paymentDate = clean(data.paymentDate) || nepalDateString();
       return createAdvance(tx, { ...data, amount, paymentDate, payrollPeriodStart: period.start, payrollPeriodEnd: period.end, eligibleSalary: Number(staff.base_salary), ceilingPercent: advancePolicy.percent, idempotencyKey, sourceIdentifier: `ADV-${idempotencyKey}` }, user.id, { businessDayId: scope.businessDayId, storeSessionId: scope.sessionId }, (innerTx, input, actor, innerScope) => createExpense(innerTx, { ...input, paidBy: user.full_name || user.username }, actor, innerScope));
     });

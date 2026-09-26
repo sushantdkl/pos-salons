@@ -1,5 +1,6 @@
 'use client';
 
+import { getCalendarSystem } from '@/lib/dates/display';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
@@ -100,7 +101,7 @@ const PAGE_SIZES = [25, 50, 100, 250];
  * totals), paging and Excel/CSV of every matching row.
  */
 export function ReportTable({
-  title, columns, rows = [], totals = {}, calendarSystem = 'AD', globalSearch = '', exportName, exportSubtitle,
+  title, columns, rows = [], totals = {}, calendarSystem = getCalendarSystem(), globalSearch = '', exportName, exportSubtitle,
   empty = 'No records in the selected period.', note, truncated = false, defaultPageSize = 50,
 }) {
   const [search, setSearch] = useState('');

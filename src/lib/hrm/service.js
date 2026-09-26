@@ -9,6 +9,7 @@
  * and writes hr_audit_log. All maths comes from ./calc.js.
  */
 
+import { bsDaysInMonth, bsToAdIso } from '@/lib/dates/calendar';
 import { hasPermission, PERMISSIONS } from '@/lib/auth/permissions';
 import { PERMISSION_KEYS } from '@/lib/auth/permission-catalog';
 import {
@@ -1016,6 +1017,11 @@ export async function decideOvertime(db, actor, id, { decision, approvedMinutes,
 
 function monthBounds(month) {
   if (!/^\d{4}-\d{2}$/.test(String(month || ''))) throw httpError('Month must be YYYY-MM');
+  // BS months (years 2070+) come from the payroll form when Settings > Calendar is BS.
+  if (Number(month.slice(0, 4)) >= 2070) {
+    const [year, value] = month.split('-').map(Number);
+    return { from: bsToAdIso(`${month}-01`), to: bsToAdIso(`${month}-${String(bsDaysInMonth(year, value)).padStart(2, '0')}`) };
+  }
   const from = `${month}-01`;
   const next = new Date(`${from}T00:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);

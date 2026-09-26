@@ -568,3 +568,58 @@ export async function getSalonAnalytics(db, period, options = {}) {
     controls: { ...controls, cashAdded: summary.cashPosition.cashAdded, cashRemoved: summary.cashPosition.cashRemoved, cancelledTokens: tokens.cancelled },
   };
 }
+
+/* ------------------------------------------------------------- drill-down */
+
+/**
+ * The bills behind one analytics row — a staff member, service, product or customer — for the
+ * same period and scope as the analytics aggregate, so the list always adds up to the row.
+ * `lineValue` is the matching lines' value (service / product / staff rows); for a customer it
+ * is the bill total, which is what "Spend" sums.
+ */
+export async function getAnalyticsBills(db, period, options = {}, target = {}) {
+  const scope = {
+    startDate: options.startDate || null,
+    endDate: options.endDate || null,
+    businessDayId: period === 'today' && options.businessDayId ? options.businessDayId : null,
+  };
+  const filter = revenueScope('b', period, scope);
+  const id = Number(target.id);
+  if (!Number.isInteger(id) || id <= 0) throw Object.assign(new Error('Choose a row to open'), { status: 400 });
+  const match = {
+    staff: "i.item_type = 'service' AND i.staff_id = ?",
+    service: "i.item_type = 'service' AND i.item_id = ?",
+    product: "i.item_type = 'product' AND i.item_id = ?",
+    customer: 'b.customer_id = ?',
+  }[target.kind];
+  if (!match) throw Object.assign(new Error('Unknown drill-down'), { status: 400 });
+  const lineValue = target.kind === 'customer' ? 'MAX(b.grand_total)' : 'COALESCE(SUM(i.subtotal), 0)';
+  const rows = await db.all(`
+    SELECT b.id, b.bill_number, ${BILL_DATE_EXPR_B} AS at, COALESCE(NULLIF(b.customer_name, ''), 'Walk-in') AS customer,
+           b.payment_method, b.grand_total,
+           ${lineValue} AS line_value,
+           COUNT(i.id)::int AS lines,
+           STRING_AGG(DISTINCT i.name, ', ') AS items,
+           STRING_AGG(DISTINCT NULLIF(i.staff_name_snapshot, ''), ', ') AS staff
+    FROM salon_bills b
+    JOIN salon_bill_items i ON i.bill_id = b.id
+    WHERE ${filter.clause} AND ${PAID_BILL_STATUS_SQL} AND ${match}
+    GROUP BY b.id
+    ORDER BY ${BILL_DATE_EXPR_B} DESC, b.id DESC
+    LIMIT 1000
+  `, [...filter.params, id]);
+  const bills = rows.map((row) => ({
+    id: Number(row.id), number: row.bill_number, at: row.at, customer: row.customer, paymentMethod: row.payment_method,
+    total: round2(row.grand_total), lineValue: round2(row.line_value), lines: Number(row.lines || 0), items: row.items || '', staff: row.staff || '',
+  }));
+  return {
+    bills,
+    totals: {
+      bills: bills.length,
+      lineValue: round2(bills.reduce((sum, bill) => sum + bill.lineValue, 0)),
+      billTotal: round2(bills.reduce((sum, bill) => sum + bill.total, 0)),
+      lines: bills.reduce((sum, bill) => sum + bill.lines, 0),
+    },
+    truncated: rows.length === 1000,
+  };
+}

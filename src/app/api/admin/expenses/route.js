@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { mapApiError } from '@/lib/db/api-errors';
-import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, currentWeekStartSql } from '@/lib/db/postgres-dates';
+import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, periodDateColumnFilter, periodDateFilter } from '@/lib/db/postgres-dates';
+import { adToBsParts, bsDaysInMonth, bsToAdIso, nepalDateString } from '@/lib/dates/calendar';
+import { getServerCalendarSystem } from '@/lib/dates/calendar-setting';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
 import { assertDrawerCashAvailable, requireOpenSession } from '@/lib/business-day/service';
@@ -36,16 +38,37 @@ const PAYMENT_METHODS = ['cash', 'online', 'bank_transfer', 'mixed'];
 const PAYMENT_STATUSES = ['unpaid', 'partially_paid', 'paid'];
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return nepalDateString();
 }
 
+// Salary months are 'YYYY-MM' in the calendar they were chosen in: BS years (2070+) are
+// ~57 years ahead of AD, so the two can never be confused.
+const isBsMonth = (month) => Number(String(month).slice(0, 4)) >= 2070;
+
 function monthStart(month) {
+  if (isBsMonth(month)) return bsToAdIso(`${month}-01`);
   return `${month}-01`;
 }
 
 function nextMonthStart(month) {
   const [year, value] = String(month).split('-').map(Number);
+  if (isBsMonth(month)) {
+    const last = bsToAdIso(`${month}-${String(bsDaysInMonth(year, value)).padStart(2, '0')}`);
+    const next = new Date(`${last}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+  }
   return new Date(Date.UTC(year, value, 1)).toISOString().slice(0, 10);
+}
+
+/** This month as 'YYYY-MM' in the salon's calendar. */
+function currentSalaryMonth() {
+  const today = nepalDateString();
+  if (getServerCalendarSystem() === 'BS') {
+    const bs = adToBsParts(today);
+    return `${bs.year}-${String(bs.month).padStart(2, '0')}`;
+  }
+  return today.slice(0, 7);
 }
 
 function money(value) {
@@ -128,7 +151,7 @@ function mapSalary(row) {
 
 async function getStaff(db) {
   return db.all(`
-    SELECT u.id, u.full_name as name, sp.salon_role as role, COALESCE(sp.base_salary, 0) as baseSalary
+    SELECT u.id, u.full_name as name, sp.salon_role as role, COALESCE(sp.base_salary, 0) as "baseSalary"
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
     WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
@@ -138,13 +161,13 @@ async function getStaff(db) {
 
 async function getStaffMonthMetrics(db, staffId, month) {
   return db.get(`
-    SELECT COUNT(i.id)::int as servicesCompleted,
-           COALESCE(SUM(i.subtotal), 0) as revenueGenerated,
-           COALESCE(SUM(i.commission_amount), 0) as commissionEarned
+    SELECT COUNT(i.id)::int as "servicesCompleted",
+           COALESCE(SUM(i.subtotal), 0) as "revenueGenerated",
+           COALESCE(SUM(i.commission_amount), 0) as "commissionEarned"
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     WHERE i.item_type = 'service' AND i.staff_id = ? AND b.status = 'paid'
-      AND (${BILL_DATE_EXPR_B}) >= ?::date AND (${BILL_DATE_EXPR_B}) < ?::date
+      AND ((${BILL_DATE_EXPR_B}) AT TIME ZONE 'Asia/Kathmandu')::date >= ?::date AND ((${BILL_DATE_EXPR_B}) AT TIME ZONE 'Asia/Kathmandu')::date < ?::date
   `, [staffId, monthStart(month), nextMonthStart(month)]);
 }
 
@@ -240,22 +263,26 @@ async function getSalaries(db, searchParams) {
 }
 
 async function getSummary(db) {
+  // Nepal dates, and "month" follows Settings → Calendar (BS or AD) like every other report.
+  const TODAY_NP = `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kathmandu')::date`;
+  const monthExpense = periodDateColumnFilter('month', 'expense_date').clause;
+  const weekExpense = periodDateColumnFilter('this_week', 'expense_date').clause;
+  const monthBills = periodDateFilter('month', null, null, BILL_DATE_EXPR).clause;
   const expenseRow = await db.get(`
     SELECT
-      COALESCE(SUM(CASE WHEN expense_date = CURRENT_DATE AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as today,
-      COALESCE(SUM(CASE WHEN expense_date >= ${currentWeekStartSql()} AND expense_date < ${currentWeekStartSql()} + INTERVAL '7 days' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as week,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as month,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Salary' THEN amount ELSE 0 END), 0) as salaryPaid,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Staff Commission' THEN amount ELSE 0 END), 0) as commissionPaid,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category = 'Product Purchase' THEN amount ELSE 0 END), 0) as productPurchase,
-      COALESCE(SUM(CASE WHEN expense_date >= date_trunc('month', CURRENT_DATE)::date AND expense_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') THEN amount ELSE 0 END), 0) as otherExpenses
+      COALESCE(SUM(CASE WHEN expense_date = ${TODAY_NP} AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as today,
+      COALESCE(SUM(CASE WHEN ${weekExpense} AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as week,
+      COALESCE(SUM(CASE WHEN ${monthExpense} AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) as month,
+      COALESCE(SUM(CASE WHEN ${monthExpense} AND category = 'Staff Salary' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) AS salary_paid,
+      COALESCE(SUM(CASE WHEN ${monthExpense} AND category = 'Staff Commission' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) AS commission_paid,
+      COALESCE(SUM(CASE WHEN ${monthExpense} AND category = 'Product Purchase' AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) AS product_purchase,
+      COALESCE(SUM(CASE WHEN ${monthExpense} AND category NOT IN ('Staff Salary', 'Staff Commission', 'Product Purchase') AND COALESCE(record_type, 'EXPENSE') = 'EXPENSE' THEN amount ELSE 0 END), 0) AS other_expenses
     FROM expenses WHERE deleted_at IS NULL
   `);
   const revenueRow = await db.get(`
     SELECT COALESCE(SUM(grand_total), 0) as total FROM salon_bills
     WHERE status = 'paid'
-      AND (${BILL_DATE_EXPR}) >= date_trunc('month', CURRENT_DATE)
-      AND (${BILL_DATE_EXPR}) < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+      AND ${monthBills}
   `);
   const pendingRow = await db.get(`
     SELECT COALESCE(SUM(remaining_balance), 0) as total FROM salary_payments
@@ -264,17 +291,17 @@ async function getSummary(db) {
   // Savings transfers are reported for context only — they are never added to expense totals.
   const savingRow = await db.get(`
     SELECT COALESCE(SUM(amount), 0) as total FROM savings_deposits
-    WHERE deleted_at IS NULL AND status = 'ACTIVE' AND deposit_date = CURRENT_DATE
+    WHERE deleted_at IS NULL AND status = 'ACTIVE' AND deposit_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kathmandu')::date
   `);
   const revenue = Number(revenueRow?.total || 0);
   return {
     totalExpensesToday: Number(expenseRow?.today || 0),
     totalExpensesWeek: Number(expenseRow?.week || 0),
     totalExpensesMonth: Number(expenseRow?.month || 0),
-    staffSalaryPaidMonth: Number(expenseRow?.salaryPaid || 0),
-    commissionPaidMonth: Number(expenseRow?.commissionPaid || 0),
-    productPurchaseMonth: Number(expenseRow?.productPurchase || 0),
-    otherExpensesMonth: Number(expenseRow?.otherExpenses || 0),
+    staffSalaryPaidMonth: Number(expenseRow?.salary_paid || 0),
+    commissionPaidMonth: Number(expenseRow?.commission_paid || 0),
+    productPurchaseMonth: Number(expenseRow?.product_purchase || 0),
+    otherExpensesMonth: Number(expenseRow?.other_expenses || 0),
     dailySavingToday: Number(savingRow?.total || 0),
     pendingSalaryBalance: Number(pendingRow?.total || 0),
     monthlyRevenue: revenue,
@@ -345,7 +372,7 @@ async function saveSalary(db, data, userId, scope = {}) {
     WHERE u.id = ? AND u.is_active = TRUE
   `, [staffId]);
   if (!staff) throw new Error('Selected staff was not found');
-  const salaryMonth = cleanText(data.salaryMonth || data.salary_month, new Date().toISOString().slice(0, 7));
+  const salaryMonth = cleanText(data.salaryMonth || data.salary_month, currentSalaryMonth());
   if (!/^\d{4}-\d{2}$/.test(salaryMonth)) throw new Error('Salary month must be YYYY-MM');
   const metrics = await getStaffMonthMetrics(db, staffId, salaryMonth);
   const baseSalary = money(data.baseSalary ?? data.base_salary ?? staff.base_salary);
