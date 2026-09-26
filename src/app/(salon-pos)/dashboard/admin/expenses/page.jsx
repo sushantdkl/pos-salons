@@ -10,6 +10,7 @@ import { DateInput, MonthInput } from '@/components/shared/calendar-date-input';
 import { currentMonth, fmtDate, fmtMonth } from '@/lib/dates/display';
 import { nepalDateString } from '@/lib/dates/calendar';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Banknote, CalendarDays, Coins, FileBarChart, HandCoins, Landmark, LayoutDashboard, Pencil, Plus, QrCode, Receipt,
   RotateCcw, Save, Search, Split, Trash2, TrendingDown, TrendingUp, Wallet, X,
@@ -173,7 +174,11 @@ export default function AdminExpensesPage() {
   const advanceIdempotencyKey = useRef(null);
   const expenseFormRef = useRef(null);
   const salaryFormRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('Overview');
+  // Sub-routes open their own tab: /expenses/salary (sidebar "Salary & Payroll"), /new, /reports.
+  const pathname = usePathname() || '';
+  const routeTab = pathname.endsWith('/salary') ? 'Salary Payments' : pathname.endsWith('/new') ? 'Expenses' : pathname.endsWith('/reports') ? 'Reports' : 'Overview';
+  const [activeTab, setActiveTab] = useState(routeTab);
+  useEffect(() => { setActiveTab(routeTab); }, [routeTab]);
   const [data, setData] = useState(null);
   const [expenseForm, setExpenseForm] = useState(emptyExpense);
   const [salaryForm, setSalaryForm] = useState(emptySalary);
@@ -604,7 +609,7 @@ function ExpenseTable({ expenses, onEdit, onDelete, editingId, title = 'Expense 
           </select>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-stone-50 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-stone-500">
             <tr><th className="px-5 py-3">Date</th><th className="px-4 py-3">Expense</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Paid with</th><th className="px-4 py-3 text-right">Amount</th>{readOnly ? null : <th className="px-4 py-3 text-right"><span className="sr-only">Actions</span></th>}</tr>
@@ -745,7 +750,7 @@ function SalaryTable({ salaries, onEdit, onDelete, editingId, readOnly = false }
         <h2 className="text-base font-extrabold text-stone-900">Salary payments</h2>
         <p className="text-sm text-stone-500">{salaries.length} payment{salaries.length === 1 ? '' : 's'} · paid <strong className="text-stone-800">{formatCurrency(totals.paid)}</strong> · still owed <strong className="text-amber-800">{formatCurrency(totals.balance)}</strong></p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-stone-50 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-stone-500">
             <tr><th className="px-5 py-3">Staff</th><th className="px-4 py-3">Month</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Advance</th><th className="px-4 py-3 text-right">Paid</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3">Status</th>{readOnly ? null : <th className="px-4 py-3"><span className="sr-only">Actions</span></th>}</tr>

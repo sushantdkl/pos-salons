@@ -28,6 +28,8 @@ export default function ServicesPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [pageError, setPageError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const tokenHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('pos_token')}` });
@@ -116,12 +118,16 @@ export default function ServicesPage() {
       method: 'DELETE',
       headers: tokenHeaders()
     });
+    const data = await response.json().catch(() => ({}));
     if (response.ok) {
       setConfirmAction(null);
+      setPageError('');
+      setNotice(data.message || 'Service deleted.');
       fetchServices();
     } else {
-      const data = await response.json();
-      setError(data.message || data.error || 'Could not delete service');
+      setConfirmAction(null);
+      setNotice('');
+      setPageError(data.message || data.error || 'Could not delete service');
     }
     setActionLoading(false);
   };
@@ -149,6 +155,8 @@ export default function ServicesPage() {
               Add Service
             </button>
           </div>
+          {notice ? <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{notice}</div> : null}
+          {pageError ? <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{pageError}</div> : null}
 
           <div className="mb-6 grid gap-3 rounded-lg border border-gray-200 bg-white p-4 md:grid-cols-[1fr_240px]">
             <div className="relative">
@@ -260,7 +268,7 @@ export default function ServicesPage() {
       <ConfirmDialog
         open={confirmAction?.type === 'deleteService'}
         title="Delete Service"
-        description={`Delete ${confirmAction?.service?.name || 'this service'}? This action cannot be undone.`}
+        description={`Delete ${confirmAction?.service?.name || 'this service'}? If it already has bills or bookings it is archived instead (hidden from billing and booking, history kept).`}
         confirmLabel="Delete"
         destructive
         loading={actionLoading}

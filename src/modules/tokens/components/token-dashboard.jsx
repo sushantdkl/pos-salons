@@ -233,9 +233,10 @@ export default function TokenDashboard({ mode = 'cashier', staffRole = '' }) {
     if (staffResponse.ok) setStaff((await staffResponse.json()).employees?.filter(activeServiceStaffFilter) || []);
   };
 
+  // The service / staff lists only feed the "issue a token" form, which a staff queue never shows.
   useEffect(() => {
-    fetchLookups();
-  }, []);
+    if (!isStaffQueue) fetchLookups();
+  }, [isStaffQueue]);
 
   useEffect(() => {
     fetchTokens();

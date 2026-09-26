@@ -176,7 +176,7 @@ function buildFilters(searchParams) {
   const params = [];
   const search = cleanText(searchParams.get('search'), '');
   if (search) {
-    clauses.push('(e.title LIKE ? OR e.category LIKE ? OR e.payment_method LIKE ? OR e.paid_to LIKE ? OR e.notes LIKE ?)');
+    clauses.push('(e.title ILIKE ? OR e.category ILIKE ? OR e.payment_method ILIKE ? OR e.paid_to ILIKE ? OR e.notes ILIKE ?)');
     params.push(...Array(5).fill(`%${search}%`));
   }
   const category = cleanText(searchParams.get('category'), '');
@@ -226,7 +226,7 @@ async function getSalaries(db, searchParams) {
   const params = [];
   const search = cleanText(searchParams.get('search'), '');
   if (search) {
-    clauses.push('(u.full_name LIKE ? OR sp.salon_role LIKE ? OR s.salary_month LIKE ? OR s.payment_status LIKE ?)');
+    clauses.push('(u.full_name ILIKE ? OR sp.salon_role ILIKE ? OR s.salary_month ILIKE ? OR s.payment_status ILIKE ?)');
     params.push(...Array(4).fill(`%${search}%`));
   }
   const staffId = Number(searchParams.get('staffId') || 0);
@@ -334,6 +334,11 @@ async function saveExpense(db, data, userId, scope = {}) {
     cleanText(data.attachmentUrl || data.attachment_url, ''),
   ];
   if (data.id) {
+    // Raising the cash part of an existing expense takes more cash out of the drawer, so the
+    // increase passes the same drawer check as a new expense.
+    const previous = await db.get('SELECT cash_amount FROM expenses WHERE id = ? AND deleted_at IS NULL', [Number(data.id)]);
+    const extraCash = Math.round((Number(payment.cash) - Number(previous?.cash_amount || 0)) * 100) / 100;
+    if (extraCash > 0) await assertDrawerCashAvailable(db, extraCash, { allowOverdraw: data.allowOverdraw === true, label: 'expense change' });
     await db.run(`
       UPDATE expenses
       SET title = ?, category = ?, amount = ?, payment_method = ?, cash_amount = ?,
@@ -517,7 +522,7 @@ export async function GET(request) {
     const staffList = await getStaff(db);
     const staff = await Promise.all(staffList.map(async (member) => ({
       ...member,
-      monthMetrics: staffId && staffId === member.id
+      monthMetrics: staffId && staffId === Number(member.id)
         ? await getStaffMonthMetrics(db, member.id, salaryMonth)
         : undefined,
     })));

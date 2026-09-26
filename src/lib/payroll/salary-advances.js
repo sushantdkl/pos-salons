@@ -1,3 +1,4 @@
+import { nepalDateString } from '../dates/calendar.js';
 import { resolveReportPeriod } from '../dates/report-periods.js';
 
 /**
@@ -141,7 +142,10 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
 
   const settingRows = await tx.all(`SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('advance_ceiling_percent','calendar_system')`);
   const settings = Object.fromEntries(settingRows.map((row) => [row.setting_key, row.setting_value]));
-  const ceilingPercent = Number(input.ceilingPercent ?? settings.advance_ceiling_percent);
+  // No limit set means up to one month's base salary per payroll period (same rule as the
+  // cashier's advance screen), so advances are never locked just because the field is blank.
+  const rawCeiling = input.ceilingPercent ?? settings.advance_ceiling_percent;
+  const ceilingPercent = rawCeiling === undefined || rawCeiling === null || String(rawCeiling).trim() === '' ? 100 : Number(rawCeiling);
   if (!Number.isFinite(ceilingPercent) || ceilingPercent <= 0 || ceilingPercent > 100) {
     const error = new Error('Admin must configure the salary advance ceiling before advances can be issued'); error.status = 409; throw error;
   }
@@ -154,7 +158,7 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
     const error = new Error("Advance exceeds the employee's remaining period allowance"); error.status = 422; throw error;
   }
 
-  const paymentDate = String(input.paymentDate || input.payment_date || '').slice(0, 10);
+  const paymentDate = String(input.paymentDate || input.payment_date || nepalDateString()).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) throw badRequest('A valid payment date is required');
 
   const referenceNumber = String(input.referenceNumber || input.reference_number || '').replace(/[<>]/g, '').trim();

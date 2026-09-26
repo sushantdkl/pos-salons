@@ -8,7 +8,7 @@ export class ServiceRepository {
     let where = 'WHERE 1=1';
 
     if (search) {
-      where += ' AND (s.name LIKE ? OR s.description LIKE ?)';
+      where += ' AND (s.name ILIKE ? OR s.description ILIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
@@ -71,7 +71,25 @@ export class ServiceRepository {
     return await this.findById(service.id);
   }
 
+  /**
+   * A service that was ever billed, tokened, booked, reviewed or used by a loyalty program keeps
+   * its history: it is archived (made inactive, so it can no longer be billed or booked) instead
+   * of erased. Only a never-used service is really deleted. Returns { archived }.
+   */
   async remove(id) {
-    return await this.db.run('DELETE FROM salon_services WHERE id = ?', [id]);
+    const usage = await this.db.get(`
+      SELECT EXISTS (SELECT 1 FROM salon_bill_items WHERE item_type <> 'product' AND item_id = ?)
+          OR EXISTS (SELECT 1 FROM walk_in_tokens WHERE service_id = ?)
+          OR EXISTS (SELECT 1 FROM appointment_services WHERE service_id = ?)
+          OR EXISTS (SELECT 1 FROM appointment_waitlist WHERE service_id = ?)
+          OR EXISTS (SELECT 1 FROM loyalty_programs WHERE reward_service_id = ? OR ?::bigint = ANY(eligible_service_ids))
+          OR EXISTS (SELECT 1 FROM customer_reviews WHERE service_id = ?) AS used
+    `, [id, id, id, id, id, id, id]);
+    if (usage?.used) {
+      await this.db.run('UPDATE salon_services SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+      return { archived: true };
+    }
+    await this.db.run('DELETE FROM salon_services WHERE id = ?', [id]);
+    return { archived: false };
   }
 }

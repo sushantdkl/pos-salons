@@ -1,6 +1,6 @@
 'use client';
 
-import { getCalendarSystem } from '@/lib/dates/display';
+import { useCalendarSystem } from '@/lib/dates/display';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -65,7 +65,8 @@ export default function ReportWorkspacePage() {
   const catalog = REPORT_CATALOG[report];
   const columnsByTable = WORKSPACE_COLUMNS[report];
   const today = useMemo(nepalToday, []);
-  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
+  // Settings → Calendar, shared by every screen (see lib/dates/display).
+  const calendarSystem = useCalendarSystem();
   const [presetKey, setPresetKey] = useState('today');
   const [range, setRange] = useState({ start: today, end: today });
   const [filters, setFilters] = useState({ basis: 'calendar', staff: '', method: '', category: '' });
@@ -91,9 +92,6 @@ export default function ReportWorkspacePage() {
     }
   }, [today]);
 
-  useEffect(() => {
-    erpFetch('/api/admin/settings').then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD')).catch(() => {});
-  }, []);
 
   const load = useCallback(async () => {
     if (!catalog || !columnsByTable) return;

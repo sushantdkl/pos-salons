@@ -54,8 +54,10 @@ export async function DELETE(request) {
     const user = await requireRole(request, db, ['admin', 'cashier']);
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
-    await new ServiceManagementService(db).delete(id, user.id);
-    return NextResponse.json({ message: 'Service deleted successfully' });
+    const result = await new ServiceManagementService(db).delete(id, user.id);
+    return NextResponse.json(result.archived
+      ? { archived: true, message: 'This service has past bills or bookings, so it was archived (hidden from billing and booking) instead of deleted.' }
+      : { archived: false, message: 'Service deleted successfully' });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Failed to delete service' }, { status: error.status || 500 });
   }

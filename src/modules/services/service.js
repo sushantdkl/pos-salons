@@ -35,8 +35,9 @@ export class ServiceManagementService {
 
   async delete(id, userId) {
     if (!id) throw new Error('Service ID is required');
-    await this.repository.remove(id);
-    await this.log(userId, 'delete', id, 'Service deleted');
+    const result = await this.repository.remove(id);
+    await this.log(userId, result.archived ? 'archive' : 'delete', id, result.archived ? 'Service archived (it has history)' : 'Service deleted');
+    return result;
   }
 
   async log(userId, action, entityId, details) {

@@ -96,7 +96,10 @@ export default function AttendanceReportsPage() {
   const [type, setType] = useState('summary');
   const { data, error, loading, reload } = useReport(`/api/hrm/reports?type=${type}&${period.query}`, { enabled: period.ready });
   const { data: overview } = useReport(`/api/hrm/reports?type=summary&${period.query}`, { enabled: period.ready });
-  const table = data ? tableFor(type, data.rows) : null;
+  // Rows belong to the report type they were loaded for; while the next tab loads, show nothing
+  // rather than old rows under the new tab's columns.
+  const fresh = data && data.type === type;
+  const table = fresh ? tableFor(type, data.rows) : null;
   const label = REPORTS.find(([key]) => key === type)[1];
   const s = overview?.summary;
 
@@ -138,7 +141,7 @@ export default function AttendanceReportsPage() {
           {REPORTS.map(([key, text]) => <button key={key} type="button" onClick={() => setType(key)} aria-pressed={type === key} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${type === key ? 'border-violet-300 bg-violet-100 text-violet-900' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'}`}>{text}</button>)}
         </nav>
         {error ? <ErrorState message={error} onRetry={reload} /> : null}
-        {loading && !data ? <LoadingState /> : null}
+        {loading && !fresh ? <LoadingState /> : null}
         {table ? <FinancialTable caption={label} rows={data.rows} rowKey={table.rowKey} columns={table.columns} empty="Nothing to report for this period." /> : null}
       </div>
     </ErpPage>

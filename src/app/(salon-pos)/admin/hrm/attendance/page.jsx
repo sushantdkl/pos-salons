@@ -26,7 +26,7 @@ function Register({ rows, onOpen }) {
   const byKey = new Map(rows.map((row) => [`${row.staffId}|${row.date}`, row]));
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-stone-200 bg-white">
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="min-w-max border-collapse text-xs">
           <caption className="sr-only">Attendance register</caption>
           <thead>

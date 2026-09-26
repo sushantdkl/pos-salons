@@ -254,7 +254,7 @@ export function SectionHeading({ title, note, action }) {
 export function FinancialTable({ columns, rows, rowKey = (row, index) => row.id ?? index, empty = 'No records for this period.', footer, caption, onRowClick }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-stone-200 bg-white">
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-sm">
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead>

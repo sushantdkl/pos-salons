@@ -6,7 +6,7 @@
  * pop-up. Figures come from /api/ledgers/overview (summed on the server).
  */
 
-import { getCalendarSystem } from '@/lib/dates/display';
+import { useCalendarSystem } from '@/lib/dates/display';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Printer, Search } from 'lucide-react';
 import { count, money } from '@/components/erp';
@@ -75,7 +75,8 @@ const COPY = {
 export function LedgerOverview({ kind, title, subtitle, accent = 'rose' }) {
   const copy = COPY[kind];
   const today = useMemo(nepalToday, []);
-  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
+  // Settings → Calendar, shared by every screen (see lib/dates/display).
+  const calendarSystem = useCalendarSystem();
   const [tab, setTab] = useState('outstanding');
   const [preset, setPreset] = useState('all');
   const [range, setRange] = useState({ from: '', to: '' });
@@ -83,9 +84,6 @@ export function LedgerOverview({ kind, title, subtitle, accent = 'rose' }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
 
-  useEffect(() => {
-    erpFetch('/api/admin/settings').then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD')).catch(() => {});
-  }, []);
   useEffect(() => { const t = setTimeout(() => setQuery(search.trim()), 250); return () => clearTimeout(t); }, [search]);
 
   const url = `/api/ledgers/overview?${new URLSearchParams(Object.fromEntries(Object.entries({ kind, q: query, from: range.from, to: range.to }).filter(([, v]) => v)))}`;
@@ -195,7 +193,7 @@ export function LedgerOverview({ kind, title, subtitle, accent = 'rose' }) {
         {data && tab === 'history' ? (
           !periodActive ? <p className="px-5 py-10 text-center text-sm text-stone-400">Choose a period (Today, This Month…) to see who had ledger activity.</p>
             : data.history.length ? (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b border-stone-200 bg-stone-50 text-[11px] font-bold uppercase tracking-[0.05em] text-stone-500">

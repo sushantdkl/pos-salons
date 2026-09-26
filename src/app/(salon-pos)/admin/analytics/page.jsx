@@ -7,7 +7,7 @@
  */
 
 import { AnalyticsQueryContext } from '@/components/analytics/bill-drill';
-import { getCalendarSystem } from '@/lib/dates/display';
+import { useCalendarSystem } from '@/lib/dates/display';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -54,14 +54,12 @@ function nepalTime(iso) {
 export default function AnalyticsPage() {
   const period = usePeriod('today');
   const [tab, setTab] = useState('overview');
-  const [calendarSystem, setCalendarSystem] = useState(getCalendarSystem);
+  // Settings → Calendar, shared by every screen (see lib/dates/display).
+  const calendarSystem = useCalendarSystem();
   const url = period.ready ? `/api/admin/analytics?${period.query}` : null;
   const { data, error, loading, reload } = useReport(url, { enabled: period.ready });
   const a = data?.analytics;
 
-  useEffect(() => {
-    erpFetch('/api/admin/settings').then((body) => setCalendarSystem(body?.settings?.calendar_system === 'BS' ? 'BS' : 'AD')).catch(() => {});
-  }, []);
 
   // The equal-length period right before this one, for the workbook's comparison column.
   const days = a?.period?.startDate && a?.period?.endDate ? daysBetween(a.period.startDate, a.period.endDate) : 0;

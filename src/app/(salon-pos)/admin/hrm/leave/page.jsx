@@ -141,7 +141,7 @@ export default function LeavePage() {
                 </div>
               ) : null}
               <div className="min-w-0 overflow-hidden rounded-xl border border-stone-200 bg-white">
-                <div className="overflow-x-auto">
+                <div className="relative overflow-x-auto">
                   <table className="w-full min-w-max text-sm">
                     <caption className="sr-only">Leave balances</caption>
                     <thead className="bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">

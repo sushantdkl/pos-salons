@@ -31,6 +31,7 @@ export default function AdminCustomers() {
   const [selectedBills, setSelectedBills] = useState([]);
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [confirmAction, setConfirmAction] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -119,10 +120,12 @@ export default function AdminCustomers() {
     const response = await fetch(`/api/admin/customers?id=${id}`, { method: 'DELETE', headers: headers() });
     if (response.ok) {
       setConfirmAction(null);
+      setPageError('');
       fetchCustomers();
     } else {
-      const data = await response.json();
-      setError(data.message || data.error || 'Could not delete customer');
+      const data = await response.json().catch(() => ({}));
+      setConfirmAction(null);
+      setPageError(data.message || data.error || 'Could not delete customer');
     }
     setActionLoading(false);
   };
@@ -160,6 +163,7 @@ export default function AdminCustomers() {
               Add Customer
             </button>
           </div>
+          {pageError ? <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{pageError}<button type="button" onClick={() => setPageError('')} className="font-semibold underline">Dismiss</button></div> : null}
 
           <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
             <div className="relative">
@@ -304,7 +308,7 @@ export default function AdminCustomers() {
       <ConfirmDialog
         open={confirmAction?.type === 'deleteCustomer'}
         title="Delete Customer"
-        description={`Delete ${confirmAction?.customer?.name || 'this customer'}? This cannot be undone if the record has no protected history.`}
+        description={`Delete ${confirmAction?.customer?.name || 'this customer'}? Only a customer with no bills, credit, loyalty or bookings can be deleted; others are kept for the salon's books.`}
         confirmLabel="Delete"
         destructive
         loading={actionLoading}
