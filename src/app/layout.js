@@ -7,10 +7,17 @@ import { siteUrl } from '@/lib/seo/site'
 // Defaults only. Public pages set their own title, description, canonical and Open Graph via
 // modules/public-site/services/seo.js; private areas are noindexed by header (next.config.mjs).
 export const metadata = {
-  title: 'The Hair Cut',
-  description: "The Hair Cut, Birendranagar-7, Surkhet.",
+  title: { default: 'The Hair Cut', template: '%s | The Hair Cut' },
+  description: 'The Hair Cut, unisex salon in Birendranagar-7, Surkhet.',
   applicationName: 'The Hair Cut',
   metadataBase: new URL(siteUrl()),
+  openGraph: {
+    type: 'website',
+    siteName: 'The Hair Cut',
+    locale: 'en_US',
+    images: ['/assets/Salon_Banner.jpeg'],
+  },
+  twitter: { card: 'summary_large_image' },
   icons: {
     icon: [
       {

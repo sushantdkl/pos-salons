@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Review & Rewards | The Hair Cut',
+  title: 'Review & Rewards',
   description: 'Tell us about your visit and check your loyalty rewards at The Hair Cut.',
   robots: { index: false, follow: false },
 };

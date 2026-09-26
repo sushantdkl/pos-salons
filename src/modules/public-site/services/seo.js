@@ -20,6 +20,7 @@ export const PAGE_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 export const DEFAULT_KEYWORDS = [
   'salon in Surkhet',
   'hair salon Surkhet',
+  'unisex salon Surkhet',
   'haircut in Surkhet',
   'haircut Birendranagar',
   'salon Birendranagar',
@@ -54,7 +55,7 @@ export const GBP_CHECKLIST = [
 export function defaultSeoSettings() {
   return {
     businessType: 'HairSalon',
-    businessDescriptor: "Men's salon",
+    businessDescriptor: 'Unisex salon',
     streetAddress: 'Birendranagar-7',
     locality: 'Birendranagar',
     district: 'Surkhet',
@@ -63,14 +64,16 @@ export function defaultSeoSettings() {
     country: 'NP',
     landmark: '',
     parking: '',
-    latitude: '',
-    longitude: '',
-    hours: WEEKDAYS.map((day) => ({ day, closed: false, opens: '', closes: '' })),
+    // Owner-confirmed facts (Sept 2026): the Google Maps place pin, and open every day 8 AM – 8 PM.
+    latitude: '28.5996354',
+    longitude: '81.6257918',
+    hours: WEEKDAYS.map((day) => ({ day, closed: false, opens: '08:00', closes: '20:00' })),
     priceRange: '',
     instagram: '',
     youtube: '',
-    googleMapsUrl: '',
-    googleReviewUrl: '',
+    googleMapsUrl: 'https://maps.google.com/?cid=11598608774880663796',
+    // Opens the salon's Google Maps listing on its Reviews tab.
+    googleReviewUrl: 'https://www.google.com/maps/place/The+Hair+Cut/@28.599635,81.625792,2078m/data=!3m1!1e3!4m8!3m7!1s0x39a2850030b92a09:0xa0f6893a8b7d98f4!8m2!3d28.5996354!4d81.6257918!9m1!1b1!16s%2Fg%2F11w3bftbd9?hl=en',
     googleReviewEnabled: true,
     gscVerification: '',
     bingVerification: '',
@@ -184,6 +187,8 @@ export function hoursConfigured(hours = []) {
 export function formatHours(hours = []) {
   if (!hoursConfigured(hours)) return '';
   const label = (row) => (row.closed ? 'Closed' : row.opens && row.closes ? `${to12h(row.opens)} – ${to12h(row.closes)}` : 'Call to confirm');
+  const labels = new Set(hours.map(label));
+  if (labels.size === 1) return `Every day: ${label(hours[0])}`;
   const groups = [];
   hours.forEach((row) => {
     const value = label(row);

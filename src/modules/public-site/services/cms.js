@@ -161,7 +161,7 @@ function sectionFallback() {
     },
     seo: {
       sectionKey: 'seo',
-      title: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+      title: "The Hair Cut | Unisex Salon in Birendranagar, Surkhet",
       subtitle: '',
       description: salonInfo.description,
       imageUrl: salonInfo.assets.ogImage,
@@ -171,7 +171,7 @@ function sectionFallback() {
       secondaryButtonLink: '',
       isVisible: true,
       metadata: {
-        ogTitle: "The Hair Cut | Men's Salon in Birendranagar, Surkhet",
+        ogTitle: "The Hair Cut | Unisex Salon in Birendranagar, Surkhet",
         ogDescription: salonInfo.description,
         keywords: 'salon, haircut, barber, surkhet, facial, shaving'
       }

@@ -24,6 +24,7 @@
     "qa:ui": "node scripts/qa/responsive-audit.mjs",
     "qa:all": "bash scripts/qa/run-all.sh prod",
     "qa:appointments": "node scripts/qa/appointments-scenario.mjs",
+    "seo:check": "node scripts/qa/seo-check.mjs",
     "demo:setup": "bash scripts/demo/setup.sh",
     "demo:start": "node scripts/demo/start.mjs"
   },

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { SiteShell } from '@/modules/public-site/components/site-shell';
 
 export const metadata = {
-  title: 'Page not found | The Hair Cut',
+  title: 'Page not found',
   robots: { index: false, follow: true },
 };
 

@@ -7,14 +7,26 @@
  */
 export const DEFAULT_SITE_URL = 'https://thehaircut.com.np';
 
-export function siteUrl() {
-  const raw = String(process.env.SITE_CANONICAL_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, '');
+/** Hosts that must never become the public canonical (staging, previews, local machines). */
+export function isNonCanonicalHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  return host.endsWith('.vercel.app') || host === 'localhost' || host.endsWith('.localhost') || /^(127\.|10\.|192\.168\.|0\.0\.0\.0|\[?::1\]?)/.test(host);
+}
+
+/** https origin with no trailing slash. A staging, local or plain-http value falls back to production. */
+export function resolveSiteUrl(value) {
+  const raw = String(value || DEFAULT_SITE_URL).trim().replace(/\/+$/, '');
   try {
     const url = new URL(raw);
+    if (url.protocol !== 'https:' || isNonCanonicalHost(url.hostname)) return DEFAULT_SITE_URL;
     return `${url.protocol}//${url.host}`;
   } catch {
     return DEFAULT_SITE_URL;
   }
+}
+
+export function siteUrl() {
+  return resolveSiteUrl(process.env.SITE_CANONICAL_URL);
 }
 
 /** Absolute URL on the canonical host. Leaves http(s) URLs alone. */

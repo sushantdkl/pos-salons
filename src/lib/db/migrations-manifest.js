@@ -24,5 +24,6 @@ export const TRACKED_MIGRATIONS = [
   '2026-10-01-crm-public-join.sql',
   '2026-10-02-seo-local-search.sql',
   '2026-10-03-bill-payment-method-change.sql',
+  '2026-10-04-unisex-salon-copy.sql',
   '2026-10-05-delegable-permissions.sql',
 ];
