@@ -17,6 +17,10 @@ const emptySalon = {
   advance_ceiling_percent: '',
 };
 
+// Only the fields this page edits are saved. Other screens own the rest (Printer & Documents:
+// receipt_*; Appointment settings: opening hours, slots) and must not be sent back from here.
+const SAVE_KEYS = Object.keys(emptySalon).filter((key) => !key.startsWith('receipt_'));
+
 const sections = [
   { id: 'business', label: 'Business', icon: Building2 },
   { id: 'billing', label: 'Billing & Tax', icon: Percent },
@@ -74,7 +78,7 @@ export default function SettingsPage() {
   const saveSettings = async (event) => {
     event.preventDefault(); setSaving(true); setMessage('');
     try {
-      const response = await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(true), body: JSON.stringify({ ...form, vat_percentage: Number(form.vat_percentage || 0), service_charge_percentage: Number(form.service_charge_percentage || 0) }) });
+      const response = await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(true), body: JSON.stringify({ ...Object.fromEntries(SAVE_KEYS.map((key) => [key, form[key]])), vat_percentage: Number(form.vat_percentage || 0), service_charge_percentage: Number(form.service_charge_percentage || 0) }) });
       const result = await response.json(); setMessage(response.ok ? 'Settings saved.' : result.error || 'Could not save settings.');
     } catch { setMessage('Connection error. Please try again.'); }
     finally { setSaving(false); }

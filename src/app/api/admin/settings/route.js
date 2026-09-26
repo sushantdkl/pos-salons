@@ -187,6 +187,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: PHONE_ERROR_MESSAGE, message: PHONE_ERROR_MESSAGE, field: 'salon_phone' }, { status: 400 });
     }
 
+    // Validate every key first so a bad value never leaves a half-saved form.
     for (const [key, value] of Object.entries(data)) {
       if (!SETTING_KEYS.has(key)) {
         return NextResponse.json({ error: `Unsupported setting: ${key}` }, { status: 400 });
@@ -212,15 +213,20 @@ export async function PUT(request) {
       if (key === 'advance_ceiling_percent' && value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0 || Number(value) > 100)) {
         return NextResponse.json({ error: 'Advance ceiling must be greater than 0 and no more than 100' }, { status: 400 });
       }
-      const settingValue = key === 'salon_phone' ? phoneOrNull(value) || '' : value;
-      await db.run(`
-        INSERT INTO system_settings (setting_key, setting_value, updated_at)
-        VALUES (?, ?, NOW())
-        ON CONFLICT (setting_key) DO UPDATE SET
-          setting_value = EXCLUDED.setting_value,
-          updated_at = NOW()
-      `, [key, String(settingValue)]);
     }
+
+    await db.transaction(async (tx) => {
+      for (const [key, value] of Object.entries(data)) {
+        const settingValue = key === 'salon_phone' ? phoneOrNull(value) || '' : value;
+        await tx.run(`
+          INSERT INTO system_settings (setting_key, setting_value, updated_at)
+          VALUES (?, ?, NOW())
+          ON CONFLICT (setting_key) DO UPDATE SET
+            setting_value = EXCLUDED.setting_value,
+            updated_at = NOW()
+        `, [key, String(settingValue)]);
+      }
+    });
 
     return NextResponse.json({ message: 'Settings updated successfully' });
   } catch (error) {
