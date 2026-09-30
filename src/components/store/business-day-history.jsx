@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Business Day history table with a per-day drill-down of its store sessions (persisted close
- * snapshots and counted note breakdown). Used by Opening & Closing and Business Day History.
+ * Business Day history table. Tapping a day (or View) opens the full day report popup; the
+ * arrow beside the date expands its store sessions inline (persisted close snapshots and
+ * counted note breakdown). Used by Opening & Closing and Business Day History.
  */
 
 import { fmtDate } from '@/lib/dates/display';
@@ -10,6 +11,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { CASH_DENOMINATIONS } from '@/lib/business-day/denominations';
 import { FinancialTable, money, StatusBadge } from '@/components/erp';
+import { BusinessDayReport } from '@/components/store/business-day-report';
 
 export function formatBusinessDate(iso) {
   if (!iso) return '—';
@@ -77,10 +79,11 @@ function DayDetail({ day }) {
 
 export default function BusinessDayHistory({ days }) {
   const [expanded, setExpanded] = useState(null);
+  const [reportDay, setReportDay] = useState(null);
   const columns = [
     {
       key: 'date', label: 'Business date', render: (day) => (
-        <button type="button" onClick={() => setExpanded(expanded === day.id ? null : day.id)} className="inline-flex items-center gap-1 font-semibold text-stone-900" aria-expanded={expanded === day.id}>
+        <button type="button" onClick={(event) => { event.stopPropagation(); setExpanded(expanded === day.id ? null : day.id); }} className="inline-flex items-center gap-1 font-semibold text-stone-900" aria-expanded={expanded === day.id} title="Show store sessions">
           {expanded === day.id ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
           {formatDate(day.businessDate)}
         </button>
@@ -104,8 +107,8 @@ export default function BusinessDayHistory({ days }) {
     { key: 'status', label: 'Status', render: (day) => <StatusBadge status={day.status === 'OPEN' ? 'OPEN' : 'CLOSED'} /> },
     {
       key: 'actions', label: '', render: (day) => (
-        <button type="button" onClick={() => setExpanded(expanded === day.id ? null : day.id)} className="text-xs font-bold text-indigo-700 hover:underline">
-          {expanded === day.id ? 'Hide' : 'View'}
+        <button type="button" onClick={(event) => { event.stopPropagation(); setReportDay(day.id); }} className="text-xs font-bold text-indigo-700 hover:underline">
+          View
         </button>
       ),
     },
@@ -113,7 +116,7 @@ export default function BusinessDayHistory({ days }) {
   const open = days.find((day) => day.id === expanded);
   return (
     <div className="space-y-2">
-      <FinancialTable columns={columns} rows={days} empty="No business days recorded yet." caption="Business day history" />
+      <FinancialTable columns={columns} rows={days} empty="No business days recorded yet." caption="Business day history" onRowClick={(day) => setReportDay(day.id)} />
       {open ? (
         <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.05em] text-stone-500">
@@ -122,6 +125,7 @@ export default function BusinessDayHistory({ days }) {
           <DayDetail day={open} />
         </div>
       ) : null}
+      {reportDay ? <BusinessDayReport dayId={reportDay} onClose={() => setReportDay(null)} /> : null}
     </div>
   );
 }

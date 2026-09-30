@@ -30,6 +30,7 @@ export function dashboardPathForRole(role) {
 const CASHIER_DELEGABLE = [
   '/dashboard/admin/business-days', '/dashboard/admin/staff-performance', '/dashboard/admin/website',
   '/admin/analytics', '/admin/reports', '/admin/appointments/settings', '/admin/crm', '/admin/printer',
+  '/admin/cash-drawer', '/admin/cash-exchange',
 ];
 
 export function canAccessPath(role, pathname) {

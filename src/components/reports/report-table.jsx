@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { count, humanize, money, StatusBadge, TONES } from '@/components/erp';
 import { BillDetailDrawer, BillLink } from '@/components/bills/bill-detail';
+import { ExpenseDetailPanel } from '@/components/expenses/expense-detail';
 import { ExportButtons } from '@/components/exports/export-buttons';
 import { formatCalendarDate } from '@/lib/dates/calendar';
 
@@ -116,6 +117,15 @@ export function ReportTable({
   const [openBill, setOpenBill] = useState(null);
   const billColumn = columns.find((column) => column.type === 'bill');
   const billIdOf = (row) => (billColumn ? row[billColumn.idKey] : null);
+  // A row that IS an expense (column spec `opens: 'expense'`) opens the Expense details panel.
+  const [openExpense, setOpenExpense] = useState(null);
+  const expenseColumn = columns.find((column) => column.opens === 'expense');
+  const expenseIdOf = (row) => (expenseColumn ? row[expenseColumn.idKey || 'id'] : null);
+  const openRow = (row) => {
+    if (billIdOf(row)) setOpenBill(billIdOf(row));
+    else if (expenseIdOf(row)) setOpenExpense(expenseIdOf(row));
+  };
+  const clickable = (row) => Boolean(billIdOf(row) || expenseIdOf(row));
 
   const needle = `${globalSearch} ${search}`.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -213,11 +223,11 @@ export function ReportTable({
             ) : visible.map((row, index) => (
               <tr
                 key={row.id ?? `${current}-${index}`}
-                className={`hover:bg-stone-50/80 ${billIdOf(row) ? 'cursor-pointer focus:bg-indigo-50/60 focus:outline-none' : ''}`}
-                onClick={billIdOf(row) ? () => setOpenBill(billIdOf(row)) : undefined}
-                onKeyDown={billIdOf(row) ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenBill(billIdOf(row)); } } : undefined}
-                tabIndex={billIdOf(row) ? 0 : undefined}
-                title={billIdOf(row) ? 'Open bill details' : undefined}
+                className={`hover:bg-stone-50/80 ${clickable(row) ? 'cursor-pointer focus:bg-indigo-50/60 focus:outline-none' : ''}`}
+                onClick={clickable(row) ? () => openRow(row) : undefined}
+                onKeyDown={clickable(row) ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openRow(row); } } : undefined}
+                tabIndex={clickable(row) ? 0 : undefined}
+                title={billIdOf(row) ? 'Open bill details' : expenseIdOf(row) ? 'Open expense details' : undefined}
               >
                 {shown.map((column) => (
                   <td key={column.key} className={`whitespace-nowrap border-b border-stone-100 px-4 py-2.5 ${NUMERIC.has(column.type) ? 'text-right tabular-nums' : ''}`}>
@@ -276,6 +286,7 @@ export function ReportTable({
         </div>
       </div>
       {openBill ? <BillDetailDrawer billId={openBill} onClose={() => setOpenBill(null)} /> : null}
+      {openExpense ? <ExpenseDetailPanel id={openExpense} onClose={() => setOpenExpense(null)} /> : null}
     </section>
   );
 }

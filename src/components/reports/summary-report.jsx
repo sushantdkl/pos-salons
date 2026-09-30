@@ -156,6 +156,7 @@ function Profitability({ s }) {
             line('Gross profit', pl.grossProfit, { strong: true, note: `${pl.grossMargin}% margin` }),
             line('Operating expenses', pl.operatingExpenses, { sign: '−', tone: 'outflow' }),
             line('Salary expense (paid)', pl.salaryExpense, { sign: '−', tone: 'outflow' }),
+            ...(Number(pl.otherIncome) ? [line('Exchange charges (other income)', pl.otherIncome, { sign: '+', tone: 'inflow' })] : []),
             line(`${pl.basis} net profit`, pl.operatingResult, { strong: true, tone: pl.operatingResult < 0 ? 'outflow' : 'inflow', note: `${pl.operatingMargin}% of net revenue` }),
           ]}
           footnote="Service cost is not tracked, so no service cost of goods is deducted. Savings transfers never reduce profit."
@@ -166,7 +167,8 @@ function Profitability({ s }) {
           lines={[
             line('Net revenue', pl.netSales),
             line('Operating expenses & wages', Number(pl.operatingExpenses) + Number(pl.salaryExpense), { sign: '−', tone: 'outflow' }),
-            line('Result', Number(pl.netSales) - Number(pl.operatingExpenses) - Number(pl.salaryExpense), { strong: true }),
+            ...(Number(pl.otherIncome) ? [line('Exchange charges (other income)', pl.otherIncome, { sign: '+', tone: 'inflow' })] : []),
+            line('Result', Number(pl.netSales) - Number(pl.operatingExpenses) - Number(pl.salaryExpense) + Number(pl.otherIncome || 0), { strong: true }),
             line('Commission accrued on services', pl.commissionAccrued, { muted: true, note: 'Earned by staff; expensed when paid' }),
           ]}
         />

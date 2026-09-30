@@ -28,7 +28,7 @@ const TRANSACTIONAL_TABLES = [
   'customer_credit_collections', 'customer_credit_ledger',
   'payment_refunds', 'financial_corrections', 'salon_payment_allocations',
   'salon_bill_items', 'salon_bills', 'walk_in_tokens',
-  'expenses', 'savings_deposits', 'inventory_movements',
+  'cash_movements', 'expenses', 'savings_deposits', 'inventory_movements',
   'store_sessions', 'business_days',
   'appointment_waitlist', 'appointment_events', 'appointment_services', 'appointments',
   'staff_time_off', 'staff_working_hours',
@@ -61,8 +61,12 @@ try {
   await client.query(`
     INSERT INTO staff_profiles (user_id, display_name, salon_role, commission_percentage, base_salary)
     VALUES ($1, 'QA Barber', 'barber', 10, 30000)
-    ON CONFLICT (user_id) DO UPDATE SET salon_role = 'barber', commission_percentage = 10, base_salary = 30000
+    ON CONFLICT (user_id) DO UPDATE SET salon_role = 'barber', commission_percentage = 10, base_salary = 30000, pay_type = 'salary'
   `, [barberId]);
+  // Owner-made expense categories and Cash In / Exchange permissions start from the defaults.
+  await client.query('DELETE FROM expense_categories WHERE is_system = FALSE');
+  await client.query("UPDATE expense_categories SET is_active = TRUE WHERE is_system = TRUE AND name NOT IN ('CLEANING', 'MAINTENANCE', 'OTHER_EXPENSE')");
+  await client.query("UPDATE role_permissions SET allowed = FALSE WHERE permission_key IN ('cash.movements', 'cash.exchange')");
 
   const upsertService = async (name, category, price) => {
     const existing = await client.query('SELECT id FROM salon_services WHERE name = $1', [name]);

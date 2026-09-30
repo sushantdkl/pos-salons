@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import Database from '@/lib/db/index';
-import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
+import { PERMISSIONS, hasPermission, requirePermission } from '@/lib/auth/permissions';
 import { requireOpenSession, assertDrawerCashAvailable } from '@/lib/business-day/service';
 import { nepalDateString } from '@/lib/dates/calendar';
 import { resolveReportPeriod } from '@/lib/dates/report-periods';
@@ -46,10 +46,14 @@ export async function GET(request) {
     const period = resolveReportPeriod('this_month', { calendarSystem: advancePolicy.calendarSystem });
     const q = new URL(request.url).searchParams;
     const isAdmin = user.role === 'admin';
+    // Commission figures follow the same rule as reports: admin, or "Show commission, cost &
+    // profit" granted. Without it a cashier still sees how much can be advanced, nothing more.
+    const canSeeCommission = isAdmin || await hasPermission(db, user, PERMISSIONS.REPORTS_SENSITIVE);
 
     // One commission-based staff member's earnings (today … custom range) and allowance.
     const staffId = Number(q.get('staffId') || 0);
     if (staffId) {
+      if (!canSeeCommission) return NextResponse.json({ error: 'Commission figures need the "Show commission, cost & profit" permission' }, { status: 403 });
       const staff = await db.get(`${STAFF_SQL} AND u.id = ?`, [staffId]);
       if (!staff) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
       if (staff.pay_type !== 'commission') return NextResponse.json({ error: 'This staff member is salary-based' }, { status: 400 });
@@ -77,12 +81,13 @@ export async function GET(request) {
         outstandingAdvance: await getOutstandingAdvance(db, row.id),
         periodIssued: money(issued.total || 0),
         remainingEligible: money(eligibility.remaining || 0),
-        noBaseSalary: Boolean(eligibility.noBaseSalary),
-        ...(eligibility.basis === 'commission' ? { unpaidCommission: money(eligibility.owed || 0) } : {}),
+        // Salary-based with nothing to advance against: the admin must finish the pay setup.
+        paySetupMissing: Boolean(eligibility.noBaseSalary),
+        ...(canSeeCommission && eligibility.basis === 'commission' ? { unpaidCommission: money(eligibility.owed || 0) } : {}),
         ...(isAdmin ? { baseSalary: Number(row.base_salary), periodMaximum: eligibility.maximum ?? null } : {}),
       };
     }));
-    return NextResponse.json({ policy: { configured: advancePolicy.configured, ceilingPercent: isAdmin ? advancePolicy.percent : undefined, period }, canOverride: isAdmin, employees });
+    return NextResponse.json({ policy: { configured: advancePolicy.configured, ceilingPercent: isAdmin ? advancePolicy.percent : undefined, period }, canOverride: isAdmin, showsEarnings: canSeeCommission, employees });
   } catch (error) { return NextResponse.json({ error: error.message || 'Unable to load advances' }, { status: error.status || 500 }); }
 }
 

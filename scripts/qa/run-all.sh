@@ -43,11 +43,14 @@ QA_BASE_URL=http://localhost:3013 QA_DATABASE_URL="$QA" node scripts/qa/loyalty-
 # printer, customers, website) on a clean database.
 DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
 QA_BASE_URL=http://localhost:3013 node scripts/qa/features-scenario.mjs > "$OUT/features.txt" 2>&1 || STATUS=1
+# Cash In / Out, exchange, commission advances, expense categories + paging, day report.
+DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
+QA_BASE_URL=http://localhost:3013 node scripts/qa/cash-commission-scenario.mjs > "$OUT/cash.txt" 2>&1 || STATUS=1
 # Whole-site crawl + API sweep on 60 days of realistic demo data (QA copy only).
 DATABASE_URL="$QA" node scripts/qa/seed-qa.mjs > /dev/null
 DATABASE_URL="$QA" DAYS=60 node scripts/demo/seed-demo.mjs > /dev/null
 QA_BASE_URL=http://localhost:3013 node scripts/qa/api-sweep.mjs > "$OUT/api.txt" 2>&1 || STATUS=1
 QA_BASE_URL=http://localhost:3013 node scripts/qa/site-crawl.mjs > "$OUT/crawl.txt" 2>&1 || STATUS=1
 killport
-grep -hE "checks passed|^FAIL|server errors|problems$" "$OUT/scenario.txt" "$OUT/reports.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/hrm.txt" "$OUT/loyalty.txt" "$OUT/features.txt" "$OUT/permissions.txt" "$OUT/ui.txt" "$OUT/api.txt" "$OUT/crawl.txt"
+grep -hE "checks passed|^FAIL|server errors|problems$" "$OUT/scenario.txt" "$OUT/reports.txt" "$OUT/appointments.txt" "$OUT/suppliers.txt" "$OUT/customers.txt" "$OUT/hrm.txt" "$OUT/loyalty.txt" "$OUT/features.txt" "$OUT/cash.txt" "$OUT/permissions.txt" "$OUT/ui.txt" "$OUT/api.txt" "$OUT/crawl.txt"
 exit $STATUS

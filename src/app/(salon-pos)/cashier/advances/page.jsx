@@ -10,14 +10,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Coins } from 'lucide-react';
 import { AlertBanner, ErpButton, ErpPage, MetricCard, MetricGroup, money, PageHeader, ReportSection } from '@/components/erp';
 import { erpFetch } from '@/components/erp/use-report';
+import { CommissionPanel } from '@/components/payroll/commission-panel';
 
-const EMPTY = { staffId: '', amount: '', paymentMethod: 'cash', note: '' };
+const EMPTY = { staffId: '', amount: '', paymentMethod: 'cash', note: '', overrideReason: '' };
 const FIELD = 'mt-1 block h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900 focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-200';
 const LABEL = 'block text-xs font-bold uppercase tracking-[0.04em] text-stone-500';
 
 export default function CashierAdvancesPage() {
   const [employees, setEmployees] = useState([]);
   const [policy, setPolicy] = useState(null);
+  const [canOverride, setCanOverride] = useState(false);
+  const [showsEarnings, setShowsEarnings] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +32,8 @@ export default function CashierAdvancesPage() {
       const data = await erpFetch('/api/payroll/advances');
       setEmployees(data.employees || []);
       setPolicy(data.policy);
+      setCanOverride(Boolean(data.canOverride));
+      setShowsEarnings(Boolean(data.showsEarnings));
     } catch (loadError) {
       setError(loadError.message || 'Unable to load advances');
     }
@@ -50,7 +55,9 @@ export default function CashierAdvancesPage() {
       });
       key.current = null;
       setForm(EMPTY);
-      setMessage('Salary advance issued and recorded against the drawer / account.');
+      setMessage(selected?.payType === 'commission'
+        ? 'Commission advance issued. It will be deducted from the next commission settlement.'
+        : 'Salary advance issued and recorded against the drawer / account.');
       load();
     } catch (submitError) {
       setError(submitError.message || 'Unable to issue advance');
@@ -60,14 +67,16 @@ export default function CashierAdvancesPage() {
   };
 
   const selected = employees.find((employee) => String(employee.id) === String(form.staffId));
+  const isCommission = selected?.payType === 'commission';
+  const overAllowance = selected ? Number(form.amount || 0) > Number(selected.remainingEligible || 0) + 0.001 : false;
 
   return (
     <ErpPage narrow>
       <PageHeader
         icon={Coins}
         iconTone="hrm"
-        title="Salary advance"
-        subtitle="Pay a staff member part of their salary early. It is deducted automatically at the next salary settlement."
+        title="Salary & commission advance"
+        subtitle="Pay a staff member early. Salary-based staff are limited by their base salary; commission-based staff by the commission they have already earned. It is deducted automatically at the next settlement."
       />
       <div className="space-y-4">
         {message ? <AlertBanner tone="inflow" title="Advance issued">{message}</AlertBanner> : null}
@@ -81,15 +90,20 @@ export default function CashierAdvancesPage() {
             <label className={LABEL}>Employee *
               <select required value={form.staffId} onChange={(event) => set('staffId', event.target.value)} className={FIELD}>
                 <option value="">Select employee</option>
-                {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}
+                {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role} · {employee.payType === 'commission' ? 'commission' : 'salary'}</option>)}
               </select>
             </label>
-            {selected ? (
+            {selected && isCommission && showsEarnings ? <CommissionPanel staffId={selected.id} /> : null}
+            {selected && (!isCommission || !showsEarnings) ? (
               <MetricGroup columns={3}>
                 <MetricCard label="Outstanding" value={money(selected.outstandingAdvance)} tone="hrm" />
                 <MetricCard label="Issued this period" value={money(selected.periodIssued)} tone="neutral" />
-                <MetricCard label="Still allowed" value={money(selected.remainingEligible)} tone="inflow" />
+                <MetricCard label={isCommission ? 'Can advance now' : 'Still allowed'} value={money(selected.remainingEligible)} tone="inflow" />
               </MetricGroup>
+            ) : null}
+            {selected && isCommission && !showsEarnings ? <p className="text-xs text-stone-500">Commission-based: the limit is the commission already earned and not yet paid. Earnings detail is visible to the admin.</p> : null}
+            {selected && !isCommission && selected.paySetupMissing ? (
+              <AlertBanner tone="cash" title="No base salary set">Set a base salary for {selected.name} in Staff, or tick &quot;Commission-based staff&quot; if they are paid by commission.</AlertBanner>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={LABEL}>Amount *
@@ -105,7 +119,14 @@ export default function CashierAdvancesPage() {
             <label className={LABEL}>Reason / note *
               <textarea required value={form.note} onChange={(event) => set('note', event.target.value)} rows={3} className={`${FIELD} h-auto py-2`} />
             </label>
-            <ErpButton type="submit" variant="primary" disabled={busy || !policy?.configured}>{busy ? 'Issuing…' : 'Issue advance'}</ErpButton>
+            {overAllowance ? (
+              canOverride ? (
+                <label className={LABEL}>Over the allowance — admin reason *
+                  <input value={form.overrideReason} onChange={(event) => set('overrideReason', event.target.value)} className={FIELD} placeholder="Why this staff member may take more than the allowance" />
+                </label>
+              ) : <AlertBanner tone="outflow">This is more than {selected?.name} can be advanced right now ({money(selected?.remainingEligible)}). Only an admin can approve more.</AlertBanner>
+            ) : null}
+            <ErpButton type="submit" variant="primary" disabled={busy || !policy?.configured || (overAllowance && !(canOverride && form.overrideReason.trim()))}>{busy ? 'Issuing…' : 'Issue advance'}</ErpButton>
           </form>
         </ReportSection>
       </div>

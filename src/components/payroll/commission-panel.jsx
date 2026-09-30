@@ -36,8 +36,6 @@ export function CommissionPanel({ staffId, onAllowance }) {
       .then((json) => { if (live) { setData(json); onAllowance?.(json.summary.allowance); } })
       .catch((loadError) => { if (live) setError(loadError.message); });
     return () => { live = false; };
-    // onAllowance is a setter from the parent; re-running on its identity would refetch forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffId]);
 
   const applyCustom = async () => {

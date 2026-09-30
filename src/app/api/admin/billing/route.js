@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { formatBillNumber } from '@/lib/billing/bill-number';
 import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
@@ -337,7 +338,7 @@ export async function POST(request) {
       }
 
       const sequence = await tx.get(`INSERT INTO document_sequences(document_type, next_value) VALUES ('salon_bill', 2) ON CONFLICT(document_type) DO UPDATE SET next_value=document_sequences.next_value + 1, updated_at=NOW() RETURNING next_value - 1 AS value`);
-      const billNumber = `SALON-${String(sequence.value).padStart(7, '0')}`;
+      const billNumber = formatBillNumber(sequence.value);
       const settingRows = await tx.all('SELECT setting_key, setting_value FROM system_settings');
       const documentSnapshot = normalizeDocumentSettings(Object.fromEntries(settingRows.map((row) => [row.setting_key, row.setting_value])));
       // Revenue day vs cash day. These differ only for a genuinely backdated Admin bill.

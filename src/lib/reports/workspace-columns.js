@@ -128,7 +128,7 @@ export const WORKSPACE_COLUMNS = {
   expenses: {
     ledger: [
       date,
-      { key: 'title', label: 'Expense', type: 'text', strong: true },
+      { key: 'title', label: 'Expense', type: 'text', strong: true, opens: 'expense', idKey: 'id' },
       { key: 'category', label: 'Category', type: 'status' },
       { key: 'paid_to', label: 'Payee', type: 'text' },
       { key: 'method', label: 'Paid by', type: 'status' },
@@ -158,7 +158,8 @@ export const WORKSPACE_COLUMNS = {
   advances: {
     advances: [
       date,
-      { key: 'employee', label: 'Employee', type: 'text', strong: true },
+      { key: 'employee', label: 'Employee', type: 'text', strong: true, opens: 'expense', idKey: 'expense_id' },
+      { key: 'basis', label: 'Against', type: 'status' },
       { key: 'method', label: 'Paid by', type: 'status' },
       { key: 'status', label: 'Status', type: 'status' },
       { key: 'reference', label: 'Reference', type: 'text', muted: true },

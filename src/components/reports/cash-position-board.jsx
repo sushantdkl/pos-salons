@@ -98,6 +98,10 @@ export function CashPositionBoard({ cash: c, online: o, isAdmin = true }) {
               : { label: 'Expenses, Suppliers & Wages', value: c.cashPaidOut, sign: '-' },
             isAdmin ? { label: 'Salary & Advances', value: c.cashSalary ?? 0, sign: '-' } : null,
             { label: 'Savings', value: c.cashSavings, sign: '-' },
+            c.ownerCashIn ? { label: 'Cash In', hint: 'owner / bank / safe', value: c.ownerCashIn, sign: '+' } : null,
+            c.ownerCashOut ? { label: 'Cash Out', hint: 'owner / bank / safe', value: c.ownerCashOut, sign: '-' } : null,
+            c.exchangeCashIn ? { label: 'Exchange — cash received', value: c.exchangeCashIn, sign: '+' } : null,
+            c.exchangeCashOut ? { label: 'Exchange — cash paid out', value: c.exchangeCashOut, sign: '-' } : null,
             { label: 'Closing Cash', value: b.ledgerBalance, strong: true },
           ]}
         />
@@ -110,6 +114,8 @@ export function CashPositionBoard({ cash: c, online: o, isAdmin = true }) {
             { label: 'Sales settled in cash', value: c.cashCollected, sign: '+' },
             c.creditCollectionsCash ? { label: 'Credit collected in cash', value: c.creditCollectionsCash, sign: '+' } : null,
             c.cashAdded ? { label: 'Float added at store open', value: c.cashAdded, sign: '+' } : null,
+            c.ownerCashIn ? { label: 'Cash In (owner / bank / safe)', value: c.ownerCashIn, sign: '+' } : null,
+            c.exchangeCashIn ? { label: 'Exchange — cash received', value: c.exchangeCashIn, sign: '+' } : null,
             { label: 'Total In', value: b.totalIn, strong: true },
             { section: 'Cash out' },
             { label: isAdmin ? 'Operating expenses & purchases' : 'Expenses & wages paid', value: isAdmin ? c.cashExpenses : c.cashPaidOut, sign: '-' },
@@ -117,6 +123,8 @@ export function CashPositionBoard({ cash: c, online: o, isAdmin = true }) {
             { label: 'Moved to savings', value: c.cashSavings, sign: '-' },
             c.cashRefunds ? { label: 'Refunds', value: c.cashRefunds, sign: '-' } : null,
             c.cashRemoved ? { label: 'Float removed at store open', value: c.cashRemoved, sign: '-' } : null,
+            c.ownerCashOut ? { label: 'Cash Out (owner / bank / safe)', value: c.ownerCashOut, sign: '-' } : null,
+            c.exchangeCashOut ? { label: 'Exchange — cash paid out', value: c.exchangeCashOut, sign: '-' } : null,
             c.sessionDifferences ? { label: c.sessionDifferences < 0 ? 'Cash short at close' : 'Cash over at close', value: Math.abs(c.sessionDifferences), sign: c.sessionDifferences < 0 ? '-' : '+' } : null,
             { label: 'Total Out', value: b.totalOutWithCounts, strong: true },
             { label: 'Closing Cash', value: b.drawerClosing, strong: true },
@@ -162,11 +170,14 @@ export function CashPositionBoard({ cash: c, online: o, isAdmin = true }) {
           title="Recorded Cash Movements"
           tone="stone"
           rows={[
-            { label: 'Cash In', hint: 'float added', value: c.cashAdded, sign: c.cashAdded ? '+' : '' },
-            { label: 'Cash Out', hint: 'float removed', value: c.cashRemoved, sign: c.cashRemoved ? '-' : '' },
+            { label: 'Float added', hint: 'at store open', value: c.cashAdded, sign: c.cashAdded ? '+' : '' },
+            { label: 'Float removed', hint: 'at store open', value: c.cashRemoved, sign: c.cashRemoved ? '-' : '' },
+            { label: 'Cash In', hint: 'owner / bank / safe', value: c.ownerCashIn ?? 0, sign: c.ownerCashIn ? '+' : '' },
+            { label: 'Cash Out', hint: 'owner / bank / safe', value: c.ownerCashOut ?? 0, sign: c.ownerCashOut ? '-' : '' },
+            (c.exchangeCashIn || c.exchangeCashOut) ? { label: 'Exchange (cash in − out)', value: (c.exchangeCashIn || 0) - (c.exchangeCashOut || 0) } : null,
             { label: 'Savings Deposit', value: c.cashSavings, strong: true },
           ]}
-          note="Drawer floats and savings deposits are the salon moving its own money. They are not salon sales or operating expenses."
+          note="Drawer floats, Cash In / Out, exchanges and savings deposits are the salon moving its own money. They are not salon sales or operating expenses."
         />
         <Panel
           title="Cash in Bank / Online"
@@ -178,6 +189,8 @@ export function CashPositionBoard({ cash: c, online: o, isAdmin = true }) {
             { label: 'Purchases, Expenses & Suppliers', value: o.onlineExpenses, sign: '-' },
             isAdmin ? { label: 'Salary & Advances', value: o.onlineSalary ?? 0, sign: '-' } : null,
             { label: 'Savings', value: o.onlineSavings, sign: '-' },
+            o.exchangeOnlineIn ? { label: 'Exchange — online received', value: o.exchangeOnlineIn, sign: '+' } : null,
+            o.exchangeOnlineOut ? { label: 'Exchange — online sent', value: o.exchangeOnlineOut, sign: '-' } : null,
             { label: 'Closing Balance', hint: 'this period', value: o.netOnlineBalance, strong: true },
           ]}
         />

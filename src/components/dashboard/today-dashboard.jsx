@@ -23,6 +23,16 @@ const APPOINTMENT_TONE = {
   PENDING: ['Pending', 'cash'], CONFIRMED: ['Confirmed', 'online'], CHECKED_IN: ['Arrived', 'ledger'], IN_SERVICE: ['In service', 'hrm'],
 };
 
+/** Services on a bill, "Haircut, Beard trim ×2". */
+function billServices(bill) {
+  return (bill.items || []).map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name)).join(', ');
+}
+
+/** Who did the work on a bill — each staff member once. */
+function billStaff(bill) {
+  return [...new Set((bill.items || []).map((item) => item.staffName).filter(Boolean))].join(', ');
+}
+
 function timeLabel(value) {
   if (!value) return '—';
   return new Date(value).toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' });
@@ -164,9 +174,19 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
               onRowClick={(bill) => setOpenBill(bill.id)}
               empty="No bills yet today."
               columns={[
-                { key: 'bill_number', label: 'Bill', render: (bill) => <BillLink billId={bill.id} number={bill.bill_number} /> },
+                {
+                  key: 'bill_number',
+                  label: 'Bill',
+                  render: (bill) => (
+                    <div className="min-w-0">
+                      <BillLink billId={bill.id} number={bill.bill_number} />
+                      <p className="max-w-55 truncate text-xs text-stone-500" title={billServices(bill)}>{billServices(bill) || '—'}</p>
+                    </div>
+                  ),
+                },
                 { key: 'time', label: 'Time', render: (bill) => timeLabel(bill.transaction_date) },
                 { key: 'customer_name', label: 'Customer', render: (bill) => bill.customer_name || 'Walk-in' },
+                { key: 'staff', label: 'Staff', render: (bill) => <span className="font-medium text-stone-800">{billStaff(bill) || '—'}</span> },
                 { key: 'payment_method', label: 'Paid by', render: (bill) => ({ cash: 'Cash', online: 'Online / QR', credit: 'Credit', split: 'Split' }[bill.payment_method] || bill.payment_method) },
                 { key: 'status', label: 'Status', render: (bill) => <StatusBadge status={String(bill.status).toLowerCase() === 'cancelled' ? 'CANCELLED' : 'PAID'} /> },
                 { key: 'grand_total', label: 'Total', align: 'right', render: (bill) => money(bill.grand_total) },

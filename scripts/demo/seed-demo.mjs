@@ -16,6 +16,7 @@
  */
 import pg from 'pg';
 import { computeAttendance, nepalInstant, shiftWindow, addDays, weekdayOf } from '../../src/lib/hrm/calc.js';
+import { formatBillNumber } from '../../src/lib/billing/bill-number.js';
 
 const url = process.env.DATABASE_URL || '';
 const dbName = new URL(url).pathname.slice(1);
@@ -228,7 +229,7 @@ try {
           payment_method, amount_paid, cash_amount, qr_amount, qr_type, total_paid, payment_status, cashier_id, token_id, transaction_time, status, created_at, business_day_id, store_session_id,
           revenue_business_day_id, payment_received_at, idempotency_key, credit_amount, loyalty_discount, loyalty_program_id)
         VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,0,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'paid',$18,$19,$20,$19,$18,$21,$22,$23,$24) RETURNING id`,
-      [`SALON-${String(billNo).padStart(7, '0')}`, customer?.id || null, customer?.name || 'Walk-in Customer', customer?.phone || null, subtotal, round2(discount + loyaltyDiscount), discountType, grandTotal,
+      [formatBillNumber(billNo), customer?.id || null, customer?.name || 'Walk-in Customer', customer?.phone || null, subtotal, round2(discount + loyaltyDiscount), discountType, grandTotal,
         method, tendered, cash, online, qrType, round2(cash + online), paymentStatus, chance(0.8) ? cashierId : adminId, tokenId, when, bd.id, session.id, ik('bill'), credit, loyaltyDiscount, loyaltyDiscount ? program.id : null]);
       if (tokenId) await q('UPDATE walk_in_tokens SET invoice_id = $1 WHERE id = $2', [bill.id, tokenId]);
       stats.bills += 1;
@@ -241,7 +242,7 @@ try {
         if (line.item_type === 'product') {
           const p = await one('UPDATE salon_products SET current_stock = GREATEST(current_stock - $1, 0) WHERE id = $2 RETURNING current_stock', [line.quantity, line.item_id]);
           await q(`INSERT INTO inventory_movements(product_id, movement_type, quantity, previous_stock, new_stock, notes, created_at) VALUES ($1,'sale',$2,$3,$4,$5,$6)`,
-            [line.item_id, line.quantity, Number(p.current_stock) + line.quantity, p.current_stock, `SALON-${String(billNo).padStart(7, '0')}`, when]);
+            [line.item_id, line.quantity, Number(p.current_stock) + line.quantity, p.current_stock, formatBillNumber(billNo), when]);
         }
       }
       let index = 0;

@@ -240,13 +240,16 @@ async function expenses(db, f) {
   if (f.method) { where += ' AND LOWER(e.payment_method) = LOWER(?)'; params.push(f.method); }
   if (f.category) { where += ' AND e.category = ?'; params.push(f.category); }
   const ledger = await db.all(`
-    SELECT e.id, ${dateText('e.expense_date')} AS date, e.title, e.category, e.paid_to, LOWER(e.payment_method) AS method,
+    SELECT e.id, ${dateText('e.expense_date')} AS date, e.title, COALESCE(ec.label, e.category) AS category, e.paid_to, LOWER(e.payment_method) AS method,
       COALESCE(e.cash_amount,0) AS cash, COALESCE(e.online_amount,0) AS online, e.amount, e.reference_number AS reference, e.notes
-    FROM expenses e WHERE ${where} ORDER BY e.expense_date DESC, e.id DESC LIMIT ${ROW_CAP + 1}`, params);
+    FROM expenses e LEFT JOIN expense_categories ec ON ec.name = e.category
+    WHERE ${where} ORDER BY e.expense_date DESC, e.id DESC LIMIT ${ROW_CAP + 1}`, params);
+  // Category names read as the owner labelled them (Tea & snacks, not TEA_SNACKS).
   const categories = await db.all(`
-    SELECT e.category, COUNT(*)::int AS count, COALESCE(SUM(e.amount),0) AS amount,
+    SELECT COALESCE(ec.label, e.category) AS category, COUNT(*)::int AS count, COALESCE(SUM(e.amount),0) AS amount,
       ROUND(100 * SUM(e.amount) / NULLIF(SUM(SUM(e.amount)) OVER (), 0), 1) AS share
-    FROM expenses e WHERE ${where} GROUP BY 1 ORDER BY amount DESC`, params);
+    FROM expenses e LEFT JOIN expense_categories ec ON ec.name = e.category
+    WHERE ${where} GROUP BY 1 ORDER BY amount DESC`, params);
   const methods = await db.all(`
     SELECT LOWER(e.payment_method) AS method, COUNT(*)::int AS count, COALESCE(SUM(e.amount),0) AS amount,
       ROUND(100 * SUM(e.amount) / NULLIF(SUM(SUM(e.amount)) OVER (), 0), 1) AS share
@@ -270,7 +273,7 @@ async function advances(db, f) {
   if (f.staff) { where += ' AND a.staff_id = ?'; params.push(f.staff); }
   if (f.method) { where += ' AND LOWER(a.payment_method) = LOWER(?)'; params.push(f.method); }
   const rows = await db.all(`
-    SELECT a.id, ${dateText('a.payment_date')} AS date, u.full_name AS employee, LOWER(a.payment_method) AS method, a.status,
+    SELECT a.id, a.expense_id, ${dateText('a.payment_date')} AS date, u.full_name AS employee, COALESCE(a.basis, 'salary') AS basis, LOWER(a.payment_method) AS method, a.status,
       a.amount, a.applied_amount AS recovered, (a.amount - a.applied_amount) AS outstanding, a.reference_number AS reference, a.note
     FROM salary_advances a JOIN users u ON u.id = a.staff_id WHERE ${where} ORDER BY a.payment_date DESC, a.id DESC LIMIT ${ROW_CAP + 1}`, params);
   const employees = await db.all(`
@@ -312,6 +315,6 @@ export async function workspaceFilterOptions(db, report) {
   if (report === 'products') { options.categoryLabel = 'All product categories'; options.categories = (await db.all("SELECT DISTINCT COALESCE(NULLIF(category,''),'Other') AS c FROM salon_products ORDER BY 1")).map((r) => ({ value: r.c, label: r.c })); }
   if (report === 'payments') { options.categoryLabel = 'All providers'; options.categories = [{ value: 'ESEWA_PHONEPAY', label: 'eSewa / PhonePay' }, { value: 'BANK', label: 'Bank QR' }, { value: 'none', label: 'No provider (cash / credit)' }]; }
   if (report === 'credit') { options.categoryLabel = 'All entry types'; options.categories = (await db.all('SELECT DISTINCT entry_type AS c FROM customer_credit_ledger ORDER BY 1')).map((r) => ({ value: r.c, label: r.c })); }
-  if (report === 'expenses') { options.categoryLabel = 'All categories'; options.categories = (await db.all(`SELECT DISTINCT e.category AS c FROM expenses e WHERE ${OPERATING_EXPENSE_SQL} ORDER BY 1`)).map((r) => ({ value: r.c, label: r.c })); }
+  if (report === 'expenses') { options.categoryLabel = 'All categories'; options.categories = (await db.all(`SELECT DISTINCT e.category AS c, COALESCE(ec.label, e.category) AS l FROM expenses e LEFT JOIN expense_categories ec ON ec.name = e.category WHERE ${OPERATING_EXPENSE_SQL} ORDER BY 2`)).map((r) => ({ value: r.c, label: r.l })); }
   return options;
 }

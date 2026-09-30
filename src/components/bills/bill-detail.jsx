@@ -5,7 +5,7 @@
  * customers, appointments, loyalty, reviews). Loads /api/admin/billing/[id]; shows the lines,
  * how it was paid, discounts incl. loyalty, void / refund with who and why, and can reprint.
  *
- *   <BillLink billId={id} number="SALON-0000123" />   — a clickable bill number
+ *   <BillLink billId={id} number="S-123" />   — a clickable bill number
  */
 
 import { fmtDate, fmtDateTime } from '@/lib/dates/display';

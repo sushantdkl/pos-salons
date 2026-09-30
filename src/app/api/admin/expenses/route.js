@@ -610,15 +610,22 @@ export async function GET(request) {
   try {
     const db = Database.getInstance();
     await ensureSalonSchema();
-    await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
-    const labels = await categoryLabels(db);
     const detailId = Number(searchParams.get('id') || 0);
     if (detailId) {
-      const detail = await getExpenseDetail(db, detailId, labels);
+      // Expense details open from reports too: anyone who may read the Expenses report may see
+      // one expense. Salary / advance specifics stay admin-only.
+      const viewer = await requirePermission(request, db, PERMISSIONS.REPORTS_VIEW);
+      const detail = await getExpenseDetail(db, detailId, await categoryLabels(db));
       if (!detail) return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+      if (viewer.role !== 'admin') {
+        if (['Staff Salary', 'Staff Commission'].includes(detail.expense.category)) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        return NextResponse.json({ ...detail, advance: null, salary: null });
+      }
       return NextResponse.json(detail);
     }
+    await requireRole(request, db, 'admin');
+    const labels = await categoryLabels(db);
     const staffId = Number(searchParams.get('staffId') || 0);
     const salaryMonth = cleanText(searchParams.get('salaryMonth'), currentSalaryMonth());
     const staffList = await getStaff(db);
