@@ -1,5 +1,6 @@
 import { nepalDateString } from '../dates/calendar.js';
 import { resolveReportPeriod } from '../dates/report-periods.js';
+import { commissionAdvanceAllowance } from './commission.js';
 
 /**
  * ADVANCE SALARY.
@@ -132,7 +133,7 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
   if (!staffId) throw badRequest('Select a staff member');
 
   const staff = await tx.get(
-    `SELECT u.id, u.full_name, COALESCE(sp.base_salary,0) AS base_salary FROM users u JOIN staff_profiles sp ON sp.user_id=u.id WHERE u.id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber','stylist','beautician') FOR UPDATE`,
+    `SELECT u.id, u.full_name, COALESCE(sp.base_salary,0) AS base_salary, COALESCE(sp.pay_type,'salary') AS pay_type FROM users u JOIN staff_profiles sp ON sp.user_id=u.id WHERE u.id = ? AND u.is_active = TRUE AND sp.salon_role IN ('barber','stylist','beautician') FOR UPDATE`,
     [staffId]
   );
   if (!staff) throw badRequest('Selected staff was not found');
@@ -142,21 +143,32 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
 
   const settingRows = await tx.all(`SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('advance_ceiling_percent','calendar_system')`);
   const settings = Object.fromEntries(settingRows.map((row) => [row.setting_key, row.setting_value]));
-  // No limit set means up to one month's base salary per payroll period (same rule as the
-  // cashier's advance screen), so advances are never locked just because the field is blank.
-  const rawCeiling = input.ceilingPercent ?? settings.advance_ceiling_percent;
-  const ceilingPercent = rawCeiling === undefined || rawCeiling === null || String(rawCeiling).trim() === '' ? 100 : Number(rawCeiling);
-  if (!Number.isFinite(ceilingPercent) || ceilingPercent <= 0 || ceilingPercent > 100) {
-    const error = new Error('Admin must configure the salary advance ceiling before advances can be issued'); error.status = 409; throw error;
-  }
   const period = input.payrollPeriodStart && input.payrollPeriodEnd
     ? { start: input.payrollPeriodStart, end: input.payrollPeriodEnd }
     : resolveReportPeriod('this_month', { calendarSystem: settings.calendar_system });
-  const alreadyIssued = await tx.get(`SELECT COALESCE(SUM(amount),0) AS total FROM salary_advances WHERE staff_id=? AND deleted_at IS NULL AND status <> 'CANCELLED' AND payment_date >= ?::date AND payment_date <= ?::date`, [staffId, period.start, period.end]);
-  const maximum = money(Number(staff.base_salary) * ceilingPercent / 100);
-  if (money(Number(alreadyIssued?.total || 0) + amount) > maximum) {
-    const error = new Error("Advance exceeds the employee's remaining period allowance"); error.status = 422; throw error;
+  const eligibility = await advanceEligibility(tx, staff, {
+    ceilingPercent: input.ceilingPercent ?? settings.advance_ceiling_percent,
+    calendarSystem: settings.calendar_system,
+    period,
+  });
+  if (eligibility.basis === 'salary' && eligibility.noBaseSalary) {
+    const error = new Error(`${staff.full_name} has no base salary set, so no salary advance can be issued. Set a base salary, or tick "Commission-based staff" in Staff.`);
+    error.status = 422;
+    throw error;
   }
+  // Over the allowance only with an admin override and a written reason (kept on the advance).
+  const overrideReason = String(input.overrideReason || '').replace(/[<>]/g, '').trim();
+  const overridden = amount > eligibility.remaining + 0.001;
+  if (overridden && !(input.allowOverride === true && overrideReason)) {
+    const error = new Error(eligibility.basis === 'commission'
+      ? `Advance is more than ${staff.full_name}'s unpaid earned commission allows (Rs ${eligibility.remaining.toFixed(2)} available). An admin can override with a reason.`
+      : `Advance exceeds the employee's remaining period allowance (Rs ${eligibility.remaining.toFixed(2)} left)`);
+    error.status = 422;
+    error.code = 'ADVANCE_OVER_ALLOWANCE';
+    error.available = eligibility.remaining;
+    throw error;
+  }
+  const ceilingPercent = eligibility.ceilingPercent;
 
   const paymentDate = String(input.paymentDate || input.payment_date || nepalDateString()).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) throw badRequest('A valid payment date is required');
@@ -167,8 +179,8 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
   // The advance IS a salary payment in cash terms, so it books an ordinary salary expense.
   // That single row is what moves cash / online balances and Expected Cash in Drawer.
   const expenseId = await createExpense(tx, {
-    title: `Advance salary - ${staff.full_name}`,
-    category: 'Staff Salary',
+    title: eligibility.basis === 'commission' ? `Commission advance - ${staff.full_name}` : `Advance salary - ${staff.full_name}`,
+    category: eligibility.basis === 'commission' ? 'Staff Commission' : 'Staff Salary',
     amount,
     paymentMethod: input.paymentMethod || input.payment_method,
     cashAmount: input.cashAmount ?? input.cash_amount,
@@ -192,20 +204,47 @@ export async function createAdvance(tx, input, userId, scope = {}, createExpense
       payment_date, reference_number, note, status, expense_id,
       business_day_id, store_session_id, created_by, updated_by,
       payroll_period_start, payroll_period_end, eligible_salary_snapshot,
-      ceiling_percent_snapshot, idempotency_key, source_identifier
-    ) VALUES (?, ?, 0, ?, ?, ?, ?::date, ?, ?, 'OUTSTANDING', ?, ?, ?, ?, ?, ?::date, ?::date, ?, ?, ?, ?)
+      ceiling_percent_snapshot, idempotency_key, source_identifier, basis, override_reason
+    ) VALUES (?, ?, 0, ?, ?, ?, ?::date, ?, ?, 'OUTSTANDING', ?, ?, ?, ?, ?, ?::date, ?::date, ?, ?, ?, ?, ?, ?)
   `, [
     staffId, amount, booked?.payment_method || 'cash',
     money(booked?.cash_amount), money(booked?.online_amount),
     paymentDate, referenceNumber || null, note || null, expenseId,
     scope.businessDayId ?? null, scope.storeSessionId ?? null, userId, userId,
-    period.start, period.end, input.eligibleSalary ?? Number(staff.base_salary),
+    period.start, period.end, eligibility.basis === 'commission' ? eligibility.owed : (input.eligibleSalary ?? Number(staff.base_salary)),
     ceilingPercent, input.idempotencyKey || null, input.sourceIdentifier || null,
+    eligibility.basis, overridden ? overrideReason : null,
   ]);
 
   const advanceId = result.lastInsertRowid;
   await tx.run('UPDATE expenses SET advance_id = ? WHERE id = ?', [advanceId, expenseId]);
-  return { advanceId, expenseId, amount, staffName: staff.full_name };
+  return { advanceId, expenseId, amount, staffName: staff.full_name, basis: eligibility.basis, overridden };
+}
+
+/**
+ * How much can still be advanced to one staff member.
+ *   salary staff      base salary x ceiling%, less advances already issued this payroll period
+ *   commission staff  unpaid earned commission x ceiling%, less advances not yet recovered
+ * A blank ceiling means 100%.
+ */
+export async function advanceEligibility(db, staff, { ceilingPercent: rawCeiling, calendarSystem, period } = {}) {
+  const ceilingPercent = rawCeiling === undefined || rawCeiling === null || String(rawCeiling).trim() === '' ? 100 : Number(rawCeiling);
+  if (!Number.isFinite(ceilingPercent) || ceilingPercent <= 0 || ceilingPercent > 100) {
+    const error = new Error('Admin must configure the salary advance ceiling before advances can be issued'); error.status = 409; throw error;
+  }
+  if ((staff.pay_type || 'salary') === 'commission') {
+    const allowance = await commissionAdvanceAllowance(db, staff.id, { ceilingPercent, calendarSystem });
+    return { basis: 'commission', ceilingPercent, remaining: allowance.allowance, owed: allowance.owed, commission: allowance };
+  }
+  const range = period || resolveReportPeriod('this_month', { calendarSystem });
+  const issued = await db.get(`SELECT COALESCE(SUM(amount),0) AS total FROM salary_advances WHERE staff_id=? AND deleted_at IS NULL AND status <> 'CANCELLED' AND payment_date >= ?::date AND payment_date <= ?::date`, [staff.id, range.start, range.end]);
+  const maximum = money(Number(staff.base_salary) * ceilingPercent / 100);
+  return {
+    basis: 'salary', ceilingPercent, maximum,
+    periodIssued: money(issued?.total),
+    remaining: Math.max(0, money(maximum - money(issued?.total))),
+    noBaseSalary: maximum <= 0,
+  };
 }
 
 /**

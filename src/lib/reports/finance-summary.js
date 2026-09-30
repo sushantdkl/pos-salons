@@ -343,6 +343,48 @@ export async function getSavingsTotals(db, period, options = {}) {
   };
 }
 
+export function movementScope(alias, period, options = {}) {
+  if (options.storeSessionId) return { clause: `${alias}.store_session_id = ?`, params: [options.storeSessionId] };
+  if (options.businessDayId) return { clause: `${alias}.business_day_id = ?`, params: [options.businessDayId] };
+  return periodDateColumnFilter(period, `${alias}.movement_date`, options.startDate, options.endDate);
+}
+
+/**
+ * Cash In / Cash Out and Cash Exchange (cash_movements). None of it is a sale or an expense:
+ *   Cash In   adds to business cash       Cash Out  removes business cash
+ *   Exchange  moves money between cash and online; only its charge is income (fee income)
+ * Reversal rows carry negated legs, so every sum here is already net of corrections and a
+ * correction lands on the day it is made without rewriting the original day.
+ */
+export async function getCashMovementTotals(db, period, options = {}) {
+  const filter = movementScope('m', period, options);
+  const createdByClause = options.createdBy ? 'AND m.created_by = ?' : '';
+  const params = options.createdBy ? [...filter.params, options.createdBy] : filter.params;
+  const row = await db.get(`
+    SELECT
+      COALESCE(SUM(CASE WHEN m.movement_type = 'CASH_IN' THEN m.cash_in ELSE 0 END), 0) AS owner_cash_in,
+      COALESCE(SUM(CASE WHEN m.movement_type = 'CASH_OUT' THEN m.cash_out ELSE 0 END), 0) AS owner_cash_out,
+      COALESCE(SUM(CASE WHEN m.movement_type = 'EXCHANGE' THEN m.cash_in ELSE 0 END), 0) AS exchange_cash_in,
+      COALESCE(SUM(CASE WHEN m.movement_type = 'EXCHANGE' THEN m.cash_out ELSE 0 END), 0) AS exchange_cash_out,
+      COALESCE(SUM(CASE WHEN m.movement_type = 'EXCHANGE' THEN m.online_in ELSE 0 END), 0) AS exchange_online_in,
+      COALESCE(SUM(CASE WHEN m.movement_type = 'EXCHANGE' THEN m.online_out ELSE 0 END), 0) AS exchange_online_out,
+      COALESCE(SUM(m.fee_income), 0) AS fee_income,
+      COUNT(CASE WHEN m.status <> 'REVERSAL' THEN 1 END)::int AS records
+    FROM cash_movements m
+    WHERE ${filter.clause} ${createdByClause}
+  `, params);
+  return {
+    ownerCashIn: numeric(row?.owner_cash_in),
+    ownerCashOut: numeric(row?.owner_cash_out),
+    exchangeCashIn: numeric(row?.exchange_cash_in),
+    exchangeCashOut: numeric(row?.exchange_cash_out),
+    exchangeOnlineIn: numeric(row?.exchange_online_in),
+    exchangeOnlineOut: numeric(row?.exchange_online_out),
+    exchangeFeeIncome: numeric(row?.fee_income),
+    cashMovementRecords: Number(row?.records || 0),
+  };
+}
+
 /**
  * Money EVENTS that happen after a sale: voids, the refunds they pay out, and customer credit
  * collections. Each is attributed to the session / business day / date it was PROCESSED on.
@@ -609,11 +651,12 @@ export async function getSalesSeries(db, periodValue, options = {}) {
  */
 export async function getFinancialSummary(db, periodValue, options = {}) {
   const period = resolveDashboardPeriod(periodValue);
-  const [sales, expenses, savings, events] = await Promise.all([
+  const [sales, expenses, savings, events, movements] = await Promise.all([
     getSalesTotals(db, period, options),
     getExpenseTotals(db, period, options),
     getSavingsTotals(db, period, options),
     getEventTotals(db, period, options),
+    getCashMovementTotals(db, period, options),
   ]);
 
   const includeSalary = options.includeSalary !== false;
@@ -638,7 +681,10 @@ export async function getFinancialSummary(db, periodValue, options = {}) {
     - events.cashRefunds
     - expenses.operatingExpensesCash
     - salaryExpensesCash
-    - savings.savingsFromCash;
+    - savings.savingsFromCash
+    // Cash In / Out and exchanges: not sales, not expenses, but they do move business cash.
+    + movements.ownerCashIn - movements.ownerCashOut
+    + movements.exchangeCashIn - movements.exchangeCashOut;
 
   // Online / QR account balance: only online inflows and online outflows move this number.
   const netOnlineBalance =
@@ -646,15 +692,18 @@ export async function getFinancialSummary(db, periodValue, options = {}) {
     - events.onlineRefunds
     - expenses.operatingExpensesOnline
     - salaryExpensesOnline
-    - savings.savingsFromOnline;
+    - savings.savingsFromOnline
+    + movements.exchangeOnlineIn - movements.exchangeOnlineOut;
 
   const netAvailableBalance = netCashMovement + netOnlineBalance;
 
   // Combined outflow totals. A cashier response withholds the salary AMOUNTS but still needs
   // the correct totals, so these are computed here rather than re-derived in the UI — that is
   // what stops a cashier's "Total Cash Outflow" disagreeing with the admin's.
-  const totalCashOut = events.cashRefunds + expenses.operatingExpensesCash + salaryExpensesCash + savings.savingsFromCash;
-  const totalOnlineOut = events.onlineRefunds + expenses.operatingExpensesOnline + salaryExpensesOnline + savings.savingsFromOnline;
+  const totalCashOut = events.cashRefunds + expenses.operatingExpensesCash + salaryExpensesCash + savings.savingsFromCash
+    + movements.ownerCashOut + movements.exchangeCashOut;
+  const totalOnlineOut = events.onlineRefunds + expenses.operatingExpensesOnline + salaryExpensesOnline + savings.savingsFromOnline
+    + movements.exchangeOnlineOut;
   const totalOutflows = expenses.operatingExpenses + salaryExpenses + savings.savingsTransfers
     + events.cashRefunds + events.onlineRefunds;
 
@@ -674,6 +723,7 @@ export async function getFinancialSummary(db, periodValue, options = {}) {
     salaryExpensesCash,
     salaryExpensesOnline,
     ...savings,
+    ...movements,
     totalCashOut,
     totalOnlineOut,
     totalOutflows,

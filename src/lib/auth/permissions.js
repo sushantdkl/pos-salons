@@ -46,6 +46,8 @@ export const PERMISSIONS = Object.freeze({
   CUSTOMERS_MANAGE: 'customers.manage',
   EXPENSES_DAILY: 'expenses.daily',
   SAVINGS_DEPOSIT: 'savings.deposit',
+  CASH_MOVEMENTS: 'cash.movements',
+  CASH_EXCHANGE: 'cash.exchange',
   STOCK_MANAGE: 'stock.manage',
   SUPPLIERS_MANAGE: 'suppliers.manage',
 });

@@ -8,7 +8,7 @@
  *   - Visibility here is convenience only. canAccessPath() and every API enforce access.
  */
 import {
-  Award, BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, ClipboardPen, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
+  ArrowDownUp, ArrowLeftRight, Award, BadgeDollarSign, Banknote, BookOpen, BookUser, CalendarClock, CalendarCog, CalendarDays, CalendarOff, ClipboardCheck, ClipboardList, ClipboardPen, Clock, HeartHandshake, ChartColumnBig, ChartPie, Coins, Contact, DoorOpen,
   GitCompareArrows, Globe, HandCoins, LayoutDashboard, ListOrdered, ListTodo, MessageCircle, MessageSquareHeart,
   PackagePlus, PackageSearch, PiggyBank, Printer, Receipt, ReceiptText, Scale, Scissors, ScrollText, SearchCheck,
   Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Ticket, Timer, TrendingUp, Truck, UserCheck, Users, Wallet, WalletCards, Warehouse,
@@ -106,6 +106,8 @@ const ADMIN_NAV = [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
     link('Expenses', '/dashboard/admin/expenses', Receipt),
     link('Savings', '/admin/savings', PiggyBank),
+    link('Cash In / Out', '/admin/cash-drawer', ArrowDownUp),
+    link('Cash Exchange', '/admin/cash-exchange', ArrowLeftRight),
     link('Credit Collection', '/cashier/credit', Wallet),
   ]),
   group('hrm', 'HRM', 'hrm', Users, [
@@ -174,6 +176,8 @@ const CASHIER_NAV = [
     link('Opening & Closing', '/store/opening-closing', DoorOpen),
     link('Daily Expenses', '/dashboard/cashier/daily-expenses', Receipt, { permission: 'expenses.daily' }),
     link('Savings', '/dashboard/cashier/savings', PiggyBank, { permission: 'savings.deposit' }),
+    link('Cash In / Out', '/admin/cash-drawer', ArrowDownUp, { permission: 'cash.movements' }),
+    link('Cash Exchange', '/admin/cash-exchange', ArrowLeftRight, { permission: 'cash.exchange' }),
     link('Credit Collection', '/cashier/credit', Wallet, { permission: 'billing.credit.create' }),
   ]),
   group('hrm', 'HRM', 'hrm', Users, [

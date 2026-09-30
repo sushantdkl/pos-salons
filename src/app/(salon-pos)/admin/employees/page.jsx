@@ -17,9 +17,12 @@ const emptyForm = {
   phone: '',
   commission_percentage: '',
   base_salary: '',
+  pay_type: 'salary',
   assigned_services: '',
   is_active: true
 };
+
+const SERVICE_ROLES = ['barber', 'stylist', 'beautician'];
 
 export default function StaffPage() {
   const [staff, setStaff] = useState([]);
@@ -67,6 +70,7 @@ export default function StaffPage() {
       phone: employee.phone || '',
       commission_percentage: employee.commission_percentage ?? '',
       base_salary: employee.base_salary ?? '',
+      pay_type: employee.pay_type || 'salary',
       assigned_services: employee.assigned_services || '',
       is_active: !!employee.is_active
     } : emptyForm);
@@ -270,7 +274,14 @@ export default function StaffPage() {
                       <p className="font-medium text-gray-950">{employee.full_name}</p>
                       <p className="text-sm text-gray-500">{employee.username} {employee.phone ? `• ${employee.phone}` : ''}</p>
                     </td>
-                    <td className="px-5 py-4 text-gray-700">{ROLE_LABELS[employee.salon_role] || employee.salon_role}</td>
+                    <td className="px-5 py-4 text-gray-700">
+                      {ROLE_LABELS[employee.salon_role] || employee.salon_role}
+                      {SERVICE_ROLES.includes(employee.salon_role) ? (
+                        <span className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${employee.pay_type === 'commission' ? 'bg-violet-50 text-violet-700' : 'bg-stone-100 text-stone-600'}`}>
+                          {employee.pay_type === 'commission' ? 'Commission-based' : 'Salary-based'}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-5 py-4 text-right font-medium text-gray-950">{formatCurrency(employee.service_revenue || 0)}</td>
                     <td className="px-5 py-4 text-right text-gray-700">{formatCurrency(employee.commission_earned || 0)} <span className="text-xs text-gray-500">({employee.commission_percentage || 0}%)</span></td>
                     <td className="px-5 py-4 text-right font-semibold text-gray-950">{formatCurrency(Number(employee.base_salary || 0) + Number(employee.commission_earned || 0))}</td>
@@ -365,6 +376,19 @@ export default function StaffPage() {
                 <span className="mb-2 block text-sm font-medium text-gray-900">Base salary</span>
                 <input type="number" min="0" step="0.01" value={formData.base_salary} onChange={(event) => setFormData({ ...formData, base_salary: event.target.value })} placeholder="e.g. 25000" className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900" />
               </label>
+              {SERVICE_ROLES.includes(formData.salon_role) ? (
+                <label className="flex items-start gap-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3 md:col-span-2">
+                  <input type="checkbox" className="mt-1 h-4 w-4" checked={formData.pay_type === 'commission'} onChange={(event) => setFormData({ ...formData, pay_type: event.target.checked ? 'commission' : 'salary' })} />
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-950">Commission-based staff</span>
+                    <span className="block text-xs text-gray-600">
+                      {formData.pay_type === 'commission'
+                        ? 'Advances are allowed against commission already earned and not yet paid, and are deducted at the next monthly settlement.'
+                        : 'Unticked: salary-based. Advances are limited by the base salary, as before.'}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               <label className="flex items-center gap-2 pt-8 text-sm font-medium text-gray-900">
                 <input type="checkbox" disabled={editingDefaultAdmin} checked={editingDefaultAdmin ? true : formData.is_active} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
                 Active

@@ -39,7 +39,8 @@ export function ExpectedCashCalculation({ expected, isAdmin, defaultOpen = true 
         <CalcLine label="Starting cash" value={expected.startingCash} />
         <CalcLine label="Cash sales" value={expected.cashCollections} sign="+" />
         <CalcLine label="Credit collected in cash" value={expected.creditCollectionsCash} sign="+" />
-        <CalcLine label="Other cash in" value={expected.otherCashIn} sign="+" />
+        <CalcLine label="Cash In (owner / bank / safe)" value={expected.ownerCashIn ?? expected.otherCashIn} sign="+" />
+        {expected.exchangeCashIn ? <CalcLine label="Exchange — cash received" value={expected.exchangeCashIn} sign="+" /> : null}
         {isAdmin && expected.operatingExpensesCash !== undefined ? (
           <>
             <CalcLine label="Cash expenses" value={expected.operatingExpensesCash} sign="−" />
@@ -50,7 +51,8 @@ export function ExpectedCashCalculation({ expected, isAdmin, defaultOpen = true 
         )}
         <CalcLine label="Cash to savings / transfers" value={expected.cashSavingsOut} sign="−" />
         <CalcLine label="Cash refunds (voids)" value={expected.cashRefunds} sign="−" />
-        <CalcLine label="Other cash out" value={expected.otherCashOut} sign="−" />
+        <CalcLine label="Cash Out (owner / bank / safe)" value={expected.ownerCashOut ?? expected.otherCashOut} sign="−" />
+        {expected.exchangeCashOut ? <CalcLine label="Exchange — cash paid out" value={expected.exchangeCashOut} sign="−" /> : null}
         <CalcLine label="Expected cash" value={expected.expectedCash} strong />
       </div>
     </details>

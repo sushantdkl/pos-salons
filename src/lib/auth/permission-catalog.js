@@ -28,10 +28,12 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
-    key: 'cash', label: 'Daily cash — expenses & savings', description: 'Money leaving the drawer during the day.',
+    key: 'cash', label: 'Daily cash — expenses, savings & cash in / out', description: 'Money coming into or leaving the drawer during the day.',
     permissions: [
       { key: 'expenses.daily', label: 'Record daily expenses', description: 'Tea, water, cleaning and other petty expenses from the drawer.' },
       { key: 'savings.deposit', label: 'Record savings deposits', description: 'Move cash or online money to a bank / sahakari deposit.' },
+      { key: 'cash.movements', label: 'Cash In / Cash Out', description: 'Add cash to or take cash out of the drawer (owner, bank, safe). Not a sale or an expense. A note is always required.' },
+      { key: 'cash.exchange', label: 'Cash exchange', description: 'Swap a customer's online payment for cash, or cash for online, with an optional charge.' },
     ],
   },
   {

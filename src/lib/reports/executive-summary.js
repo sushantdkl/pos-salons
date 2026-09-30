@@ -748,8 +748,10 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
   /* ---- profit & loss (admin only) -------------------------------------- */
   const profitLoss = forAdmin ? (() => {
     const grossProfit = round2(revenue.netSales - productCost.estimatedProductCost);
+    // Exchange charges are the only income outside sales: a fee for swapping cash and online.
+    const otherIncome = round2(financial.exchangeFeeIncome);
     const operatingResult = round2(
-      revenue.netSales - productCost.estimatedProductCost - expenses.total - salaryBlock.totalPaid
+      revenue.netSales - productCost.estimatedProductCost - expenses.total - salaryBlock.totalPaid + otherIncome
     );
     return {
       netSales: revenue.netSales,
@@ -762,6 +764,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
       grossMargin: percentOf(grossProfit, revenue.netSales),
       operatingExpenses: expenses.total,
       salaryExpense: salaryBlock.totalPaid,
+      otherIncome,
       operatingResult,
       operatingMargin: percentOf(operatingResult, revenue.netSales),
       commissionAccrued: revenueSplit.commissionAccrued,
@@ -776,7 +779,10 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
 
   /* ---- cash position --------------------------------------------------- */
   const cashPaidOut = round2(expenses.cash + salaryCash);
-  const cashOut = round2(cashPaidOut + savings.fromCash + payments.cashRefunds);
+  // Cash In / Out (owner, bank, safe) and exchange cash legs — business cash, never sales/expense.
+  const movementCashIn = round2(numeric(financial.ownerCashIn) + numeric(financial.exchangeCashIn));
+  const movementCashOut = round2(numeric(financial.ownerCashOut) + numeric(financial.exchangeCashOut));
+  const cashOut = round2(cashPaidOut + savings.fromCash + payments.cashRefunds + movementCashOut);
   // Cash MOVEMENT statement for the period (not a drawer balance): everything that moved
   // physical cash, including non-P&L drawer adjustments made at Store Open.
   const netCashMovement = round2(numeric(financial.netCashMovement) + cashAdjustments.net);
@@ -813,6 +819,10 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     cashSavings: savings.fromCash,
     cashAdded: cashAdjustments.added,
     cashRemoved: cashAdjustments.removed,
+    ownerCashIn: round2(financial.ownerCashIn),
+    ownerCashOut: round2(financial.ownerCashOut),
+    exchangeCashIn: round2(financial.exchangeCashIn),
+    exchangeCashOut: round2(financial.exchangeCashOut),
     cashOut,
     // Shortages (-) / overages (+) found at every close in the period. Additive by design.
     sessionDifferences: sessionFacts.sessionDifference,
@@ -828,6 +838,12 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
       cashRefunds: liveDrawer.cashRefunds,
       cashExpenses: liveDrawer.cashExpenses,
       cashSavingsOut: liveDrawer.cashSavingsOut,
+      ownerCashIn: liveDrawer.ownerCashIn,
+      ownerCashOut: liveDrawer.ownerCashOut,
+      exchangeCashIn: liveDrawer.exchangeCashIn,
+      exchangeCashOut: liveDrawer.exchangeCashOut,
+      otherCashIn: liveDrawer.otherCashIn,
+      otherCashOut: liveDrawer.otherCashOut,
       expectedCash: liveDrawer.expectedCash,
       ...(forAdmin ? { salaryCash: liveDrawer.salaryCash, operatingExpensesCash: liveDrawer.operatingExpensesCash } : {}),
     } : null,
@@ -852,7 +868,7 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
       const salesAndCollections = round2(numeric(payments.grossCashCollected) + numeric(payments.creditCollectionsCash));
       const openingAdjustment = round2(cashAdjustments.added - cashAdjustments.removed);
       const ledgerBalance = round2(numeric(sessionFacts.startingCash) + netCashMovement);
-      const totalIn = round2(salesAndCollections + cashAdjustments.added);
+      const totalIn = round2(salesAndCollections + cashAdjustments.added + movementCashIn);
       // Count differences at close: a shortage is cash that left the drawer, an overage came in.
       const totalOutWithCounts = round2(cashOut + cashAdjustments.removed - numeric(sessionFacts.sessionDifference));
       return {
@@ -883,7 +899,9 @@ export async function getExecutiveSummary(db, periodValue, options = {}) {
     onlinePaidOut: round2(expenses.online + salaryOnline),
     onlineSavings: savings.fromOnline,
     onlineRefunds: payments.onlineRefunds,
-    totalOnlineOut: round2(expenses.online + salaryOnline + savings.fromOnline + payments.onlineRefunds),
+    exchangeOnlineIn: round2(financial.exchangeOnlineIn),
+    exchangeOnlineOut: round2(financial.exchangeOnlineOut),
+    totalOnlineOut: round2(expenses.online + salaryOnline + savings.fromOnline + payments.onlineRefunds + numeric(financial.exchangeOnlineOut)),
     netOnlineBalance: round2(financial.netOnlineBalance),
     salesAndCollections: round2(numeric(payments.grossQrCollected) + numeric(payments.creditCollectionsOnline)),
     ...(forAdmin ? { onlineSalary: salaryOnline } : {}),

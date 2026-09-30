@@ -3,8 +3,10 @@ import Database from '@/lib/db/index';
 import { logAction } from '@/lib/db/helpers';
 import { mapApiError } from '@/lib/db/api-errors';
 import { BILL_DATE_EXPR, BILL_DATE_EXPR_B, periodDateColumnFilter, periodDateFilter } from '@/lib/db/postgres-dates';
-import { adToBsParts, bsDaysInMonth, bsToAdIso, nepalDateString } from '@/lib/dates/calendar';
-import { getServerCalendarSystem } from '@/lib/dates/calendar-setting';
+import { nepalDateString } from '@/lib/dates/calendar';
+import { DASHBOARD_PERIODS } from '@/lib/reports/dashboard-period';
+import { currentSalaryMonth, monthStart, nextMonthStart } from '@/lib/payroll/commission';
+import { assertExpenseCategory, categoryLabels, listCategories } from '@/lib/expenses/categories';
 import { cleanText, ensureSalonSchema, requireRole } from '@/lib/salon-schema';
 import { PERMISSIONS, requirePermission } from '@/lib/auth/permissions';
 import { assertDrawerCashAvailable, requireOpenSession } from '@/lib/business-day/service';
@@ -24,16 +26,8 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Savings deposits are no longer expense categories — they live in savings_deposits
-// and are recorded from the Savings page. See docs/migrations/2026-07-31-savings-deposits.sql.
-const EXPENSE_CATEGORIES = [
-  'Staff Salary', 'Staff Commission', 'Product Purchase', 'Rent', 'Electricity',
-  'Water', 'Internet', 'Maintenance', 'Marketing', 'Equipment', 'Cleaning', 'Other',
-  'TEA_SNACKS', 'WATER_JAR', 'CLEANING', 'TRANSPORT', 'MAINTENANCE', 'PETTY_PURCHASE',
-  'OTHER_EXPENSE',
-];
-
-const SAVINGS_CATEGORIES = ['DAILY_SAVING'];
+// Expense categories live in expense_categories (Manage categories on the Expenses page).
+// Savings deposits are never an expense — they live in savings_deposits.
 const PAYMENT_METHODS = ['cash', 'online', 'bank_transfer', 'mixed'];
 const PAYMENT_STATUSES = ['unpaid', 'partially_paid', 'paid'];
 
@@ -41,35 +35,7 @@ function today() {
   return nepalDateString();
 }
 
-// Salary months are 'YYYY-MM' in the calendar they were chosen in: BS years (2070+) are
-// ~57 years ahead of AD, so the two can never be confused.
-const isBsMonth = (month) => Number(String(month).slice(0, 4)) >= 2070;
-
-function monthStart(month) {
-  if (isBsMonth(month)) return bsToAdIso(`${month}-01`);
-  return `${month}-01`;
-}
-
-function nextMonthStart(month) {
-  const [year, value] = String(month).split('-').map(Number);
-  if (isBsMonth(month)) {
-    const last = bsToAdIso(`${month}-${String(bsDaysInMonth(year, value)).padStart(2, '0')}`);
-    const next = new Date(`${last}T00:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    return next.toISOString().slice(0, 10);
-  }
-  return new Date(Date.UTC(year, value, 1)).toISOString().slice(0, 10);
-}
-
-/** This month as 'YYYY-MM' in the salon's calendar. */
-function currentSalaryMonth() {
-  const today = nepalDateString();
-  if (getServerCalendarSystem() === 'BS') {
-    const bs = adToBsParts(today);
-    return `${bs.year}-${String(bs.month).padStart(2, '0')}`;
-  }
-  return today.slice(0, 7);
-}
+// Salary-month helpers (BS or AD 'YYYY-MM') are shared with the commission module.
 
 function money(value) {
   const amount = Number(value || 0);
@@ -112,6 +78,14 @@ function mapExpense(row) {
     referenceNumber: row.reference_number || '',
     attachmentUrl: row.attachment_url || '',
     recordType: row.record_type || 'EXPENSE',
+    // Where the row came from. Payroll and supplier rows are owned by their own screens and
+    // cannot be edited or deleted here, or the advance / settlement / ledger would drift.
+    source: row.source || 'manual',
+    locked: Boolean(row.source && row.source !== 'manual'),
+    advanceId: row.advance_id ? Number(row.advance_id) : null,
+    supplierPaymentId: row.supplier_payment_id ? Number(row.supplier_payment_id) : null,
+    businessDate: row.business_date || null,
+    sessionNumber: row.session_number ? Number(row.session_number) : null,
     createdByName: row.created_by_name || '',
     updatedByName: row.updated_by_name || '',
     createdAt: row.created_at,
@@ -149,9 +123,38 @@ function mapSalary(row) {
   };
 }
 
+const EXPENSE_SOURCE_SQL = `CASE
+  WHEN e.advance_id IS NOT NULL THEN 'advance'
+  WHEN e.supplier_payment_id IS NOT NULL THEN 'supplier'
+  WHEN e.reference_number LIKE 'SALARY-%' THEN 'salary'
+  WHEN e.reference_number LIKE 'COMMISSION-%' THEN 'commission'
+  ELSE 'manual' END`;
+
+const LOCKED_MESSAGE = {
+  advance: 'This expense is a salary / commission advance. Cancel or change it from Salary & advances so the advance stays correct.',
+  salary: 'This expense was written by a salary settlement. Edit that salary payment instead.',
+  commission: 'This expense was written by a salary settlement. Edit that salary payment instead.',
+  supplier: 'This expense is a supplier payment. Change it from Suppliers so the supplier ledger stays correct.',
+};
+
+async function expenseSource(db, id) {
+  const row = await db.get(`SELECT ${EXPENSE_SOURCE_SQL} AS source FROM expenses e WHERE e.id = ?`, [Number(id)]);
+  return row?.source || null;
+}
+
+function periodOf(searchParams) {
+  const period = cleanText(searchParams.get('period'), '');
+  if (!period || period === 'all' || !DASHBOARD_PERIODS[period]) return null;
+  const startDate = cleanText(searchParams.get('startDate'), '');
+  const endDate = cleanText(searchParams.get('endDate'), '');
+  if (period === 'custom' && !(startDate && endDate)) return null;
+  return { period, startDate, endDate };
+}
+
 async function getStaff(db) {
   return db.all(`
-    SELECT u.id, u.full_name as name, sp.salon_role as role, COALESCE(sp.base_salary, 0) as "baseSalary"
+    SELECT u.id, u.full_name as name, sp.salon_role as role, COALESCE(sp.base_salary, 0) as "baseSalary",
+           COALESCE(sp.pay_type, 'salary') as "payType", COALESCE(sp.commission_percentage, 0) as "commissionPercentage"
     FROM users u
     JOIN staff_profiles sp ON sp.user_id = u.id
     WHERE u.is_active = TRUE AND sp.salon_role IN ('barber', 'stylist', 'beautician')
@@ -189,6 +192,12 @@ function buildFilters(searchParams) {
     clauses.push('e.payment_method = ?');
     params.push(paymentMethod);
   }
+  const range = periodOf(searchParams);
+  if (range) {
+    const filter = periodDateColumnFilter(range.period, 'e.expense_date', range.startDate, range.endDate);
+    clauses.push(filter.clause);
+    params.push(...filter.params);
+  }
   const from = cleanText(searchParams.get('from'), '');
   const to = cleanText(searchParams.get('to'), '');
   if (from) {
@@ -207,18 +216,105 @@ function buildFilters(searchParams) {
   return { where: clauses.join(' AND '), params };
 }
 
-async function getExpenses(db, searchParams) {
+const EXPENSE_SELECT = `
+  SELECT e.*, ${EXPENSE_SOURCE_SQL} AS source,
+         COALESCE(c.full_name, '') as created_by_name, COALESCE(u.full_name, '') as updated_by_name,
+         bd.business_date, ss.session_number
+  FROM expenses e
+  LEFT JOIN users c ON c.id = e.created_by
+  LEFT JOIN users u ON u.id = e.updated_by
+  LEFT JOIN business_days bd ON bd.id = e.business_day_id
+  LEFT JOIN store_sessions ss ON ss.id = e.store_session_id
+`;
+
+/**
+ * Server-paged expense list. Every row in range is reachable (there is no hidden cap), and the
+ * totals cover the whole filtered range, not only the visible page.
+ */
+async function getExpenses(db, searchParams, labels) {
   const { where, params } = buildFilters(searchParams);
+  const pageSize = [10, 25, 50, 100].includes(Number(searchParams.get('pageSize'))) ? Number(searchParams.get('pageSize')) : 25;
+  const totals = await db.get(`
+    SELECT COUNT(*)::int AS count, COALESCE(SUM(e.amount), 0) AS amount,
+           COALESCE(SUM(e.cash_amount), 0) AS cash, COALESCE(SUM(e.online_amount), 0) AS online
+    FROM expenses e WHERE ${where}
+  `, params);
+  const count = Number(totals?.count || 0);
+  const pages = Math.max(1, Math.ceil(count / pageSize));
+  const page = Math.min(pages, Math.max(1, Number.parseInt(searchParams.get('page'), 10) || 1));
   const rows = await db.all(`
-    SELECT e.*, COALESCE(c.full_name, '') as created_by_name, COALESCE(u.full_name, '') as updated_by_name
-    FROM expenses e
-    LEFT JOIN users c ON c.id = e.created_by
-    LEFT JOIN users u ON u.id = e.updated_by
+    ${EXPENSE_SELECT}
     WHERE ${where}
     ORDER BY e.expense_date DESC, e.id DESC
-    LIMIT 300
-  `, params);
-  return rows.map(mapExpense);
+    LIMIT ? OFFSET ?
+  `, [...params, pageSize, (page - 1) * pageSize]);
+  return {
+    rows: rows.map((row) => ({ ...mapExpense(row), categoryLabel: labels[row.category] || row.category })),
+    pagination: { page, pageSize, total: count, pages },
+    totals: { amount: Number(totals?.amount || 0), cash: Number(totals?.cash || 0), online: Number(totals?.online || 0), count },
+  };
+}
+
+/** Spend by category for the selected period (Overview). */
+async function getPeriodBreakdown(db, searchParams, labels) {
+  const range = periodOf(searchParams) || { period: 'month' };
+  const filter = periodDateColumnFilter(range.period, 'e.expense_date', range.startDate, range.endDate);
+  const rows = await db.all(`
+    SELECT e.category, COALESCE(SUM(e.amount), 0) AS amount, COUNT(*)::int AS count,
+           COALESCE(SUM(e.cash_amount), 0) AS cash, COALESCE(SUM(e.online_amount), 0) AS online
+    FROM expenses e
+    WHERE e.deleted_at IS NULL AND COALESCE(e.record_type, 'EXPENSE') = 'EXPENSE' AND ${filter.clause}
+    GROUP BY e.category ORDER BY amount DESC
+  `, filter.params);
+  const bills = periodDateFilter(range.period, range.startDate, range.endDate, BILL_DATE_EXPR);
+  const revenue = await db.get(`SELECT COALESCE(SUM(grand_total), 0) AS total FROM salon_bills WHERE status = 'paid' AND ${bills.clause}`, bills.params);
+  const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  return {
+    period: range.period,
+    total: Math.round(total * 100) / 100,
+    cash: Math.round(rows.reduce((sum, row) => sum + Number(row.cash || 0), 0) * 100) / 100,
+    online: Math.round(rows.reduce((sum, row) => sum + Number(row.online || 0), 0) * 100) / 100,
+    records: rows.reduce((sum, row) => sum + Number(row.count || 0), 0),
+    revenue: Number(revenue?.total || 0),
+    byCategory: rows.map((row) => ({ category: row.category, label: labels[row.category] || row.category, amount: Number(row.amount || 0), count: Number(row.count || 0) })),
+  };
+}
+
+/** One expense with everything linked to it, for the detail panel. */
+async function getExpenseDetail(db, id, labels) {
+  const row = await db.get(`${EXPENSE_SELECT} WHERE e.id = ?`, [Number(id)]);
+  if (!row) return null;
+  const expense = { ...mapExpense(row), categoryLabel: labels[row.category] || row.category, deleted: Boolean(row.deleted_at) };
+  let advance = null;
+  if (row.advance_id) {
+    advance = await db.get(`
+      SELECT a.id, a.amount, a.applied_amount, a.status, a.payment_date, a.basis, a.override_reason, a.note,
+             u.full_name AS staff_name
+      FROM salary_advances a JOIN users u ON u.id = a.staff_id WHERE a.id = ?
+    `, [row.advance_id]);
+  }
+  let salary = null;
+  const ref = String(row.reference_number || '');
+  const match = ref.match(/^(SALARY|COMMISSION)-(\d{4}-\d{2})-(\d+)$/);
+  if (match) {
+    salary = await db.get(`
+      SELECT s.id, s.salary_month, s.total_payable, s.advance_applied, s.amount_paid, s.remaining_balance, s.payment_status,
+             u.full_name AS staff_name
+      FROM salary_payments s JOIN users u ON u.id = s.staff_id
+      WHERE s.staff_id = ? AND s.salary_month = ? AND s.deleted_at IS NULL ORDER BY s.id DESC LIMIT 1
+    `, [Number(match[3]), match[2]]);
+  }
+  return {
+    expense,
+    advance: advance ? {
+      id: Number(advance.id), staffName: advance.staff_name, amount: Number(advance.amount), applied: Number(advance.applied_amount),
+      status: advance.status, paymentDate: advance.payment_date, basis: advance.basis, overrideReason: advance.override_reason || '', note: advance.note || '',
+    } : null,
+    salary: salary ? {
+      id: Number(salary.id), staffName: salary.staff_name, salaryMonth: salary.salary_month, totalPayable: Number(salary.total_payable),
+      advanceApplied: Number(salary.advance_applied), amountPaid: Number(salary.amount_paid), remainingBalance: Number(salary.remaining_balance), status: salary.payment_status,
+    } : null,
+  };
 }
 
 async function getSalaries(db, searchParams) {
@@ -248,6 +344,12 @@ async function getSalaries(db, searchParams) {
   if (paymentMethod && paymentMethod !== 'all') {
     clauses.push('s.payment_method = ?');
     params.push(paymentMethod);
+  }
+  const range = periodOf(searchParams);
+  if (range && !salaryMonth) {
+    const filter = periodDateColumnFilter(range.period, 's.payment_date', range.startDate, range.endDate);
+    clauses.push(filter.clause);
+    params.push(...filter.params);
   }
 
   const rows = await db.all(`
@@ -309,17 +411,10 @@ async function getSummary(db) {
   };
 }
 
-function validateCategory(category) {
-  const value = cleanText(category, '');
-  if (SAVINGS_CATEGORIES.includes(value)) {
-    throw new Error('Savings deposits are recorded on the Savings page, not as an expense.');
-  }
-  if (!EXPENSE_CATEGORIES.includes(value)) throw new Error('Valid expense category is required');
-  return value;
-}
-
 async function saveExpense(db, data, userId, scope = {}) {
-  const category = validateCategory(data.category);
+  const previous = data.id ? await db.get('SELECT category FROM expenses WHERE id = ? AND deleted_at IS NULL', [Number(data.id)]) : null;
+  if (data.id && !previous) { const error = new Error('Expense not found'); error.status = 404; throw error; }
+  const category = await assertExpenseCategory(db, data.category, { previous: previous?.category || null });
   const amount = money(data.amount);
   const payment = normalizePayment(data.paymentMethod || data.payment_method, amount, data.cashAmount || data.cash_amount, data.onlineAmount || data.online_amount);
   const title = cleanText(data.title, '');
@@ -517,8 +612,15 @@ export async function GET(request) {
     await ensureSalonSchema();
     await requireRole(request, db, 'admin');
     const { searchParams } = new URL(request.url);
+    const labels = await categoryLabels(db);
+    const detailId = Number(searchParams.get('id') || 0);
+    if (detailId) {
+      const detail = await getExpenseDetail(db, detailId, labels);
+      if (!detail) return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json(detail);
+    }
     const staffId = Number(searchParams.get('staffId') || 0);
-    const salaryMonth = cleanText(searchParams.get('salaryMonth'), new Date().toISOString().slice(0, 7));
+    const salaryMonth = cleanText(searchParams.get('salaryMonth'), currentSalaryMonth());
     const staffList = await getStaff(db);
     const staff = await Promise.all(staffList.map(async (member) => ({
       ...member,
@@ -541,9 +643,13 @@ export async function GET(request) {
       advanceApplications: row.advanceApplied > 0 ? await getApplicationsForSalary(db, row.id) : [],
     })));
 
+    const expensePage = await getExpenses(db, searchParams, labels);
     return NextResponse.json({
       summary: await getSummary(db),
-      expenses: await getExpenses(db, searchParams),
+      periodSummary: await getPeriodBreakdown(db, searchParams, labels),
+      expenses: expensePage.rows,
+      expensePagination: expensePage.pagination,
+      expenseTotals: expensePage.totals,
       salaries: salariesWithAdvances,
       staff: staff.map((member) => ({
         ...member,
@@ -552,7 +658,9 @@ export async function GET(request) {
       })),
       staffAdvances,
       advanceTotals,
-      categories: EXPENSE_CATEGORIES,
+      categories: (await listCategories(db)).map((category) => category.name),
+      categoryList: await listCategories(db, { includeInactive: true }),
+      categoryLabels: labels,
       paymentMethods: PAYMENT_METHODS,
       paymentStatuses: PAYMENT_STATUSES,
     });
@@ -585,7 +693,9 @@ export async function POST(request) {
       const existing = await db.get('SELECT id FROM salary_advances WHERE idempotency_key=?', [key]);
       if (existing) return NextResponse.json({ message: 'Advance salary already recorded', id: existing.id, duplicate: true });
       data.idempotencyKey = key;
-      const result = await db.transaction(async (tx) => createAdvance(tx, data, user.id, scope, saveExpense));
+      // Only an admin may advance more than the allowance, and only with a written reason.
+      const input = { ...data, allowOverride: user.role === 'admin', overrideReason: data.overrideReason };
+      const result = await db.transaction(async (tx) => createAdvance(tx, input, user.id, scope, saveExpense));
       await logAction(db, user.id, 'create', 'salary_advance', result.advanceId, `${result.staffName} ${result.amount}`);
       return NextResponse.json({ message: 'Advance salary recorded', id: result.advanceId }, { status: 201 });
     }
@@ -615,10 +725,8 @@ export async function PUT(request) {
       return NextResponse.json({ message: 'Salary payment updated', id });
     }
     if (!data.id) return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
-    const linked = await db.get('SELECT supplier_payment_id FROM expenses WHERE id = ?', [Number(data.id)]);
-    if (linked?.supplier_payment_id) {
-      return NextResponse.json({ error: 'This expense is a supplier payment. Change it from Suppliers so the supplier ledger stays correct.' }, { status: 409 });
-    }
+    const source = await expenseSource(db, data.id);
+    if (source && source !== 'manual') return NextResponse.json({ error: LOCKED_MESSAGE[source] }, { status: 409 });
     const id = await saveExpense(db, data, user.id);
     await logAction(db, user.id, 'update', 'expense', id, cleanText(data.title, 'Expense'));
     return NextResponse.json({ message: 'Expense updated', id });
@@ -652,22 +760,22 @@ export async function DELETE(request) {
       return NextResponse.json({ message: 'Advance cancelled and the payment reversed' });
     }
     if (type === 'salary') {
-      const salary = await db.get('SELECT staff_id, salary_month FROM salary_payments WHERE id = ?', [id]);
-      // Return any advance this settlement absorbed to OUTSTANDING; otherwise deleting the
-      // settlement would silently consume the advance forever.
-      await db.transaction(async (tx) => releaseApplications(tx, id));
-      await db.run('UPDATE salary_payments SET deleted_at = NOW(), updated_by = ?, updated_at = NOW(), advance_applied = 0 WHERE id = ?', [user.id, id]);
-      if (salary) {
-        await db.run(`
+      // One transaction: release the advances this settlement absorbed (back to OUTSTANDING),
+      // remove the settlement and the expense rows it wrote. A failure leaves nothing half-done.
+      await db.transaction(async (tx) => {
+        const salary = await tx.get('SELECT staff_id, salary_month FROM salary_payments WHERE id = ? AND deleted_at IS NULL', [id]);
+        if (!salary) { const error = new Error('Salary payment not found'); error.status = 404; throw error; }
+        await releaseApplications(tx, id);
+        await tx.run('UPDATE salary_payments SET deleted_at = NOW(), updated_by = ?, updated_at = NOW(), advance_applied = 0 WHERE id = ?', [user.id, id]);
+        await tx.run(`
           UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW()
           WHERE reference_number IN (?, ?) AND deleted_at IS NULL
         `, [user.id, `SALARY-${salary.salary_month}-${salary.staff_id}`, `COMMISSION-${salary.salary_month}-${salary.staff_id}`]);
-      }
+      });
     } else {
-      const linked = await db.get('SELECT supplier_payment_id FROM expenses WHERE id = ?', [id]);
-      if (linked?.supplier_payment_id) {
-        return NextResponse.json({ error: 'This expense is a supplier payment. Void it from Suppliers so the supplier ledger stays correct.' }, { status: 409 });
-      }
+      const source = await expenseSource(db, id);
+      if (!source) return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+      if (source !== 'manual') return NextResponse.json({ error: LOCKED_MESSAGE[source] }, { status: 409 });
       await db.run('UPDATE expenses SET deleted_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?', [user.id, id]);
     }
     await logAction(db, user.id, 'delete', type === 'salary' ? 'salary_payment' : 'expense', id, 'Soft deleted');

@@ -15,6 +15,11 @@ function normalizeUsername(value) {
   return cleanText(value).toLowerCase().replace(/\s+/g, '');
 }
 
+/** 'commission' when "Commission-based staff" is ticked; salary-based otherwise (the default). */
+function payTypeOf(data) {
+  return data.pay_type === 'commission' || data.commission_based === true ? 'commission' : 'salary';
+}
+
 function validateStaff(data, editing = false) {
   const username = normalizeUsername(data.username);
   if (!username) return 'Username is required';
@@ -27,6 +32,7 @@ function validateStaff(data, editing = false) {
   if (String(data.phone || '').trim() && !phoneOrNull(data.phone)) return PHONE_ERROR_MESSAGE;
   if (Number(data.commission_percentage || 0) < 0 || Number(data.commission_percentage || 0) > 100) return 'Commission must be between 0 and 100';
   if (Number(data.base_salary || 0) < 0) return 'Base salary cannot be negative';
+  if (payTypeOf(data) === 'commission' && !(Number(data.commission_percentage || 0) > 0)) return 'A commission-based staff member needs a commission % above 0';
   return null;
 }
 
@@ -121,6 +127,7 @@ export async function GET(request) {
              COALESCE(sp.assigned_services, '') as assigned_services,
              COALESCE(sp.commission_percentage, 0) as commission_percentage,
              COALESCE(sp.base_salary, 0) as base_salary,
+             COALESCE(sp.pay_type, 'salary') as pay_type,
              COALESCE(agg.service_revenue, 0) as service_revenue,
              COALESCE(agg.commission_earned, 0) as commission_earned,
              COALESCE(agg.invoice_count, 0) as invoice_count
@@ -176,15 +183,16 @@ export async function POST(request) {
     ]);
 
     await db.run(`
-      INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary, pay_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       result.lastInsertRowid,
       cleanText(data.full_name),
       role,
       Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
       Number(data.commission_percentage || 0),
-      Number(data.base_salary || 0)
+      Number(data.base_salary || 0),
+      payTypeOf(data)
     ]);
 
     await db.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
@@ -249,9 +257,10 @@ export async function PUT(request) {
       await tx.run(sql, params);
 
       await tx.run(`
-        INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO staff_profiles (user_id, display_name, salon_role, assigned_services, commission_percentage, base_salary, pay_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id) DO UPDATE SET
+          pay_type = EXCLUDED.pay_type,
           display_name = EXCLUDED.display_name,
           salon_role = EXCLUDED.salon_role,
           assigned_services = EXCLUDED.assigned_services,
@@ -264,7 +273,8 @@ export async function PUT(request) {
         role,
         Array.isArray(data.assigned_services) ? data.assigned_services.join(',') : cleanText(data.assigned_services),
         Number(data.commission_percentage || 0),
-        Number(data.base_salary || 0)
+        Number(data.base_salary || 0),
+        payTypeOf(data)
       ]);
 
       await tx.run('INSERT INTO action_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',

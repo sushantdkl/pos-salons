@@ -23,7 +23,9 @@ export function migrationContents(file) {
 }
 
 export function migrationChecksum(sql) {
-  return crypto.createHash('sha256').update(sql).digest('hex');
+  // Line endings are normalised: a Windows checkout (core.autocrlf) turns every file into
+  // CRLF, which must not make an unchanged, already-applied migration look edited.
+  return crypto.createHash('sha256').update(String(sql).replace(/\r\n/g, '\n')).digest('hex');
 }
 
 export function migrationBody(sql) {

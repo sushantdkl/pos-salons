@@ -119,8 +119,9 @@ async function dayClosingCash(db, businessDayId) {
  * Cash a session is expected to hold — THE drawer formula, used by Close Store, the Opening &
  * Closing screen and every summary that reports a live drawer:
  *
- *   starting_cash + cash sales + credit collected in cash
+ *   starting_cash + cash sales + credit collected in cash + Cash In + exchange cash in
  *   - cash refunds - cash operating expenses - cash salary/advances - cash savings
+ *   - Cash Out - exchange cash paid out
  *
  * Every term comes from getFinancialSummary scoped to this session, so it can never disagree
  * with the cash figures shown elsewhere. A bill sold AND voided in this session nets to zero
@@ -137,21 +138,32 @@ export async function computeExpectedCash(db, session) {
   const salaryCash = numeric(fin.salaryExpensesCash);
   const cashExpenses = operatingExpensesCash + salaryCash;
   const cashSavingsOut = numeric(fin.savingsFromCash);
-  const expectedCash = Math.round((startingCash + cashCollections + creditCollectionsCash - cashExpenses - cashRefunds - cashSavingsOut) * 100) / 100;
+  // Cash In / Out (owner, bank, safe) and the cash legs of exchanges. Not sales, not expenses.
+  const ownerCashIn = numeric(fin.ownerCashIn);
+  const ownerCashOut = numeric(fin.ownerCashOut);
+  const exchangeCashIn = numeric(fin.exchangeCashIn);
+  const exchangeCashOut = numeric(fin.exchangeCashOut);
+  const otherCashIn = Math.round((ownerCashIn + exchangeCashIn) * 100) / 100;
+  const otherCashOut = Math.round((ownerCashOut + exchangeCashOut) * 100) / 100;
+  const expectedCash = Math.round((startingCash + cashCollections + creditCollectionsCash + otherCashIn - cashExpenses - cashRefunds - cashSavingsOut - otherCashOut) * 100) / 100;
 
   return {
     startingCash,
     cashCollections,
     splitCash: numeric(fin.splitCash),
     creditCollectionsCash,
-    otherCashIn: 0,
+    otherCashIn,
+    ownerCashIn,
+    exchangeCashIn,
     cashRefunds,
     operatingExpensesCash,
     // Salary + advances paid from the drawer. Callers that serve a cashier must not itemise it.
     salaryCash,
     cashExpenses,
     cashSavingsOut,
-    otherCashOut: 0,
+    otherCashOut,
+    ownerCashOut,
+    exchangeCashOut,
     expectedCash,
     // Context figures (NOT part of physical drawer cash):
     qrCollections: numeric(fin.grossQrCollected),
