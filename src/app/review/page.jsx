@@ -177,7 +177,7 @@ export default function ReviewRewardsPage() {
       <div className="mx-auto w-full max-w-md px-4 pb-12 pt-8">
         <header className="mb-6 text-center">
           <p className="font-serif text-2xl tracking-[0.18em] text-white">THE HAIR CUT</p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.3em]" style={{ color: GOLD }}>Review &amp; Rewards</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.3em]" style={{ color: GOLD }}>{config?.rewardsEnabled ? 'Review & Rewards' : 'Customer Review'}</p>
         </header>
 
         {loadError ? <p className="rounded-xl bg-rose-950/60 p-4 text-center text-sm text-rose-200">{loadError}</p> : null}
@@ -211,7 +211,7 @@ export default function ReviewRewardsPage() {
                   </button>
                 </form>
                 {rating && config.generalFeedbackEnabled ? <button type="button" onClick={() => startReview()} className="mt-3 w-full text-center text-sm text-stone-400 underline">Continue without my number</button> : null}
-                <p className="mt-3 text-center text-[11px] leading-relaxed text-stone-500">We only use your number to find your reward card. It does not sign you up for messages.</p>
+                <p className="mt-3 text-center text-[11px] leading-relaxed text-stone-500">{config.rewardsEnabled ? 'We only use your number to find your reward card and recent visits.' : 'We only use your number to find recent visits.'} It does not sign you up for messages.</p>
               </section>
             ) : null}
             {error ? <p role="alert" className="rounded-xl bg-rose-950/60 p-3 text-center text-sm text-rose-200">{error}</p> : null}

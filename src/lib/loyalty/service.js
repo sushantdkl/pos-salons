@@ -40,17 +40,17 @@ export async function crmAudit(tx, { entityType, entityId = null, customerId = n
 export async function getCrmSettings(db) {
   const row = await db.get('SELECT * FROM crm_settings WHERE id = 1');
   return {
-    publicRewardsEnabled: row?.public_rewards_enabled !== false,
+    publicRewardsEnabled: row?.public_rewards_enabled === true,
     publicReviewsEnabled: row?.public_reviews_enabled !== false,
     generalFeedbackEnabled: row?.general_feedback_enabled !== false,
-    claimCodesEnabled: row?.claim_codes_enabled !== false,
-    publicJoinEnabled: row?.public_join_enabled !== false,
+    claimCodesEnabled: row?.claim_codes_enabled === true,
+    publicJoinEnabled: row?.public_join_enabled === true,
     claimCodeValidDays: Number(row?.claim_code_valid_days || 7),
     reviewWindowDays: Number(row?.review_window_days || 14),
     websiteReviewsEnabled: row?.website_reviews_enabled !== false,
     receiptQrEnabled: row?.receipt_qr_enabled !== false,
     qrHeadline: row?.qr_headline || 'LOVE YOUR LOOK?',
-    qrSubtext: row?.qr_subtext || 'Scan to leave a review & check your rewards.',
+    qrSubtext: row?.qr_subtext || 'Scan to leave a review.',
     qrFooter: row?.qr_footer || '',
     lowRatingThreshold: Number(row?.low_rating_threshold || 2),
   };
@@ -149,6 +149,10 @@ export async function saveProgram(db, actor, id, input) {
       const result = await tx.run(`INSERT INTO loyalty_programs(name, eligible_service_ids, eligible_categories, required_visits, reward_type, reward_service_id, reward_value, reward_label,
         reward_counts_as_visit, start_date, end_date, is_active, created_by, updated_by) VALUES (?, ?::bigint[], ?::text[], ?, ?, ?, ?, ?, ?, COALESCE(?::date, CURRENT_DATE), ?::date, ?, ?, ?)`, [...values, actor.id, actor.id]);
       programId = Number(result.lastInsertRowid);
+      // Loyalty is unavailable on a new installation until the owner creates the first active
+      // program. Creating it turns on the reward card; optional joining and claim codes remain
+      // explicit switches in Review settings.
+      if (input.isActive !== false) await tx.run('UPDATE crm_settings SET public_rewards_enabled = TRUE, updated_by = ?, updated_at = NOW() WHERE id = 1', [actor.id]);
       await crmAudit(tx, { entityType: 'loyalty_program', entityId: programId, action: 'create', newValue: { name, required, rewardType, label }, actorId: actor.id });
     }
     return mapProgram(await tx.get(`${PROGRAM_SELECT} WHERE p.id = ?`, [programId]));

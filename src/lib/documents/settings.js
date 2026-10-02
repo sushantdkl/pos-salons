@@ -14,8 +14,8 @@ export const DOCUMENT_DEFAULTS = Object.freeze({
   statement_footer: 'Please settle outstanding dues at your earliest convenience.',
   statement_show_not_tax_invoice: 'true', statement_show_pan: 'true', statement_show_address: 'true',
   statement_show_phone: 'true', statement_show_printed_at: 'true',
-  // Review & Rewards QR sheets (the printed card customers scan to review and check rewards).
-  qr_title: 'LOVE YOUR LOOK?', qr_instruction: 'Scan to leave a review & check your rewards',
+  // Review QR sheets. Actual loyalty wording is added only when an active owner-created program exists.
+  qr_title: 'LOVE YOUR LOOK?', qr_instruction: 'Scan to leave a review',
   qr_station_label: '', qr_print_size_mm: '110', qr_sheet_size: 'a4', qr_footer: '',
   qr_show_salon_name: 'true', qr_show_border: 'true', qr_show_url: 'true',
 });

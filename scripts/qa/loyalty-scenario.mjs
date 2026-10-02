@@ -76,6 +76,9 @@ const haircutBill = (extra = {}, key = randomUUID()) => bill({ services: [{ id: 
 const card = async (customerId) => (await must(cashier, 'GET', `/api/crm/loyalty/customer?customerId=${customerId}`)).programs.find((p) => p.name === 'QA Haircut Loyalty');
 
 /* ------------------------------------------------------------------ A 9 + 1 */
+const beforeProgram = await must(null, 'GET', '/api/public/rewards');
+check('A rewards stay hidden when the switch is on but no program exists', beforeProgram.rewardsEnabled === false && beforeProgram.programs.length === 0, beforeProgram);
+check('A the editable feedback form still works without loyalty', Boolean(beforeProgram.form?.id), beforeProgram.form);
 const program = (await must(admin, 'POST', '/api/crm/loyalty', {
   action: 'program', name: 'QA Haircut Loyalty', eligibleServiceIds: [haircut.id], requiredVisits: 9, rewardType: 'FREE_SERVICE', rewardServiceId: haircut.id,
 })).program;

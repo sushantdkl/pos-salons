@@ -7,10 +7,17 @@
  */
 
 import { normalizePhone } from '@/lib/validation/phone';
-import { awardBill, customerBalances, getCrmSettings, httpError } from './service';
+import { awardBill, customerBalances, getCrmSettings, httpError, listPrograms } from './service';
 import { firstName, recentVisitsForReview } from '@/lib/reviews/service';
 
 const ACTIVITY_LABEL = { EARN: 'Paid visit', REDEEM: 'Reward used', MANUAL_ADJUSTMENT: 'Adjusted by salon', EXPIRY: 'Expired' };
+
+async function requireActiveLoyalty(db) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+  if (!(await listPrograms(db, { activeOn: today })).length) {
+    throw httpError('The salon has not created an active loyalty program yet.', 403);
+  }
+}
 
 async function safeCard(db, customer, settings) {
   const balances = (await customerBalances(db, customer.id)).filter((row) => row.isActive);
@@ -56,6 +63,7 @@ export async function lookupRewards(db, phone) {
 export async function joinRewards(db, { phone, name }) {
   const settings = await getCrmSettings(db);
   if (!settings.publicRewardsEnabled || !settings.publicJoinEnabled) throw httpError('Joining from this page is not available right now. Please ask at the counter.', 403);
+  await requireActiveLoyalty(db);
   const normalized = normalizePhone(phone);
   if (!normalized) throw httpError('Enter a valid 10-digit mobile number', 400);
   const cleanName = String(name || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -74,6 +82,7 @@ export async function joinRewards(db, { phone, name }) {
 export async function claimVisit(db, { phone, code, name }) {
   const settings = await getCrmSettings(db);
   if (!settings.claimCodesEnabled || !settings.publicRewardsEnabled) throw httpError('Reward codes are not available right now.', 403);
+  await requireActiveLoyalty(db);
   const normalized = normalizePhone(phone);
   if (!normalized) throw httpError('Enter a valid 10-digit mobile number', 400);
   const cleanCode = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');

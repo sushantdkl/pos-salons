@@ -9,7 +9,7 @@ import { fmtDate, fmtDateTime } from '@/lib/dates/display';
 import Link from 'next/link';
 import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, BadgeCheck, Download, MessageSquareHeart, Printer, RotateCcw, Star } from 'lucide-react';
+import { AlertTriangle, Award, BadgeCheck, CheckCircle2, CircleDashed, ClipboardPen, Download, MessageSquareHeart, Printer, QrCode, RotateCcw, Star } from 'lucide-react';
 import {
   AlertBanner, ErpButton, ErpPage, ErrorState, FinancialTable, LoadingState, MetricCard, MetricGroup, PageHeader, StatusBadge,
 } from '@/components/erp';
@@ -86,41 +86,80 @@ function ReviewsTable({ reviews, onOpen }) {
   );
 }
 
-function QrPanel() {
+function ReviewSetup({ data, onTab }) {
+  const setup = data.setup || {};
+  const programs = data.activeLoyaltyPrograms || [];
+  const items = [
+    { label: 'Feedback form', detail: setup.activeForms ? `${setup.activeForms} active form${setup.activeForms === 1 ? '' : 's'}` : 'Create or activate a form', ready: setup.activeForms > 0, href: '/admin/crm/reviews/forms', action: setup.activeForms ? 'Manage' : 'Create form', icon: ClipboardPen },
+    { label: 'Collect reviews', detail: setup.reviewsEnabled ? 'Customer review page is open' : 'Review collection is switched off', ready: Boolean(setup.reviewsEnabled), tab: 'settings', action: 'Settings', icon: MessageSquareHeart },
+    { label: 'Print QR', detail: setup.receiptQrEnabled ? 'QR can be printed and added to receipts' : 'Receipt QR is switched off', ready: Boolean(setup.receiptQrEnabled), tab: 'qr', action: 'Open QR', icon: QrCode },
+    { label: 'Loyalty', detail: programs.length ? `${programs.length} active program${programs.length === 1 ? '' : 's'}` : 'No reward promise is shown', ready: programs.length > 0, href: '/admin/crm/loyalty', action: programs.length ? 'Manage' : 'Create program', icon: Award },
+  ];
+  return (
+    <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white" aria-label="Review setup">
+      <div className="flex flex-col gap-1 border-b border-stone-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h2 className="font-semibold text-stone-950">Review setup</h2><p className="text-xs text-stone-500">Finish only the parts your salon wants to use.</p></div>
+        <span className="text-xs font-semibold tabular-nums text-stone-500">{items.filter((item) => item.ready).length} of {items.length} ready</span>
+      </div>
+      <div className="divide-y divide-stone-100 lg:grid lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+        {items.map((item) => {
+          const content = <>
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><item.icon className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 text-sm font-semibold text-stone-900">{item.ready ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <CircleDashed className="h-3.5 w-3.5 text-amber-600" />}{item.label}</span><span className="mt-0.5 block text-xs leading-4 text-stone-500">{item.detail}</span><span className="mt-1 block text-xs font-semibold text-pink-700 group-hover:underline">{item.action}</span></span>
+          </>;
+          const className = 'group flex min-h-20 w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pink-500';
+          return item.tab
+            ? <button key={item.label} type="button" onClick={() => onTab(item.tab)} className={className}>{content}</button>
+            : <Link key={item.label} href={item.href} className={className}>{content}</Link>;
+        })}
+      </div>
+    </section>
+  );
+}
+
+function QrPanel({ programs = [] }) {
   // Wording, sheet size and QR size come from Printer & Documents → Review QR sheets.
   const documents = useReport('/api/admin/settings?mode=documents');
   const sheet = documents.data?.settings;
+  const programSummary = programs.map((program) => `${program.requiredVisits} paid visits → ${program.rewardLabel}`).join(' · ');
+  const printableSheet = sheet ? {
+    ...sheet,
+    // A review QR must not promise rewards until the owner creates an active loyalty program.
+    qr_instruction: programs.length ? sheet.qr_instruction : 'Scan to leave a review.',
+    qr_footer: programs.length ? (sheet.qr_footer || programSummary) : '',
+  } : null;
   const print = () => {
-    if (!sheet) return;
+    if (!printableSheet) return;
     const win = window.open('', '_blank', 'width=900,height=1100');
     if (!win) return;
     const origin = window.location.origin;
-    win.document.write(buildReviewQrSheetHtml(sheet, { qrSrc: `${origin}/api/public/qr`, reviewUrl: `${window.location.host}/review` }));
+    win.document.write(buildReviewQrSheetHtml(printableSheet, { qrSrc: `${origin}/api/public/qr`, reviewUrl: `${window.location.host}/review` }));
     win.document.close();
   };
   return (
     <div className="grid gap-4 md:grid-cols-[260px_1fr]">
       <div className="rounded-xl border border-stone-200 bg-white p-4 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/api/public/qr" alt="Universal Review & Rewards QR code" className="mx-auto h-48 w-48" />
+        <img src="/api/public/qr" alt={programs.length ? 'Review and rewards QR code' : 'Customer review QR code'} className="mx-auto h-48 w-48" />
         <p className="mt-2 text-xs text-stone-500">Always opens <b>/review</b>. It holds no customer data and never gives a stamp by itself.</p>
       </div>
       <div className="space-y-3">
+        {!programs.length ? <AlertBanner tone="cash" title="Review QR only">No active loyalty program exists, so the sheet makes no reward promise. Create a program in <Link href="/admin/crm/loyalty" className="font-semibold underline">Loyalty</Link> when you are ready.</AlertBanner> : null}
         <div className="rounded-xl border border-stone-200 bg-white p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Printed sheet</p>
-          {sheet ? (
+          {printableSheet ? (
             <>
-              <p className="mt-2 font-serif text-xl font-bold">{sheet.qr_title}</p>
-              {sheet.qr_station_label ? <p className="text-sm font-bold uppercase tracking-wide text-stone-700">{sheet.qr_station_label}</p> : null}
-              <p className="text-sm text-stone-600">{sheet.qr_instruction}</p>
-              {sheet.qr_footer ? <p className="mt-1 text-sm font-semibold">{sheet.qr_footer}</p> : null}
-              <p className="mt-2 text-xs text-stone-500">{String(sheet.qr_sheet_size).toUpperCase()} sheet · {sheet.qr_print_size_mm} mm QR</p>
+              <p className="mt-2 font-serif text-xl font-bold">{printableSheet.qr_title}</p>
+              {printableSheet.qr_station_label ? <p className="text-sm font-bold uppercase tracking-wide text-stone-700">{printableSheet.qr_station_label}</p> : null}
+              <p className="text-sm text-stone-600">{printableSheet.qr_instruction}</p>
+              {printableSheet.qr_footer ? <p className="mt-1 text-sm font-semibold">{printableSheet.qr_footer}</p> : null}
+              <p className="mt-2 text-xs text-stone-500">{String(printableSheet.qr_sheet_size).toUpperCase()} sheet · {printableSheet.qr_print_size_mm} mm QR</p>
             </>
           ) : <p className="mt-2 text-sm text-stone-400">Loading…</p>}
           <Link href="/admin/printer" className="mt-3 inline-flex text-sm font-semibold text-pink-700 hover:underline">Edit wording &amp; layout in Printer &amp; Documents →</Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ErpButton icon={Printer} variant="primary" onClick={print} disabled={!sheet}>Print QR sheet</ErpButton>
+          <ErpButton icon={Printer} variant="primary" onClick={print} disabled={!printableSheet}>Print QR sheet</ErpButton>
           <a href="/api/public/qr?format=png&size=1200" download="review-rewards-qr.png" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Download className="h-4 w-4" />PNG</a>
           <a href="/api/public/qr" download="review-rewards-qr.svg" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><Download className="h-4 w-4" />SVG</a>
           <a href="/review" target="_blank" rel="noreferrer" className="text-sm font-semibold text-pink-700 hover:underline">Open the customer page</a>
@@ -130,7 +169,7 @@ function QrPanel() {
   );
 }
 
-function SettingsPanel({ settings, onSaved }) {
+function SettingsPanel({ settings, hasLoyalty, onSaved }) {
   const [form, setForm] = useState(settings);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -139,17 +178,18 @@ function SettingsPanel({ settings, onSaved }) {
     setError('');
     try { await erpFetch('/api/crm/reviews', { method: 'POST', body: { action: 'settings', ...form, claimCodeValidDays: Number(form.claimCodeValidDays), reviewWindowDays: Number(form.reviewWindowDays), lowRatingThreshold: Number(form.lowRatingThreshold) } }); setMessage('Saved.'); onSaved(); } catch (err) { setError(err.message); }
   };
-  const toggle = (key, label, hint) => (
-    <label className="flex items-start gap-3 py-1.5"><input type="checkbox" className="mt-1 h-4 w-4 accent-pink-600" checked={Boolean(form[key])} onChange={(event) => set(key, event.target.checked)} />
+  const toggle = (key, label, hint, disabled = false) => (
+    <label className={`flex items-start gap-3 py-1.5 ${disabled ? 'opacity-55' : ''}`}><input type="checkbox" disabled={disabled} className="mt-1 h-4 w-4 accent-pink-600" checked={Boolean(form[key])} onChange={(event) => set(key, event.target.checked)} />
       <span><span className="block text-sm font-semibold text-stone-900">{label}</span>{hint ? <span className="block text-xs text-stone-500">{hint}</span> : null}</span></label>
   );
   return (
     <div className="max-w-2xl space-y-4 rounded-xl border border-stone-200 bg-white p-4">
+      {!hasLoyalty ? <AlertBanner tone="cash" title="Loyalty is not configured">Reward lookup, joining and receipt codes stay unavailable until you create an active loyalty program.</AlertBanner> : null}
       {toggle('publicReviewsEnabled', 'Customers can leave reviews from the QR page')}
       {toggle('generalFeedbackEnabled', 'Allow feedback without a verified visit', 'Shown as “General feedback”, separate from verified visit reviews.')}
-      {toggle('publicRewardsEnabled', 'Customers can see their reward card with their phone number', 'Shows first name and progress only. Rate-limited.')}
-      {toggle('claimCodesEnabled', 'Print a one-time reward code on walk-in receipts')}
-      {toggle('publicJoinEnabled', 'Let new customers join rewards from the QR page (name + mobile, no visit earned)')}
+      {toggle('publicRewardsEnabled', 'Customers can see their reward card with their phone number', 'Shows first name and progress only. Rate-limited.', !hasLoyalty)}
+      {toggle('claimCodesEnabled', 'Print a one-time reward code on walk-in receipts', null, !hasLoyalty)}
+      {toggle('publicJoinEnabled', 'Let new customers join rewards from the QR page (name + mobile, no visit earned)', null, !hasLoyalty)}
       {toggle('receiptQrEnabled', 'Print the Review & Rewards QR on receipts')}
       {toggle('websiteReviewsEnabled', 'Show published reviews on the website')}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -180,7 +220,8 @@ export default function CustomerReviewsPage() {
 
   return (
     <ErpPage>
-      <PageHeader icon={MessageSquareHeart} iconTone="crm" title="Customer Reviews" subtitle="Build feedback forms, print QR codes, moderate responses, and publish selected customer reviews." />
+      <PageHeader icon={MessageSquareHeart} iconTone="crm" title="Customer Reviews" subtitle="Collect feedback, handle private responses, and publish only what customers approved."
+        actions={<div className="flex flex-wrap gap-2"><Link href="/admin/crm/reviews/forms" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><ClipboardPen className="h-4 w-4" />Edit feedback forms</Link><ErpButton icon={QrCode} variant="primary" onClick={() => setTab('qr')}>QR codes</ErpButton></div>} />
       <div className="space-y-4">
         <nav className="flex gap-2 overflow-x-auto border-b border-stone-200 pb-2" aria-label="Review sections">
           {TABS.map(([key, label]) => (key === 'forms'
@@ -199,11 +240,9 @@ export default function CustomerReviewsPage() {
                   <MetricCard label="Average rating" value={o.totals.average === null ? '—' : `${o.totals.average} ★`} tone="cash" />
                   <MetricCard label="Pending review" value={o.totals.pending} tone="cash" />
                   <MetricCard label="Published" value={o.totals.published} tone="inflow" />
-                  <MetricCard label="Private" value={o.totals.private} tone="online" />
-                  <MetricCard label="This month" value={o.totals.thisMonth} tone="neutral" />
-                  <MetricCard label="Verified visits" value={o.totals.verified} tone="inflow" />
-                  <MetricCard label="Repeat reviewers" value={o.totals.repeatReviewers} tone="neutral" />
                 </MetricGroup>
+                <ReviewSetup data={o} onTab={setTab} />
+                <p className="text-xs text-stone-500">This month: <b className="text-stone-700">{o.totals.thisMonth}</b> · Verified visits: <b className="text-stone-700">{o.totals.verified}</b> · Private: <b className="text-stone-700">{o.totals.private}</b> · Repeat reviewers: <b className="text-stone-700">{o.totals.repeatReviewers}</b></p>
                 {o.lowRatings.length ? (
                   <div className="space-y-2">
                     {o.lowRatings.map((review) => (
@@ -235,7 +274,7 @@ export default function CustomerReviewsPage() {
                   <div className="rounded-xl border border-stone-200 bg-white p-4">
                     <p className="text-sm font-semibold text-stone-900">Staff feedback</p>
                     {o.staff.length ? o.staff.map((row) => <p key={row.name} className="mt-2 flex justify-between text-sm"><span>{row.name}</span><span className="text-stone-500">{row.count} review{row.count === 1 ? '' : 's'}{row.average !== null ? ` · ${row.average}★` : ''}</span></p>) : <p className="mt-2 text-sm text-stone-400">No staff feedback yet.</p>}
-                    <p className="mt-2 text-[11px] text-stone-400">Averages shown only from {o.minStaffSample} reviews up. Not a ranking.</p>
+                    <p className="mt-2 text-xs text-stone-400">Averages shown only from {o.minStaffSample} reviews up. Not a ranking.</p>
                   </div>
                 </div>
                 <div className="min-w-0">
@@ -264,8 +303,8 @@ export default function CustomerReviewsPage() {
           </>
         ) : null}
 
-        {tab === 'qr' ? <QrPanel /> : null}
-        {tab === 'settings' ? (settings.data ? <SettingsPanel settings={settings.data.settings} onSaved={settings.reload} /> : <LoadingState />) : null}
+        {tab === 'qr' ? <QrPanel programs={o?.activeLoyaltyPrograms || []} /> : null}
+        {tab === 'settings' ? (settings.data ? <SettingsPanel settings={settings.data.settings} hasLoyalty={Boolean(o?.activeLoyaltyPrograms?.length)} onSaved={settings.reload} /> : <LoadingState />) : null}
       </div>
       {open ? <ReviewDetail review={open} onClose={() => setOpen(null)} onChanged={refresh} /> : null}
     </ErpPage>

@@ -12,7 +12,7 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { crmAudit, getCrmSettings, httpError } from '@/lib/loyalty/service';
+import { crmAudit, getCrmSettings, httpError, listPrograms } from '@/lib/loyalty/service';
 
 const QUESTION_TYPES = ['STAR', 'TEXT', 'SINGLE', 'MULTI', 'YES_NO'];
 const STATUSES = ['PENDING', 'PUBLISHED', 'PRIVATE', 'REJECTED', 'ARCHIVED'];
@@ -274,6 +274,12 @@ const MIN_STAFF_SAMPLE = 5;
 
 export async function reviewOverview(db, { from = null, to = null } = {}) {
   const settings = await getCrmSettings(db);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
+  const activeLoyaltyPrograms = await listPrograms(db, { activeOn: today });
+  const formSummary = await db.get(`SELECT COUNT(*)::int AS total,
+    COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS active,
+    COUNT(*) FILTER (WHERE status = 'ACTIVE' AND is_default)::int AS active_default
+    FROM feedback_forms`);
   const range = from && to ? "AND (r.submitted_at AT TIME ZONE 'Asia/Kathmandu')::date BETWEEN ?::date AND ?::date" : '';
   const rangeParams = from && to ? [from, to] : [];
   const totals = await db.get(`SELECT COUNT(*)::int AS total, AVG(r.overall_rating) AS average,
@@ -312,6 +318,20 @@ export async function reviewOverview(db, { from = null, to = null } = {}) {
     lowRatings,
     recent,
     lowRatingThreshold: settings.lowRatingThreshold,
+    activeLoyaltyPrograms: activeLoyaltyPrograms.map((program) => ({
+      id: program.id,
+      name: program.name,
+      requiredVisits: program.requiredVisits,
+      rewardLabel: program.rewardLabel,
+    })),
+    setup: {
+      activeForms: Number(formSummary?.active || 0),
+      totalForms: Number(formSummary?.total || 0),
+      hasDefaultForm: Number(formSummary?.active_default || 0) > 0,
+      reviewsEnabled: settings.publicReviewsEnabled,
+      websitePublishingEnabled: settings.websiteReviewsEnabled,
+      receiptQrEnabled: settings.receiptQrEnabled,
+    },
   };
 }
 

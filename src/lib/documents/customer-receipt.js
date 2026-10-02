@@ -42,7 +42,8 @@ function reviewRewardsSection(bill, salon, compact) {
     : '';
   if (!qr && !code && !progress) return '';
   const size = compact ? '26mm' : '32mm';
-  return `<hr class="divider" /><div style="text-align:center;break-inside:avoid;page-break-inside:avoid"><div><strong>REVIEW &amp; REWARDS</strong></div>${qr ? `<div class="muted">Scan to review your visit${progress || code ? ' and check your rewards' : ''}.</div><img src="${escapeHtml(origin)}/api/public/qr" alt="" style="width:${size};height:${size};display:block;margin:4px auto" /><div class="muted">${escapeHtml(host)}/review</div>` : ''}${progress}${code}</div>`;
+  const hasRewards = Boolean(progress || code);
+  return `<hr class="divider" /><div style="text-align:center;break-inside:avoid;page-break-inside:avoid"><div><strong>${hasRewards ? 'REVIEW &amp; REWARDS' : 'REVIEW YOUR VISIT'}</strong></div>${qr ? `<div class="muted">Scan to review your visit${hasRewards ? ' and check your rewards' : ''}.</div><img src="${escapeHtml(origin)}/api/public/qr" alt="" style="width:${size};height:${size};display:block;margin:4px auto" /><div class="muted">${escapeHtml(host)}/review</div>` : ''}${progress}${code}</div>`;
 }
 
 export function buildCustomerReceiptHtml(billData, settings = {}) {

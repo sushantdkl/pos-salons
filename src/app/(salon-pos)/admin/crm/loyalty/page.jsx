@@ -11,14 +11,14 @@ import { DateInput } from '@/components/shared/calendar-date-input';
 import Link from 'next/link';
 import { BillLink } from '@/components/bills/bill-detail';
 import { useEffect, useMemo, useState } from 'react';
-import { Award, Gift, Pencil, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Award, CheckCircle2, Gift, MessageSquareHeart, Pencil, Plus, Search, SlidersHorizontal } from 'lucide-react';
 import {
   AlertBanner, ErpButton, ErpPage, ErrorState, FinancialTable, LoadingState, MetricCard, MetricGroup, PageHeader, StatusBadge,
 } from '@/components/erp';
 import { erpFetch, useReport } from '@/components/erp/use-report';
 import { FIELD, LABEL, Modal } from '@/components/hrm/ui';
 
-const TABS = [['overview', 'Overview'], ['programs', 'Programs'], ['customers', 'Customers'], ['rewards', 'Rewards'], ['transactions', 'Transactions'], ['settings', 'Settings']];
+const TABS = [['overview', 'Setup & overview'], ['customers', 'Customer cards'], ['rewards', 'Ready rewards'], ['transactions', 'Activity']];
 const TYPE_LABEL = { EARN: 'Paid visit', REDEEM: 'Reward used', REVERSAL: 'Reversal', MANUAL_ADJUSTMENT: 'Adjustment', EXPIRY: 'Expiry' };
 
 function fmt(value) {
@@ -139,7 +139,7 @@ export default function LoyaltyPage() {
   return (
     <ErpPage>
       <PageHeader icon={Award} iconTone="crm" title="Loyalty" subtitle="Digital loyalty cards: paid visits earn stamps, rewards are applied at the POS as a discount."
-        actions={<ErpButton icon={Plus} variant="primary" onClick={() => setEditing({})}>New program</ErpButton>} />
+        actions={<div className="flex flex-wrap gap-2"><Link href="/admin/crm/reviews?tab=settings" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><MessageSquareHeart className="h-4 w-4" />Review & QR settings</Link><ErpButton icon={Plus} variant="primary" onClick={() => setEditing({})}>New program</ErpButton></div>} />
       {error ? <ErrorState message={error} onRetry={reload} /> : null}
       {loading && !data ? <LoadingState /> : null}
       {data ? (
@@ -151,15 +151,37 @@ export default function LoyaltyPage() {
 
           {tab === 'overview' ? (
             <>
-              <MetricGroup columns={3}>
+              <MetricGroup columns={4}>
                 <MetricCard label="Active loyalty customers" value={t.enrolled} tone="crm" />
-                <MetricCard label="Eligible paid visits" value={t.eligibleVisits} tone="neutral" />
                 <MetricCard label="Customers 1 visit away" value={t.nearReward} tone="cash" />
-                <MetricCard label="Rewards earned" value={t.rewardsEarned} tone="inflow" />
                 <MetricCard label="Rewards redeemed" value={t.rewardsRedeemed} tone="ops" />
                 <MetricCard label="Outstanding rewards" value={t.outstandingRewards} tone="online" hint={t.redemptionRate === null ? undefined : `${t.redemptionRate}% redemption rate`} />
               </MetricGroup>
               {!data.programs.length ? <AlertBanner tone="cash" title="No loyalty program yet">Create one — e.g. Haircut: 9 paid visits, the 10th free.</AlertBanner> : null}
+              {data.programs.length ? (
+                <section className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div><h2 className="flex items-center gap-2 font-semibold text-stone-950"><CheckCircle2 className="h-4 w-4 text-emerald-600" />Loyalty is configured</h2><p className="text-xs text-stone-500">Edit the earning rule or reward here. Customer progress updates automatically from paid bills.</p></div>
+                    <ErpButton icon={Plus} onClick={() => setEditing({})}>Add another program</ErpButton>
+                  </div>
+                  <FinancialTable caption="Loyalty programs" rows={data.programs} empty="No programs yet." columns={[
+                    { key: 'name', label: 'Program', render: (row) => <span className="font-semibold">{row.name}</span> },
+                    { key: 'eligible', label: 'Services that earn visits', render: (row) => [...row.eligibleServiceIds.map((id) => services.find((s) => s.id === id)?.name || `#${id}`), ...row.eligibleCategories.map((c) => `${c} category`)].join(', ') },
+                    { key: 'rule', label: 'Customer earns', render: (row) => `${row.requiredVisits} paid visits → ${row.rewardLabel}` },
+                    { key: 'active', label: 'Status', render: (row) => <StatusBadge status={row.isActive ? 'ACTIVE' : 'CLOSED'} label={row.isActive ? 'Active' : 'Inactive'} tone={row.isActive ? 'inflow' : 'neutral'} /> },
+                    { key: 'edit', label: '', render: (row) => <button type="button" onClick={() => setEditing(row)} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-rose-700 hover:bg-rose-50"><Pencil className="h-3.5 w-3.5" />Edit program</button> },
+                  ]} />
+                </section>
+              ) : null}
+              <section className="rounded-xl border border-stone-200 bg-white p-4">
+                <h2 className="font-semibold text-stone-950">What happens automatically</h2>
+                <div className="mt-3 grid gap-3 text-sm text-stone-600 md:grid-cols-3">
+                  <p><b className="block text-stone-900">1. Paid service</b>An identified customer earns a visit only for eligible, fully paid services.</p>
+                  <p><b className="block text-stone-900">2. Reward becomes ready</b>The cashier sees it at billing and applies it as a discount.</p>
+                  <p><b className="block text-stone-900">3. History stays auditable</b>Voids reverse visits and manual changes always require a reason.</p>
+                </div>
+                <Link href="/admin/crm/reviews?tab=settings" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 hover:underline"><Gift className="h-4 w-4" />Choose what customers can see on the QR page</Link>
+              </section>
               <p className="text-xs text-stone-500">Figures describe what customers earned and used. They do not claim that loyalty caused any sales.</p>
             </>
           ) : null}
@@ -179,7 +201,7 @@ export default function LoyaltyPage() {
             <>
               <label className="relative block w-full sm:w-72">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-stone-400" aria-hidden="true" />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or phone" aria-label="Search loyalty customers" className="h-9 w-full rounded-lg border border-stone-200 bg-white pl-8 pr-2 text-[13px]" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or phone" aria-label="Search loyalty customers" className="h-9 w-full rounded-lg border border-stone-200 bg-white pl-8 pr-2 text-sm" />
               </label>
               <FinancialTable caption="Loyalty customers" rows={customers} rowKey={(row) => `${row.customerId}-${row.programId}`} empty="No loyalty activity yet." columns={customerColumns} />
             </>

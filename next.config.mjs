@@ -2,7 +2,8 @@
 const nextConfig = {
   // QA builds use their own output folder (NEXT_DIST_DIR=.next-qa) so they never overwrite
   // the .next folder a running `npm run dev` is using. Production / cPanel keep the default.
-  distDir: process.env.NEXT_DIST_DIR || '.next',
+  distDir: process.env.NEXT_DIST_DIR
+    || (process.env.npm_lifecycle_event === 'dev:3005' ? '.next-3005' : '.next'),
   async headers() {
     // Private app areas: never indexed, whatever links to them. Auth is what actually protects them.
     const noindex = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];

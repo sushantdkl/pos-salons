@@ -29,6 +29,7 @@
     }
   },
   "include": [
+    ".next-demo/types/**/*.ts",
     ".next-qa/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next/types/**/*.ts",
@@ -37,7 +38,7 @@
     "src/**/*.jsx",
     "src/**/*.ts",
     "src/**/*.tsx",
-    ".next-demo/types/**/*.ts"
+    ".next-3005/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

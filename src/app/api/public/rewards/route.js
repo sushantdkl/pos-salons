@@ -36,12 +36,15 @@ export async function GET(request) {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(new Date());
     const seo = await readSeoSettings(db);
     const programs = settings.publicRewardsEnabled ? (await listPrograms(db, { activeOn: today })).map((p) => ({ name: p.name, requiredVisits: p.requiredVisits, rewardLabel: p.rewardLabel })) : [];
+    // A switch alone must never advertise a loyalty scheme. Rewards exist only after the owner
+    // creates an active program with a real earning rule and reward.
+    const rewardsEnabled = settings.publicRewardsEnabled && programs.length > 0;
     return NextResponse.json({
-      rewardsEnabled: settings.publicRewardsEnabled,
+      rewardsEnabled,
       reviewsEnabled: settings.publicReviewsEnabled,
       generalFeedbackEnabled: settings.generalFeedbackEnabled,
-      claimCodesEnabled: settings.claimCodesEnabled && settings.publicRewardsEnabled,
-      joinEnabled: settings.publicJoinEnabled && settings.publicRewardsEnabled,
+      claimCodesEnabled: settings.claimCodesEnabled && rewardsEnabled,
+      joinEnabled: settings.publicJoinEnabled && rewardsEnabled,
       programs,
       form: settings.publicReviewsEnabled ? await publicForm(db) : null,
       // Independent of rating, rewards and anything the visitor does on the page — shown the same to everyone.

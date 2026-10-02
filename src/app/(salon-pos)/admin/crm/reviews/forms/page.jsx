@@ -67,7 +67,7 @@ function FormEditor({ initial, services, onClose, onSaved }) {
         <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
           {services.map((service) => {
             const on = form.applicableServiceIds.includes(service.id);
-            return <button key={service.id} type="button" aria-pressed={on} onClick={() => set('applicableServiceIds', on ? form.applicableServiceIds.filter((id) => id !== service.id) : [...form.applicableServiceIds, service.id])} className={`rounded-full border px-3 py-1 text-xs font-semibold ${on ? 'border-pink-300 bg-pink-100 text-pink-900' : 'border-stone-200 text-stone-600'}`}>{service.name}</button>;
+            return <button key={service.id} type="button" aria-pressed={on} onClick={() => set('applicableServiceIds', on ? form.applicableServiceIds.filter((id) => id !== service.id) : [...form.applicableServiceIds, service.id])} className={`rounded-full border px-3 py-1 text-xs font-semibold ${on ? 'border-pink-300 bg-pink-100' : 'border-stone-200'} text-pink-900`}>{service.name}</button>;
           })}
         </div>
       </fieldset>
@@ -83,7 +83,7 @@ function FormEditor({ initial, services, onClose, onSaved }) {
               <label className="flex items-center gap-1 text-xs text-stone-600"><input type="checkbox" checked={Boolean(question.required)} onChange={(event) => setQuestion(index, { required: event.target.checked })} />Required</label>
               <button type="button" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)} className="rounded p-1.5 text-stone-500 hover:bg-stone-100 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
               <button type="button" aria-label="Move down" disabled={index === form.questions.length - 1} onClick={() => move(index, 1)} className="rounded p-1.5 text-stone-500 hover:bg-stone-100 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
-              <button type="button" aria-label="Remove question" onClick={() => set('questions', form.questions.filter((_, i) => i !== index))} className="rounded p-1.5 text-stone-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" aria-label="Remove question" onClick={() => set('questions', form.questions.filter((_, i) => i !== index))} className="rounded p-1.5 text-rose-600 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
             </div>
             {['SINGLE', 'MULTI'].includes(question.type) ? (
               <input aria-label="Choices" className="h-10 rounded-lg border border-stone-300 px-3 text-sm sm:col-span-3" placeholder="Choices, separated by commas"
@@ -105,7 +105,7 @@ export default function FeedbackFormsPage() {
   useEffect(() => { erpFetch('/api/admin/services').then((d) => setServices(d.services || [])).catch(() => {}); }, []);
   return (
     <ErpPage>
-      <PageHeader icon={ClipboardPen} iconTone="crm" title="Feedback Forms" subtitle="The questions customers answer on the Review & Rewards page."
+      <PageHeader icon={ClipboardPen} iconTone="crm" title="Feedback Forms" subtitle="Choose exactly what customers answer. The starter form is yours to edit."
         actions={(
           <>
             <Link href="/admin/crm/reviews" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"><ArrowLeft className="h-4 w-4" />Reviews</Link>
@@ -115,16 +115,30 @@ export default function FeedbackFormsPage() {
       {error ? <ErrorState message={error} onRetry={reload} /> : null}
       {loading && !data ? <LoadingState /> : null}
       {data ? (
-        <FinancialTable caption="Feedback forms" rows={data.forms} empty="No forms yet." columns={[
-          { key: 'name', label: 'Form', render: (row) => <span className="font-semibold">{row.name}{row.isDefault ? <span className="ml-2 rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-bold text-pink-800">DEFAULT</span> : null}</span> },
-          { key: 'questions', label: 'Questions', align: 'right', render: (row) => row.questions.length },
-          { key: 'services', label: 'Services', render: (row) => (row.applicableServiceIds.length ? row.applicableServiceIds.map((id) => services.find((s) => s.id === id)?.name || `#${id}`).join(', ') : 'All') },
-          { key: 'flags', label: 'Includes', render: (row) => [row.ratingEnabled && 'rating', row.reviewTextEnabled && 'review', row.staffFeedbackEnabled && 'staff', row.publicConsentEnabled && 'publish consent'].filter(Boolean).join(', ') },
-          { key: 'responses', label: 'Responses', align: 'right', render: (row) => row.responses },
-          { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} label={row.status.charAt(0) + row.status.slice(1).toLowerCase()} tone={row.status === 'ACTIVE' ? 'inflow' : 'neutral'} /> },
-          { key: 'updated', label: 'Updated', render: (row) => fmtDate(row.updatedAt) },
-          { key: 'edit', label: '', render: (row) => <button type="button" onClick={() => setEditing(row)} className="text-xs font-bold text-pink-700 hover:underline">Edit</button> },
-        ]} />
+        <div className="space-y-4">
+          {data.forms.find((form) => form.isDefault) ? (
+            <AlertBanner tone="inflow" title={`${data.forms.find((form) => form.isDefault).name} is the customer default`} action={<ErpButton onClick={() => setEditing(data.forms.find((form) => form.isDefault))}>Edit questions</ErpButton>}>
+              Customers see this form unless an active service-specific form matches their visit. You can change its questions, wording and publishing consent at any time.
+            </AlertBanner>
+          ) : <AlertBanner tone="cash" title="Choose a default form">Create or edit an active form and mark it as default so the QR page knows what to show.</AlertBanner>}
+          <section className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+            <div className="grid gap-3 text-sm text-stone-600 md:grid-cols-3">
+              <p><b className="block text-stone-900">Default form</b>Used for every visit unless a service-specific form applies.</p>
+              <p><b className="block text-stone-900">Service-specific forms</b>Ask different questions for haircuts, colour, spa or any chosen services.</p>
+              <p><b className="block text-stone-900">Draft before launch</b>Keep a form in Draft while editing, then activate it when ready.</p>
+            </div>
+          </section>
+          <FinancialTable caption="Feedback forms" rows={data.forms} empty="No forms yet. Create your first form to start collecting feedback." columns={[
+            { key: 'name', label: 'Form', render: (row) => <span className="font-semibold">{row.name}{row.isDefault ? <span className="ml-2 rounded bg-pink-100 px-1.5 py-0.5 text-xs font-bold text-pink-800">DEFAULT</span> : null}</span> },
+            { key: 'questions', label: 'Questions', align: 'right', render: (row) => row.questions.length },
+            { key: 'services', label: 'Shown for', render: (row) => (row.applicableServiceIds.length ? row.applicableServiceIds.map((id) => services.find((s) => s.id === id)?.name || `#${id}`).join(', ') : 'All services') },
+            { key: 'flags', label: 'Collects', render: (row) => [row.ratingEnabled && 'rating', row.reviewTextEnabled && 'written review', row.staffFeedbackEnabled && 'staff feedback', row.publicConsentEnabled && 'publish consent'].filter(Boolean).join(', ') },
+            { key: 'responses', label: 'Responses', align: 'right', render: (row) => row.responses },
+            { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} label={row.status.charAt(0) + row.status.slice(1).toLowerCase()} tone={row.status === 'ACTIVE' ? 'inflow' : 'neutral'} /> },
+            { key: 'updated', label: 'Updated', render: (row) => fmtDate(row.updatedAt) },
+            { key: 'edit', label: '', render: (row) => <button type="button" onClick={() => setEditing(row)} className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-bold text-pink-700 hover:bg-pink-50">Edit form</button> },
+          ]} />
+        </div>
       ) : null}
       {editing ? <FormEditor initial={editing.id ? editing : null} services={services} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} /> : null}
     </ErpPage>
