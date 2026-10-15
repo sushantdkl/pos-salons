@@ -9,6 +9,7 @@ import {
   getFinancialSummary,
   numeric,
   PAID_BILL_STATUS_SQL,
+  ACTIVE_BILL_STATUS_SQL,
   paymentMethodLabel,
   qrTypeLabel,
 } from '@/lib/reports/finance-summary';
@@ -108,7 +109,7 @@ export async function GET(request) {
       FROM salon_bill_items i
       JOIN salon_bills b ON b.id = i.bill_id
       LEFT JOIN users u ON u.id = i.staff_id
-      WHERE ${itemClause} AND ${PAID_BILL_STATUS_B} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
+      WHERE ${itemClause} AND ${ACTIVE_BILL_STATUS_SQL} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
       GROUP BY i.staff_id, i.staff_name_snapshot, u.full_name
       ORDER BY revenue DESC
       LIMIT 10

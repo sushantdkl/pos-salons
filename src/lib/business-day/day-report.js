@@ -115,13 +115,15 @@ export async function getBusinessDayReport(db, dayId, { forAdmin = false } = {})
 
   const staffRows = await db.all(`
     SELECT COALESCE(NULLIF(i.staff_name_snapshot, ''), u.full_name, 'Unassigned') AS staff,
-           SUM(CASE WHEN i.item_type = 'service' THEN i.quantity ELSE 0 END)::int AS services,
-           COUNT(DISTINCT b.id)::int AS customers,
-           COALESCE(SUM(i.subtotal), 0) AS revenue,
-           COALESCE(SUM(i.commission_amount), 0) AS commission
+           SUM(CASE WHEN i.item_type = 'service' AND LOWER(COALESCE(b.status, '')) IN ('paid', 'completed') THEN i.quantity ELSE 0 END)::int AS services,
+           COUNT(DISTINCT CASE WHEN LOWER(COALESCE(b.status, '')) IN ('paid', 'completed') THEN b.id END)::int AS customers,
+           COALESCE(SUM(CASE WHEN LOWER(COALESCE(b.status, '')) IN ('paid', 'completed') THEN i.subtotal ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN LOWER(COALESCE(b.status, '')) IN ('paid', 'completed') THEN i.commission_amount ELSE 0 END), 0) AS commission,
+           COUNT(CASE WHEN NOT (LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')) THEN i.id END)::int AS voided_services,
+           COALESCE(SUM(CASE WHEN NOT (LOWER(COALESCE(b.status, '')) IN ('paid', 'completed')) THEN i.subtotal ELSE 0 END), 0) AS voided_amount
     FROM salon_bill_items i JOIN salon_bills b ON b.id = i.bill_id
     LEFT JOIN users u ON u.id = i.staff_id
-    WHERE ${REVENUE_DAY} = ? AND LOWER(COALESCE(b.status, '')) IN ('paid', 'completed') AND i.staff_id IS NOT NULL
+    WHERE ${REVENUE_DAY} = ? AND ${PAID_BILL_STATUS_SQL} AND i.staff_id IS NOT NULL
     GROUP BY 1 ORDER BY revenue DESC
   `, [day.id]);
 
@@ -272,7 +274,7 @@ export async function getBusinessDayReport(db, dayId, { forAdmin = false } = {})
       tokens: { generated: Number(tokens?.generated || 0), billed: Number(tokens?.billed || 0), cancelled: Number(tokens?.cancelled || 0), waiting: Number(tokens?.waiting || 0) },
       topServices: services.slice(0, 8).map((row) => ({ name: row.name, quantity: Number(row.quantity), amount: round2(row.amount) })),
       topProducts: products.slice(0, 5).map((row) => ({ name: row.name, quantity: Number(row.quantity), amount: round2(row.amount) })),
-      staff: staffRows.map((row) => ({ staff: row.staff, services: Number(row.services), customers: Number(row.customers), revenue: round2(row.revenue), ...(forAdmin ? { commission: round2(row.commission) } : {}) })),
+      staff: staffRows.map((row) => ({ staff: row.staff, services: Number(row.services), customers: Number(row.customers), revenue: round2(row.revenue), voidedServices: Number(row.voided_services || 0), voidedAmount: round2(row.voided_amount), ...(forAdmin ? { commission: round2(row.commission) } : {}) })),
     },
     bills: bills.map((row) => ({
       id: Number(row.id), billNumber: row.bill_number, customer: row.customer_name || 'Walk-in', total: numeric(row.grand_total),

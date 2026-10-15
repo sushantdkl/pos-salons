@@ -16,7 +16,7 @@
 import { BILL_DATE_EXPR_B, periodBoundsSql, periodDateColumnFilter, SALON_TIMEZONE } from '@/lib/db/postgres-dates';
 import { getAnalyticsExtras } from '@/lib/reports/analytics-money';
 import { getExecutiveSummary, INVENTORY_PURCHASE_CATEGORY } from '@/lib/reports/executive-summary';
-import { eventScope, getSalesSeries, numeric, PAID_BILL_STATUS_SQL, revenueScope, soldBillSql } from '@/lib/reports/finance-summary';
+import { ACTIVE_BILL_STATUS_SQL, eventScope, getSalesSeries, numeric, PAID_BILL_STATUS_SQL, revenueScope, soldBillSql } from '@/lib/reports/finance-summary';
 
 const round2 = (value) => Math.round((numeric(value) + Number.EPSILON) * 100) / 100;
 const pct = (part, whole) => (numeric(whole) > 0 ? Math.round((numeric(part) / numeric(whole)) * 1000) / 10 : 0);
@@ -176,7 +176,7 @@ async function getStaffTickets(db, period, scope) {
     SELECT i.staff_id, COUNT(DISTINCT b.id)::int AS bills
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
-    WHERE ${filter.clause} AND ${PAID_BILL_STATUS_SQL} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
+    WHERE ${filter.clause} AND ${ACTIVE_BILL_STATUS_SQL} AND i.item_type = 'service' AND i.staff_id IS NOT NULL
     GROUP BY i.staff_id
   `, filter.params);
   return new Map(rows.map((row) => [String(row.staff_id), Number(row.bills || 0)]));
@@ -603,7 +603,7 @@ export async function getAnalyticsBills(db, period, options = {}, target = {}) {
            STRING_AGG(DISTINCT NULLIF(i.staff_name_snapshot, ''), ', ') AS staff
     FROM salon_bills b
     JOIN salon_bill_items i ON i.bill_id = b.id
-    WHERE ${filter.clause} AND ${PAID_BILL_STATUS_SQL} AND ${match}
+    WHERE ${filter.clause} AND ${target.kind === 'staff' ? ACTIVE_BILL_STATUS_SQL : PAID_BILL_STATUS_SQL} AND ${match}
     GROUP BY b.id
     ORDER BY ${BILL_DATE_EXPR_B} DESC, b.id DESC
     LIMIT 1000

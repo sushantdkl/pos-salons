@@ -6,6 +6,7 @@ import {
   getFinancialSummary,
   numeric,
   PAID_BILL_STATUS_SQL,
+  ACTIVE_BILL_STATUS_SQL,
   PAID_BILL_STATUS_SQL_SB,
   paymentMethodLabel,
   qrTypeLabel,
@@ -158,14 +159,18 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
       i.staff_id as staff_id,
       COALESCE(NULLIF(sp.display_name, ''), u.full_name, 'Unknown Staff') as staff_name,
       COALESCE(NULLIF(sp.salon_role, ''), u.role, 'staff') as staff_role,
-      COUNT(i.id)::int as services_completed,
-      COUNT(DISTINCT COALESCE(b.customer_id::text, NULLIF(b.customer_name, ''), b.id::text))::int as customers_served,
-      COALESCE(SUM(i.subtotal), 0) as revenue
+      COUNT(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.id END)::int as services_completed,
+      COUNT(DISTINCT CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN COALESCE(b.customer_id::text, NULLIF(b.customer_name, ''), b.id::text) END)::int as customers_served,
+      COALESCE(SUM(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.subtotal ELSE 0 END), 0) as revenue,
+      COUNT(CASE WHEN NOT ${ACTIVE_BILL_STATUS_SQL} THEN i.id END)::int as voided_services,
+      COALESCE(SUM(CASE WHEN NOT ${ACTIVE_BILL_STATUS_SQL} THEN i.subtotal ELSE 0 END), 0) as voided_amount
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     JOIN users u ON u.id = i.staff_id
     LEFT JOIN staff_profiles sp ON sp.user_id = i.staff_id
     WHERE ${itemFilter.clause}
+      -- Sold bills, voided ones included, so the void stays visible. Staff are credited only
+      -- for bills still standing (revenue / services); voided work is shown beside it.
       AND ${PAID_BILL_STATUS_SQL}
       AND i.item_type = 'service'
       AND i.staff_id IS NOT NULL
@@ -290,6 +295,8 @@ export async function getSalonDashboardSummary(db, periodValue, options = {}) {
       servicesCompleted: Number(row.services_completed || 0),
       customersServed: Number(row.customers_served || 0),
       revenue: numeric(row.revenue),
+      voidedServices: Number(row.voided_services || 0),
+      voidedAmount: numeric(row.voided_amount),
     })),
     expenseBreakdown: expenseBreakdown.map((row) => ({
       category: row.category,

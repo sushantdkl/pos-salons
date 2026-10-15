@@ -35,6 +35,7 @@ import {
   getFinancialSummary,
   numeric,
   PAID_BILL_STATUS_SQL,
+  ACTIVE_BILL_STATUS_SQL,
   PAID_BILL_STATUS_SQL_SB,
   revenueScope,
   SALARY_EXPENSE_CATEGORIES,
@@ -472,16 +473,20 @@ async function getStaffPerformance(db, period, options) {
       i.staff_id,
       COALESCE(NULLIF(sp.display_name, ''), u.full_name, u.username, 'Unknown Staff') AS staff_name,
       COALESCE(NULLIF(sp.salon_role, ''), u.role, 'staff') AS staff_role,
-      COUNT(i.id)::int AS services_completed,
-      COALESCE(SUM(i.quantity), 0)::int AS units,
-      COUNT(DISTINCT COALESCE(b.customer_id::text, NULLIF(b.customer_name, ''), b.id::text))::int AS customers_served,
-      COALESCE(SUM(i.subtotal), 0) AS revenue,
-      COALESCE(SUM(i.commission_amount), 0) AS commission
+      COUNT(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.id END)::int AS services_completed,
+      COALESCE(SUM(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.quantity ELSE 0 END), 0)::int AS units,
+      COUNT(DISTINCT CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN COALESCE(b.customer_id::text, NULLIF(b.customer_name, ''), b.id::text) END)::int AS customers_served,
+      COALESCE(SUM(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.subtotal ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${ACTIVE_BILL_STATUS_SQL} THEN i.commission_amount ELSE 0 END), 0) AS commission,
+      COUNT(CASE WHEN NOT ${ACTIVE_BILL_STATUS_SQL} THEN i.id END)::int AS voided_services,
+      COALESCE(SUM(CASE WHEN NOT ${ACTIVE_BILL_STATUS_SQL} THEN i.subtotal ELSE 0 END), 0) AS voided_amount
     FROM salon_bill_items i
     JOIN salon_bills b ON b.id = i.bill_id
     JOIN users u ON u.id = i.staff_id
     LEFT JOIN staff_profiles sp ON sp.user_id = i.staff_id
     WHERE ${filter.clause}
+      -- Sold bills incl. voided ones, so a void stays visible. Staff are credited only for
+      -- bills still standing (same rule as commission and payroll); voided work is beside it.
       AND ${PAID_BILL_STATUS_SQL}
       AND i.item_type = 'service'
       AND i.staff_id IS NOT NULL
@@ -500,6 +505,9 @@ async function getStaffPerformance(db, period, options) {
     revenue: round2(row.revenue),
     commission: round2(row.commission),
     percentage: percentOf(row.revenue, total),
+    // Shown beside the actual figures, never added to them.
+    voidedServices: Number(row.voided_services || 0),
+    voidedAmount: round2(row.voided_amount),
   }));
 }
 

@@ -141,7 +141,16 @@ export function StaffTab({ a }) {
             { key: 'servicesCompleted', label: 'Services', align: 'right', render: (row) => count(row.servicesCompleted) },
             { key: 'customersServed', label: 'Customers', align: 'right', render: (row) => count(row.customersServed) },
             { key: 'averageTicket', label: 'Avg ticket', align: 'right', render: (row) => money(row.averageTicket) },
-            { key: 'revenue', label: 'Revenue', align: 'right', className: 'font-bold text-emerald-700', render: (row) => money(row.revenue) },
+            {
+              key: 'revenue', label: 'Revenue', align: 'right', className: 'font-bold text-emerald-700',
+              // Actual revenue only; voided work is listed beneath it, never added.
+              render: (row) => (
+                <div>
+                  {money(row.revenue)}
+                  {row.voidedAmount > 0 ? <p className="text-[11px] font-semibold text-rose-600">{money(row.voidedAmount)} voided · {count(row.voidedServices)}</p> : null}
+                </div>
+              ),
+            },
             { key: 'commission', label: 'Commission', align: 'right', className: 'font-semibold text-violet-700', render: (row) => money(row.commission) },
             { key: 'percentage', label: 'Share', align: 'right', render: (row) => `${row.percentage}%` },
           ]}

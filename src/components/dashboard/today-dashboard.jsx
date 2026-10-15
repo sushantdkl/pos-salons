@@ -207,7 +207,18 @@ export default function TodayDashboard({ data, error, loading, reload, role, tok
                   { key: 'role', label: 'Role', render: (row) => <span className="capitalize">{row.role}</span> },
                   { key: 'servicesCompleted', label: 'Services', align: 'right' },
                   { key: 'customersServed', label: 'Customers', align: 'right' },
-                  { key: 'revenue', label: 'Revenue', align: 'right', render: (row) => money(row.revenue) },
+                  {
+                    key: 'revenue',
+                    label: 'Revenue',
+                    align: 'right',
+                    // Actual revenue only; anything voided is shown beneath, never added.
+                    render: (row) => (
+                      <div>
+                        <span>{money(row.revenue)}</span>
+                        {row.voidedAmount > 0 ? <p className="text-[11px] font-semibold text-rose-600">{money(row.voidedAmount)} voided · {row.voidedServices} service{row.voidedServices === 1 ? '' : 's'}</p> : null}
+                      </div>
+                    ),
+                  },
                 ]}
               />
             </div>

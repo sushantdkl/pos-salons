@@ -94,6 +94,18 @@ export function soldBillSql(alias = 'b') {
 export const PAID_BILL_STATUS_SQL = soldBillSql('b');
 export const PAID_BILL_STATUS_SQL_SB = soldBillSql('sb');
 
+/**
+ * A bill that is still standing: paid / completed and NOT voided.
+ *
+ * Staff figures (services done, revenue credited, commission) use this, not soldBillSql: a
+ * voided bill's work was reversed, so the staff member is not credited for it on any day —
+ * the same rule commission and payroll have always used.
+ */
+export function activeBillSql(alias = 'b') {
+  return `LOWER(COALESCE(${alias}.status, '')) IN ('paid', 'completed')`;
+}
+export const ACTIVE_BILL_STATUS_SQL = activeBillSql('b');
+
 /** Nepal calendar date of a timestamp column. */
 const nepalDate = (column) => `((${column}) AT TIME ZONE '${SALON_TIMEZONE}')::date`;
 

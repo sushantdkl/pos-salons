@@ -63,6 +63,9 @@ try {
     VALUES ($1, 'QA Barber', 'barber', 10, 30000)
     ON CONFLICT (user_id) DO UPDATE SET salon_role = 'barber', commission_percentage = 10, base_salary = 30000, pay_type = 'salary'
   `, [barberId]);
+  // Products the feature scenario created on earlier runs would otherwise crowd the
+  // dashboard's six-row low-stock list.
+  await client.query("UPDATE salon_products SET status = 'inactive' WHERE name LIKE 'QA Gel %'");
   // Owner-made expense categories and Cash In / Exchange permissions start from the defaults.
   await client.query('DELETE FROM expense_categories WHERE is_system = FALSE');
   await client.query("UPDATE expense_categories SET is_active = TRUE WHERE is_system = TRUE AND name NOT IN ('CLEANING', 'MAINTENANCE', 'OTHER_EXPENSE')");

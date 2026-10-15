@@ -199,7 +199,13 @@ check('Analytics services sold', analytics1.services.servicesSold, 3);
 check('Analytics top service by revenue', analytics1.services.byRevenue[0]?.name, (value) => value === 'QA Haircut');
 check('Analytics voids control', analytics1.controls.voids, 1);
 check('Analytics trend sums to net sales', analytics1.salesTrend.reduce((sum, point) => sum + point.netSales, 0), 8500);
-check('Analytics staff revenue (barber, 3 services)', analytics1.staff[0]?.servicesCompleted, 3);
+// Bill D was voided: its trim is not credited to the barber (A + B only), while sales still
+// report it on the sale day and deduct the void as an event.
+check('Analytics staff services exclude the voided bill (barber, 2 services)', analytics1.staff[0]?.servicesCompleted, 2);
+check('Analytics staff revenue excludes the voided bill', analytics1.staff[0]?.revenue, 8000);
+check('Dashboard staff activity excludes the voided bill', dash1.staffActivity?.[0]?.revenue, 8000);
+check('Dashboard staff activity shows what was voided', dash1.staffActivity?.[0]?.voidedAmount, 700);
+check('Analytics staff row shows what was voided', analytics1.staff[0]?.voidedServices, 1);
 // Drill-down: the bills behind a staff / service row add up to that row.
 const staffRow = analytics1.staff[0];
 const staffBills = (await call(admin, 'GET', `/api/admin/analytics/bills?period=today&kind=staff&id=${staffRow.staffId}`)).json;

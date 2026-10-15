@@ -306,7 +306,7 @@ export function BusinessDayReport({ dayId, onClose }) {
                   <table className="w-full text-sm">
                     <thead><tr className="bg-stone-50 text-left text-[10.5px] font-bold uppercase tracking-[0.05em] text-stone-500"><th className="px-3 py-2">Staff</th><th className="px-3 py-2 text-right">Services</th><th className="px-3 py-2 text-right">Customers</th><th className="px-3 py-2 text-right">Revenue</th>{forAdmin ? <th className="px-3 py-2 text-right">Commission</th> : null}</tr></thead>
                     <tbody className="divide-y divide-stone-100">
-                      {data.services.staff.map((row) => <tr key={row.staff}><td className="px-3 py-2 font-semibold">{row.staff}</td><td className="px-3 py-2 text-right tabular-nums">{row.services}</td><td className="px-3 py-2 text-right tabular-nums">{row.customers}</td><td className="px-3 py-2 text-right tabular-nums">{money(row.revenue)}</td>{forAdmin ? <td className="px-3 py-2 text-right tabular-nums text-violet-700">{money(row.commission)}</td> : null}</tr>)}
+                      {data.services.staff.map((row) => <tr key={row.staff}><td className="px-3 py-2 font-semibold">{row.staff}</td><td className="px-3 py-2 text-right tabular-nums">{row.services}</td><td className="px-3 py-2 text-right tabular-nums">{row.customers}</td><td className="px-3 py-2 text-right tabular-nums">{money(row.revenue)}{row.voidedAmount > 0 ? <p className="text-[11px] font-semibold text-rose-600">{money(row.voidedAmount)} voided · {row.voidedServices}</p> : null}</td>{forAdmin ? <td className="px-3 py-2 text-right tabular-nums text-violet-700">{money(row.commission)}</td> : null}</tr>)}
                     </tbody>
                   </table>
                 </div>
